@@ -38,6 +38,13 @@ jobs:
           VITE_SUPABASE_ANON_KEY: sb_publishable_uhclsIDMqnKxbUzkbgcYsg_a70CzU29
         run: npm run build
 
+      - name: Add direct SPA route entries
+        run: |
+          for route in smart-apply ai-transfer account smart-apply/account ai-transfer/account; do
+            mkdir -p "dist/$route"
+            cp dist/index.html "dist/$route/index.html"
+          done
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
