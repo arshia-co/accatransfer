@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Opening ACCA Transfer...</title>
+    <script>
+      (function redirectSpaPath(location) {
+        var path = location.pathname.replace(/^\/+/, '');
+        var query = location.search
+          ? '&' + location.search.slice(1).replace(/&/g, '~and~')
+          : '';
+        location.replace(
+          location.protocol + '//' + location.host + '/?/' + path + query + location.hash
+        );
+      })(window.location);
+    </script>
+  </head>
+  <body></body>
+</html>

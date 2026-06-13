@@ -36,9 +36,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://qysluhfrjpcguhneqsuz.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_uhclsIDMqnKxbUzkbgcYsg_a70CzU29
-        run: |
-          npm run build
-          cp dist/index.html dist/404.html
+        run: npm run build
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -51,4 +49,3 @@ jobs:
       - name: Deploy
         uses: actions/deploy-pages@v4
         id: deployment
-

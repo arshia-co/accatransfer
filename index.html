@@ -23,6 +23,19 @@
     <link rel="icon" type="image/webp" href="/assets/acca-logo-320.webp" />
     <link rel="preload" as="font" type="font/woff2" href="/fonts/vazirmatn-arabic.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="/fonts/vazirmatn-latin.woff2" crossorigin />
+    <script>
+      (function restoreSpaPath(location) {
+        if (location.search.slice(0, 2) !== '?/') return;
+        var restoredPath = location.search
+          .slice(1)
+          .split('&')
+          .map(function decodePart(part) {
+            return part.replace(/~and~/g, '&');
+          })
+          .join('?');
+        window.history.replaceState(null, '', restoredPath + location.hash);
+      })(window.location);
+    </script>
   </head>
   <body>
     <div id="root"></div>
