@@ -1,0 +1,9 @@
+project_id = "acca-smart-apply"
+
+[functions.smart-apply-chat]
+# Guest chat is origin-restricted in the function body.
+verify_jwt = false
+
+[functions.transfer-analyze]
+# Explicit bearer validation is performed with supabase.auth.getUser().
+verify_jwt = false

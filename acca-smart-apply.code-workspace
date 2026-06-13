@@ -1,0 +1,28 @@
+{
+  "folders": [
+    {
+      "name": "ACCA Smart Apply",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "window.title": "ACCA Smart Apply — ${activeEditorShort}",
+    "workbench.colorCustomizations": {
+      "titleBar.activeBackground": "#071A3D",
+      "titleBar.activeForeground": "#F7F1E8",
+      "titleBar.inactiveBackground": "#0B2350",
+      "titleBar.inactiveForeground": "#C6A768",
+      "activityBar.background": "#071A3D",
+      "activityBar.foreground": "#C6A768",
+      "statusBar.background": "#071A3D",
+      "statusBar.foreground": "#F7F1E8"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "bradlc.vscode-tailwindcss",
+      "dbaeumer.vscode-eslint",
+      "dsznajder.es7-react-js-snippets"
+    ]
+  }
+}
