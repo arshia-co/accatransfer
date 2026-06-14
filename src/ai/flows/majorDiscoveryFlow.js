@@ -106,33 +106,30 @@ const EXPLAIN_LEAD = {
   ar: 'دعني أوضّح لك هذا السؤال بالكامل 👇',
 };
 
-// What each MBTI-style question is REALLY asking + its goal, in plain words.
-// (The glossary concept is appended after this for the term itself.)
-const AXIS_INTENT = {
-  EI: {
-    fa: 'این سؤال در واقع می‌پرسد انرژی‌ات را بیشتر از کجا می‌گیری — از بودن کنار آدم‌ها، یا از زمان آرام و تنها. هدفم این است که بفهمم در چه محیط تحصیلی‌ای راحت‌تری.',
-    en: 'This question is really asking where you get your energy — from being around people, or from calm, alone time. The goal is to learn which study environment suits you.',
-    tr: 'Bu soru aslında enerjini nereden aldığını soruyor — insanlarla birlikte olmaktan mı, yoksa sakin ve yalnız zamandan mı. Amaç, hangi öğrenme ortamının sana uyduğunu anlamak.',
-    ar: 'هذا السؤال يسأل في الحقيقة من أين تستمد طاقتك — من وجودك بين الناس أم من الوقت الهادئ بمفردك. الهدف معرفة بيئة الدراسة التي تناسبك.',
-  },
-  SN: {
-    fa: 'این سؤال می‌پرسد ذهنت با چه چیزی راحت‌تر است — جزئیات و مثال‌های واقعی، یا ایده‌ها و تصویر کلی. هدفم فهمیدن سبک یادگیری توست.',
-    en: 'This question asks what your mind prefers — concrete details and real examples, or ideas and the big picture. The goal is to understand your learning style.',
-    tr: 'Bu soru zihninin neyi tercih ettiğini soruyor — somut ayrıntılar ve gerçek örnekler mi, yoksa fikirler ve büyük resim mi. Amaç öğrenme tarzını anlamak.',
-    ar: 'هذا السؤال يسأل ما يفضّله عقلك — التفاصيل الملموسة والأمثلة الواقعية، أم الأفكار والصورة الكبرى. الهدف فهم أسلوب تعلّمك.',
-  },
-  TF: {
-    fa: 'این سؤال می‌پرسد وقتی تصمیم می‌گیری بیشتر به چه چیزی تکیه می‌کنی — منطق و معیارها، یا ارزش‌ها و اثر تصمیم روی آدم‌ها. هدفم فهمیدن سبک تصمیم‌گیری توست.',
-    en: 'This question asks what you lean on when you decide — logic and criteria, or values and the human impact of the choice. The goal is to understand your decision style.',
-    tr: 'Bu soru karar verirken neye dayandığını soruyor — mantık ve ölçütler mi, yoksa değerler ve kararın insanlara etkisi mi. Amaç karar tarzını anlamak.',
-    ar: 'هذا السؤال يسأل على ماذا تعتمد عند اتخاذ القرار — المنطق والمعايير، أم القيم وأثر القرار على الناس. الهدف فهم أسلوبك في القرار.',
-  },
-  JP: {
-    fa: 'این سؤال می‌پرسد با برنامه و نظم راحت‌تری یا با انعطاف و آزادی عمل. هدفم این است که نوع برنامه درسی مناسب تو را پیدا کنم.',
-    en: 'This question asks whether you’re more comfortable with a clear plan and structure, or with flexibility and open options. The goal is to find the kind of curriculum that fits you.',
-    tr: 'Bu soru net bir plan ve düzenle mi yoksa esneklik ve açık seçeneklerle mi daha rahat olduğunu soruyor. Amaç sana uygun müfredatı bulmak.',
-    ar: 'هذا السؤال يسأل هل ترتاح أكثر مع خطة ونظام واضح أم مع المرونة وحرية الخيارات. الهدف إيجاد نوع المنهج الذي يناسبك.',
-  },
+// Short, plain pole labels per MBTI axis. These are combined with the EXACT
+// current question text (see QUESTION_FRAME) so the explanation is always about
+// the question on screen — not a generic paragraph reused across the whole axis.
+const AXIS_POLES = {
+  EI: { fa: ['برون‌گرا', 'درون‌گرا'], en: ['more extroverted', 'more introverted'], tr: ['daha dışadönük', 'daha içedönük'], ar: ['أكثر انبساطاً', 'أكثر انطواءً'] },
+  SN: { fa: ['واقع‌گرا و جزئی‌نگر', 'شهودی و کل‌نگر'], en: ['concrete and detail-focused', 'intuitive and big-picture'], tr: ['somut ve ayrıntıcı', 'sezgisel ve bütüncül'], ar: ['واقعي ومهتم بالتفاصيل', 'حدسي وشمولي'] },
+  TF: { fa: ['منطق‌محور', 'ارزش‌محور'], en: ['logic-led', 'values-led'], tr: ['mantık odaklı', 'değer odaklı'], ar: ['منطقي', 'قيمي'] },
+  JP: { fa: ['ساختارمند و برنامه‌محور', 'منعطف و باز'], en: ['structured and planned', 'flexible and open'], tr: ['planlı ve düzenli', 'esnek ve açık'], ar: ['منظم ومخطط', 'مرن ومنفتح'] },
+};
+
+// Frames the explanation around the ACTUAL question text the student sees.
+const QUESTION_FRAME = {
+  fa: (q, a, b) => `سؤالی که الان روی صفحه است این است:\n«${q}»\nهدفش این است که ببینم تو در این مورد بیشتر ${a} هستی یا ${b}.`,
+  en: (q, a, b) => `The question on screen right now is:\n“${q}”\nIts goal is to see whether, here, you’re ${a} or ${b}.`,
+  tr: (q, a, b) => `Şu an ekrandaki soru:\n“${q}”\nAmacı, burada senin ${a} mı yoksa ${b} mı olduğunu görmek.`,
+  ar: (q, a, b) => `السؤال المعروض الآن هو:\n«${q}»\nهدفه أن أرى هل أنت هنا ${a} أم ${b}.`,
+};
+
+// Same idea for non-MBTI questions: quote the exact question, then its purpose.
+const QUOTE_LEAD = {
+  fa: (q) => `سؤالی که الان روی صفحه است این است:\n«${q}»`,
+  en: (q) => `The question on screen right now is:\n“${q}”`,
+  tr: (q) => `Şu an ekrandaki soru:\n“${q}”`,
+  ar: (q) => `السؤال المعروض الآن هو:\n«${q}»`,
 };
 
 // Always-shown closing line: ties the explanation back to the on-screen
@@ -182,18 +179,22 @@ const LAYER_EXPLAIN = {
 const currentQuestionIndex = (state) =>
   Math.min(TOTAL - 1, (state.discoveryAnswers || []).length);
 
-/** Plain-language explanation of what a question is really asking + its goal.
- *  For MBTI-style questions it pairs the question's intent with the concept
- *  (from the glossary). Never changes the question — only explains it. */
+/** Plain-language explanation of the EXACT question on screen + its goal.
+ *  It quotes the current question text so the help always matches what's being
+ *  asked (not a generic per-axis paragraph). For MBTI-style questions it adds
+ *  the concept from the glossary. Never changes the question — only explains it. */
 function explanationForQuestion(q, lang) {
-  if (q.axis) {
-    const intent = AXIS_INTENT[q.axis] ? L(AXIS_INTENT[q.axis], lang) : '';
+  const qText = L(q.text, lang);
+  if (q.axis && AXIS_POLES[q.axis]) {
+    const poles = L(AXIS_POLES[q.axis], lang) || AXIS_POLES[q.axis].en;
+    const frame = (QUESTION_FRAME[lang] || QUESTION_FRAME.en)(qText, poles[0], poles[1]);
     const entry = DISCOVERY_GLOSSARY.find((e) => e.id === q.axis.toLowerCase());
     const concept = entry ? L(entry.explain, lang) : '';
-    return [intent, concept].filter(Boolean).join('\n\n');
+    return [frame, concept].filter(Boolean).join('\n\n');
   }
-  const note = LAYER_EXPLAIN[q.layer] || LAYER_EXPLAIN.traits;
-  return L(note, lang);
+  const lead = (QUOTE_LEAD[lang] || QUOTE_LEAD.en)(qText);
+  const note = L(LAYER_EXPLAIN[q.layer] || LAYER_EXPLAIN.traits, lang);
+  return `${lead}\n\n${note}`;
 }
 
 function questionActions(lang, qIndex) {
