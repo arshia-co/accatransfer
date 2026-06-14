@@ -14,10 +14,10 @@ function closeMedia(stream) {
 }
 
 const openingInstructions = {
-  fa: 'Start in Persian with one brief, natural greeting. Continue the university admission conversation and ask the single most relevant next education question. Never ask about a job role.',
-  en: 'Start in English with one brief, natural greeting. Continue the university admission conversation and ask the single most relevant next education question. Never ask about a job role.',
-  tr: 'Start in Turkish with one brief, natural greeting. Continue the university admission conversation and ask the single most relevant next education question. Never ask about a job role.',
-  ar: 'Start in Arabic with one brief, natural greeting. Continue the university admission conversation and ask the single most relevant next education question. Never ask about a job role.',
+  fa: 'Start in Persian with one brief, natural greeting. Explain in one sentence that this is a reflective educational interest conversation, not a psychological diagnosis. Then ask one deep question about a real moment when the student felt fully absorbed, energized, or proud while learning, creating, helping, analyzing, or solving something. Ask only one question and wait.',
+  en: 'Start in English with one brief, natural greeting. Explain in one sentence that this is a reflective educational interest conversation, not a psychological diagnosis. Then ask one deep question about a real moment when the student felt fully absorbed, energized, or proud while learning, creating, helping, analyzing, or solving something. Ask only one question and wait.',
+  tr: 'Start in Turkish with one brief, natural greeting. Explain in one sentence that this is a reflective educational interest conversation, not a psychological diagnosis. Then ask one deep question about a real moment when the student felt fully absorbed, energized, or proud while learning, creating, helping, analyzing, or solving something. Ask only one question and wait.',
+  ar: 'Start in Arabic with one brief, natural greeting. Explain in one sentence that this is a reflective educational interest conversation, not a psychological diagnosis. Then ask one deep question about a real moment when the student felt fully absorbed, energized, or proud while learning, creating, helping, analyzing, or solving something. Ask only one question and wait.',
 };
 
 export function supportsRealtimeVoice() {
@@ -54,11 +54,22 @@ export async function startRealtimeVoiceSession({
 
   const peer = new RTCPeerConnection();
   const remoteAudio = new Audio();
+  let userMuted = false;
+  let assistantSpeaking = false;
   remoteAudio.autoplay = true;
   remoteAudio.playsInline = true;
   remoteAudio.setAttribute('aria-hidden', 'true');
 
   microphone.getTracks().forEach((track) => peer.addTrack(track, microphone));
+
+  const syncMicrophone = () => {
+    microphone.getAudioTracks().forEach((track) => {
+      // Half-duplex while the assistant speaks prevents speaker echo or room
+      // noise from being mistaken for a student interruption.
+      track.enabled = !userMuted && !assistantSpeaking;
+    });
+  };
+
   peer.ontrack = (event) => {
     remoteAudio.srcObject = event.streams[0];
     remoteAudio.play().catch(() => {});
@@ -67,7 +78,20 @@ export async function startRealtimeVoiceSession({
   const dataChannel = peer.createDataChannel('oai-events');
   dataChannel.addEventListener('message', (event) => {
     try {
-      onEvent?.(JSON.parse(event.data));
+      const serverEvent = JSON.parse(event.data);
+      if (serverEvent.type === 'response.created' || serverEvent.type === 'output_audio_buffer.started') {
+        assistantSpeaking = true;
+        syncMicrophone();
+      }
+      if (
+        serverEvent.type === 'output_audio_buffer.stopped'
+        || serverEvent.type === 'output_audio_buffer.cleared'
+        || (serverEvent.type === 'response.done' && serverEvent.response?.status !== 'completed')
+      ) {
+        assistantSpeaking = false;
+        syncMicrophone();
+      }
+      onEvent?.(serverEvent);
     } catch {
       // Ignore malformed diagnostic events without ending the voice session.
     }
@@ -111,14 +135,15 @@ export async function startRealtimeVoiceSession({
 
   return {
     setMuted(muted) {
-      microphone.getAudioTracks().forEach((track) => {
-        track.enabled = !muted;
-      });
+      userMuted = muted;
+      syncMicrophone();
     },
     interrupt() {
       if (dataChannel.readyState !== 'open') return;
       dataChannel.send(JSON.stringify({ type: 'response.cancel' }));
       dataChannel.send(JSON.stringify({ type: 'output_audio_buffer.clear' }));
+      assistantSpeaking = false;
+      syncMicrophone();
     },
     close() {
       closeMedia(microphone);

@@ -30,6 +30,8 @@ export default function VoiceConversationOverlay({
 }) {
   const voiceSession = useRef(null);
   const turn = useRef({ userAdded: false, pendingAssistant: null, pendingTimer: null });
+  const assistantPlayback = useRef(false);
+  const mutedRef = useRef(false);
   const deliveredIds = useRef(new Set());
   const [phase, setPhase] = useState('connecting');
   const [caption, setCaption] = useState('');
@@ -41,6 +43,8 @@ export default function VoiceConversationOverlay({
     if (!open) return undefined;
     let cancelled = false;
     turn.current = { userAdded: false, pendingAssistant: null, pendingTimer: null };
+    assistantPlayback.current = false;
+    mutedRef.current = false;
     deliveredIds.current = new Set();
 
     const deliver = (role, text, id) => {
@@ -68,6 +72,8 @@ export default function VoiceConversationOverlay({
           setPhase('ready');
           break;
         case 'input_audio_buffer.speech_started':
+          if (assistantPlayback.current) break;
+          flushAssistant();
           if (turn.current.pendingTimer) {
             window.clearTimeout(turn.current.pendingTimer);
             turn.current.pendingTimer = null;
@@ -87,8 +93,13 @@ export default function VoiceConversationOverlay({
           flushAssistant();
           break;
         case 'response.created':
+          assistantPlayback.current = true;
           setCaption('');
           setPhase('thinking');
+          break;
+        case 'output_audio_buffer.started':
+          assistantPlayback.current = true;
+          setPhase('speaking');
           break;
         case 'response.output_audio_transcript.delta':
           setPhase('speaking');
@@ -106,7 +117,16 @@ export default function VoiceConversationOverlay({
           break;
         }
         case 'response.done':
-          setPhase('ready');
+          if (event.response?.status !== 'completed') {
+            assistantPlayback.current = false;
+            setPhase(mutedRef.current ? 'muted' : 'ready');
+          }
+          break;
+        case 'output_audio_buffer.stopped':
+        case 'output_audio_buffer.cleared':
+          assistantPlayback.current = false;
+          flushAssistant();
+          setPhase(mutedRef.current ? 'muted' : 'ready');
           break;
         case 'error':
           setErrorCode('session_failed');
@@ -171,6 +191,7 @@ export default function VoiceConversationOverlay({
 
   const toggleMute = () => {
     const next = !muted;
+    mutedRef.current = next;
     setMuted(next);
     voiceSession.current?.setMuted(next);
     setPhase(next ? 'muted' : 'ready');
