@@ -9,9 +9,13 @@
 //    the admission funnel) stay deterministic — fast, consistent, no token cost.
 import { runIntent, interpretFreeText } from './conversationEngine.mock';
 import { INTENTS } from './intents';
-import { aiMsg, action } from './messageKit';
-import { goalActions } from './flows/goalFlow';
 import { realChat, isRealChatConfigured } from './realChatProvider';
+import {
+  buildGuidedContext,
+  guidedDecisionResult,
+  localGuidedDecision,
+  validateGuidedDecision,
+} from './guidedSelection';
 
 const rand = (min, max) => min + Math.random() * (max - min);
 
@@ -31,22 +35,9 @@ const STRUCTURED_INTENTS = new Set([
   INTENTS.SET_LANGUAGE,
   INTENTS.DISCOVERY_SET_NAME,
   INTENTS.DISCOVERY_FREE_TEXT,
-  INTENTS.SET_GOAL,
+  INTENTS.GUIDED_CONFIRM_OPTION,
+  INTENTS.GUIDED_CANCEL_CONFIRMATION,
 ]);
-
-const BACK_LABEL = { fa: 'بازگشت به مسیرهای اصلی', en: 'Back to the main paths', tr: 'Ana yollara dön', ar: 'العودة إلى المسارات الرئيسية' };
-const COUNSELOR_LABEL = { fa: 'گفت‌وگو با مشاور', en: 'Talk to a counselor', tr: 'Danışmanla görüş', ar: 'تحدث مع مستشار' };
-
-// Keep the student moving after a free-form AI answer, so quick replies never
-// disappear for good.
-function followupActions(state) {
-  const lang = state.language;
-  if (state.currentStep === 'awaiting_goal') return goalActions(lang);
-  return [
-    action(lang, BACK_LABEL, 'goals', INTENTS.BACK_TO_GOALS, { icon: 'Undo2' }),
-    action(lang, COUNSELOR_LABEL, 'counselor', INTENTS.TALK_TO_COUNSELOR, { icon: 'MessageCircle' }),
-  ];
-}
 
 /**
  * Sends an intent (button tap) to the "AI" and resolves with the engine result.
@@ -58,8 +49,8 @@ export async function sendIntent(intent, value, state) {
 }
 
 /**
- * Sends free text to the "AI". Structured captures stay local; open questions
- * go to the real model when configured, with a mock fallback on any failure.
+ * Sends free text to the AI classifier. It may explain, redirect, or suggest
+ * an allowed option, but only the deterministic flow engine can move forward.
  */
 export async function sendText(text, state) {
   await delay(rand(260, 480));
@@ -69,16 +60,32 @@ export async function sendText(text, state) {
     return runIntent(interpreted.route.intent, interpreted.route.value, state);
   }
 
-  if (isRealChatConfigured) {
-    const reply = await realChat({ state, userText: text });
-    if (reply) {
-      return { messages: [aiMsg(state.language, reply, { actions: followupActions(state) })], patch: {} };
-    }
-    // fall through to mock answer on provider failure
+  if (interpreted?.result) return interpreted.result;
+
+  const context = buildGuidedContext(state);
+  if (!context.allowedOptions.length) {
+    if (!interpreted) return { messages: [], patch: {} };
+    const { intent, value } = interpreted.route;
+    return runIntent(intent, value, state);
   }
 
-  if (!interpreted) return { messages: [], patch: {} };
-  if (interpreted.result) return interpreted.result;
-  const { intent, value } = interpreted.route;
-  return runIntent(intent, value, state);
+  let decision = null;
+  if (isRealChatConfigured) {
+    decision = await realChat({ state, userText: text, context });
+  }
+
+  const validatedDecision = validateGuidedDecision(
+    decision || localGuidedDecision({ context, studentMessage: text, language: state.language }),
+    context,
+    text,
+    state.language,
+  );
+  const guided = guidedDecisionResult({ decision: validatedDecision, context, state });
+
+  if (guided?.selected) {
+    return runIntent(guided.selected.nextIntent, guided.selected.value, state);
+  }
+  if (guided?.result) return guided.result;
+
+  return runIntent(INTENTS.FREE_TEXT, text, state);
 }

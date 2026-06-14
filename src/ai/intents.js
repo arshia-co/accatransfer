@@ -7,6 +7,8 @@ export const INTENTS = {
   BOOT: 'boot',
   RESTART: 'restart',
   FREE_TEXT: 'free_text',
+  GUIDED_CONFIRM_OPTION: 'guided_confirm_option',
+  GUIDED_CANCEL_CONFIRMATION: 'guided_cancel_confirmation',
 
   // Language
   SET_LANGUAGE: 'set_language',

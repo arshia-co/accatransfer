@@ -1,7 +1,5 @@
-// Real AI chat provider — calls the secure `smart-apply-chat` Edge Function
-// (which holds the OpenAI key server-side). Used for open Q&A / FAQ / free
-// conversation once Supabase is configured. The deterministic 25-question
-// Major Discovery stays local by design (no token cost, perfectly consistent).
+// Real AI decision provider. The Edge Function may classify a free-text reply
+// and write one short helper message, but it cannot advance the conversation.
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { L } from '../lib/lang';
 import { ACCA_CATEGORY_LABELS } from '../data/majorQuestions';
@@ -23,30 +21,26 @@ function profileSummary(state) {
   return bits.join(', ');
 }
 
-// Maps the stored chat into OpenAI's role format (last turns only; rich cards
-// without text are skipped).
-function toHistory(messages) {
-  return (messages || [])
-    .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content)
-    .slice(-12)
-    .map((m) => ({ role: m.role, content: m.content }));
-}
-
 /**
- * @returns {Promise<string|null>} the assistant reply text, or null on failure
- * so the caller can fall back to the mock answer.
+ * @returns {Promise<object|null>} a controlled decision, or null on failure.
  */
-export async function realChat({ state, userText }) {
+export async function realChat({ state, userText, context }) {
   if (!supabase) return null;
-  const history = toHistory(state.messages);
-  history.push({ role: 'user', content: userText });
   try {
     const { data, error } = await supabase.functions.invoke('smart-apply-chat', {
-      body: { messages: history, language: state.language, profileSummary: profileSummary(state) },
+      body: {
+        language: state.language,
+        profileSummary: profileSummary(state),
+        currentQuestion: context.currentQuestion,
+        allowedOptions: context.allowedOptions,
+        currentIntent: context.currentIntent,
+        currentStep: context.currentStep,
+        mode: context.mode,
+        studentMessage: userText,
+      },
     });
     if (error) return null;
-    const reply = (data?.reply || '').trim();
-    return reply || null;
+    return data?.decision || null;
   } catch {
     return null;
   }

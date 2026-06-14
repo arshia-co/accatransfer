@@ -89,6 +89,7 @@ const persistentState = (state) => ({
   discoveryResult: state.discoveryResult,
   directionPrograms: state.directionPrograms,
   goal: state.goal,
+  pendingOptionConfirmation: state.pendingOptionConfirmation,
   navigationHistory: state.navigationHistory,
 });
 
@@ -119,6 +120,7 @@ const initialState = ({ restore = true } = {}) => {
     discoveryResult: null,
     directionPrograms: [],
     goal: null,
+    pendingOptionConfirmation: null,
     navigationHistory: [],
     isLoginGateOpen: false,
     isDashboardOpen: false,
@@ -180,6 +182,7 @@ const captureNavigationSnapshot = (state) => ({
   discoveryResult: cloneData(state.discoveryResult),
   directionPrograms: cloneData(state.directionPrograms),
   goal: state.goal,
+  pendingOptionConfirmation: cloneData(state.pendingOptionConfirmation),
 });
 
 export const useSmartApplyStore = create((set, get) => {
@@ -395,6 +398,7 @@ export const useSmartApplyStore = create((set, get) => {
         discoveryResult: cloneData(previous.discoveryResult),
         directionPrograms: cloneData(previous.directionPrograms),
         goal: previous.goal,
+        pendingOptionConfirmation: cloneData(previous.pendingOptionConfirmation),
         navigationHistory: history.slice(0, -1),
         assistantStatus: 'idle',
         isAssistantSpeaking: false,
