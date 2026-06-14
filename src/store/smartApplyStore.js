@@ -16,45 +16,149 @@ const nextMessageId = () => `msg_${String(++messageSeq).padStart(3, '0')}`;
 
 const newSessionId = () => `sa_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
-const initialState = () => ({
-  sessionId: newSessionId(),
-  language: 'fa',
-  currentIntent: INTENTS.BOOT,
-  currentStep: 'boot',
-  messages: [],
-  studentProfile: {
-    name: null,
-    degree: null,
-    country: null,
-    gpa: null,
-    budget: null,
-    preferredLanguage: null,
-    knownMajor: null,
-    interests: [],
-    scores: null,
-  },
-  suggestedActions: [],
-  recommendedMajors: [],
-  discoveryAnswers: [],
-  discoveryResult: null,
-  directionPrograms: [],
-  goal: null,
-  isLoginGateOpen: false,
-  isDashboardOpen: false,
-  isAuthenticated: false,
-  // Real auth (Supabase) — unused in the pure-mock demo.
-  user: null,
-  authStage: 'idle', // idle | code_sent
-  authBusy: false,
-  authError: null,
-  authEmail: null,
-  authInited: false,
-  voiceMode: false,
-  isListening: false,
-  isAssistantSpeaking: false,
-  assistantStatus: 'idle', // idle | thinking | typing
-  voiceNotice: false,
-  booted: false,
+const SESSION_MEMORY_KEY = 'acca_smart_apply_session_v1';
+const MAX_HISTORY_ENTRIES = 60;
+const SUPPORTED_LANGS = new Set(['fa', 'en', 'tr', 'ar']);
+let skipNextBrowserWrite = false;
+
+const defaultStudentProfile = () => ({
+  name: null,
+  degree: null,
+  country: null,
+  gpa: null,
+  budget: null,
+  preferredLanguage: null,
+  knownMajor: null,
+  interests: [],
+  scores: null,
+});
+
+const cloneData = (value) => JSON.parse(JSON.stringify(value));
+
+const loadBrowserMemory = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SESSION_MEMORY_KEY) || 'null');
+    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.state?.messages)) return null;
+    return parsed.state || null;
+  } catch {
+    return null;
+  }
+};
+
+const clearBrowserMemory = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(SESSION_MEMORY_KEY);
+  } catch {
+    /* private mode / quota — non-fatal */
+  }
+};
+
+const persistentState = (state) => ({
+  sessionId: state.sessionId,
+  language: state.language,
+  currentIntent: state.currentIntent,
+  currentStep: state.currentStep,
+  messages: state.messages,
+  studentProfile: state.studentProfile,
+  suggestedActions: state.suggestedActions,
+  recommendedMajors: state.recommendedMajors,
+  discoveryAnswers: state.discoveryAnswers,
+  discoveryResult: state.discoveryResult,
+  directionPrograms: state.directionPrograms,
+  goal: state.goal,
+  navigationHistory: state.navigationHistory,
+});
+
+const saveBrowserMemory = (state) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SESSION_MEMORY_KEY, JSON.stringify({
+      version: 1,
+      savedAt: Date.now(),
+      state: persistentState(state),
+    }));
+  } catch {
+    /* Browser storage is best-effort; the active session continues in memory. */
+  }
+};
+
+const initialState = ({ restore = true } = {}) => {
+  const base = {
+    sessionId: newSessionId(),
+    language: 'fa',
+    currentIntent: INTENTS.BOOT,
+    currentStep: 'boot',
+    messages: [],
+    studentProfile: defaultStudentProfile(),
+    suggestedActions: [],
+    recommendedMajors: [],
+    discoveryAnswers: [],
+    discoveryResult: null,
+    directionPrograms: [],
+    goal: null,
+    navigationHistory: [],
+    isLoginGateOpen: false,
+    isDashboardOpen: false,
+    isAuthenticated: false,
+    // Real auth (Supabase) — unused in the pure-mock demo.
+    user: null,
+    authStage: 'idle', // idle | code_sent
+    authBusy: false,
+    authError: null,
+    authEmail: null,
+    authInited: false,
+    voiceMode: false,
+    isListening: false,
+    isAssistantSpeaking: false,
+    assistantStatus: 'idle', // idle | thinking | typing
+    voiceNotice: false,
+    booted: false,
+  };
+
+  const stored = restore ? loadBrowserMemory() : null;
+  if (!stored) return base;
+
+  const restoredMessages = Array.isArray(stored.messages) ? stored.messages : [];
+  const highestMessageId = restoredMessages.reduce((highest, message) => {
+    const numericId = Number.parseInt(String(message?.id || '').replace(/\D/g, ''), 10);
+    return Number.isFinite(numericId) ? Math.max(highest, numericId) : highest;
+  }, 0);
+  messageSeq = Math.max(messageSeq, highestMessageId, restoredMessages.length);
+
+  return {
+    ...base,
+    ...stored,
+    language: SUPPORTED_LANGS.has(stored.language) ? stored.language : base.language,
+    messages: restoredMessages,
+    studentProfile: { ...defaultStudentProfile(), ...(stored.studentProfile || {}) },
+    suggestedActions: Array.isArray(stored.suggestedActions) ? stored.suggestedActions : [],
+    recommendedMajors: Array.isArray(stored.recommendedMajors) ? stored.recommendedMajors : [],
+    discoveryAnswers: Array.isArray(stored.discoveryAnswers) ? stored.discoveryAnswers : [],
+    directionPrograms: Array.isArray(stored.directionPrograms) ? stored.directionPrograms : [],
+    navigationHistory: Array.isArray(stored.navigationHistory) ? stored.navigationHistory : [],
+    assistantStatus: 'idle',
+    voiceMode: false,
+    isListening: false,
+    isAssistantSpeaking: false,
+    voiceNotice: false,
+    booted: false,
+  };
+};
+
+const captureNavigationSnapshot = (state) => ({
+  messagesLength: state.messages.length,
+  language: state.language,
+  currentIntent: state.currentIntent,
+  currentStep: state.currentStep,
+  studentProfile: cloneData(state.studentProfile),
+  suggestedActions: cloneData(state.suggestedActions),
+  recommendedMajors: cloneData(state.recommendedMajors),
+  discoveryAnswers: cloneData(state.discoveryAnswers),
+  discoveryResult: cloneData(state.discoveryResult),
+  directionPrograms: cloneData(state.directionPrograms),
+  goal: state.goal,
 });
 
 export const useSmartApplyStore = create((set, get) => {
@@ -66,20 +170,36 @@ export const useSmartApplyStore = create((set, get) => {
   };
 
   /** Core sequencer shared by button taps and free text. */
-  const runExchange = async (produce, { echoLabel } = {}) => {
+  const runExchange = async (produce, { echoLabel, remember = false } = {}) => {
     if (get().assistantStatus !== 'idle') return;
+
+    const previousHistory = get().navigationHistory;
+    set({
+      navigationHistory: remember
+        ? [
+          ...previousHistory,
+          captureNavigationSnapshot(get()),
+        ].slice(-MAX_HISTORY_ENTRIES)
+        : previousHistory,
+      suggestedActions: [],
+      assistantStatus: 'thinking',
+      isAssistantSpeaking: true,
+    });
 
     if (echoLabel) {
       pushMessage({ role: 'user', content: echoLabel, lang: get().language });
     }
-    set({ suggestedActions: [], assistantStatus: 'thinking', isAssistantSpeaking: true });
 
     let result;
     try {
       result = await produce(get());
     } catch {
       // Mock layer should never throw, but never strand the composer.
-      set({ assistantStatus: 'idle', isAssistantSpeaking: false });
+      set({
+        assistantStatus: 'idle',
+        isAssistantSpeaking: false,
+        ...(remember ? { navigationHistory: previousHistory } : {}),
+      });
       return;
     }
 
@@ -99,7 +219,6 @@ export const useSmartApplyStore = create((set, get) => {
       isAssistantSpeaking: false,
       suggestedActions: lastDelivered?.actions || [],
     }));
-
     if (result?.effect === 'whatsapp') {
       window.open(WHATSAPP_URL, '_blank', 'noopener');
     }
@@ -131,6 +250,7 @@ export const useSmartApplyStore = create((set, get) => {
       if (get().booted) return;
       set({ booted: true });
       get().initAuth();
+      if (get().messages.length > 0) return;
       runExchange((state) => sendIntent(INTENTS.BOOT, null, state));
     },
 
@@ -215,7 +335,7 @@ export const useSmartApplyStore = create((set, get) => {
       }
       runExchange(
         (state) => sendIntent(action.nextIntent, action.value, state),
-        { echoLabel: action.label },
+        { echoLabel: action.label, remember: true },
       );
     },
 
@@ -223,7 +343,32 @@ export const useSmartApplyStore = create((set, get) => {
     submitFreeText: (text) => {
       const trimmed = String(text || '').trim();
       if (!trimmed) return;
-      runExchange((state) => sendText(trimmed, state), { echoLabel: trimmed });
+      runExchange((state) => sendText(trimmed, state), { echoLabel: trimmed, remember: true });
+    },
+
+    goBack: () => {
+      if (get().assistantStatus !== 'idle') return;
+      const history = get().navigationHistory;
+      const previous = history[history.length - 1];
+      if (!previous) return;
+
+      set((state) => ({
+        language: previous.language,
+        currentIntent: previous.currentIntent,
+        currentStep: previous.currentStep,
+        messages: state.messages.slice(0, previous.messagesLength),
+        studentProfile: cloneData(previous.studentProfile),
+        suggestedActions: cloneData(previous.suggestedActions),
+        recommendedMajors: cloneData(previous.recommendedMajors),
+        discoveryAnswers: cloneData(previous.discoveryAnswers),
+        discoveryResult: cloneData(previous.discoveryResult),
+        directionPrograms: cloneData(previous.directionPrograms),
+        goal: previous.goal,
+        navigationHistory: history.slice(0, -1),
+        assistantStatus: 'idle',
+        isAssistantSpeaking: false,
+        isListening: false,
+      }));
     },
 
     setVoiceActivity: ({ listening = false, speaking = false }) => {
@@ -271,11 +416,27 @@ export const useSmartApplyStore = create((set, get) => {
     openDashboard: () => set({ isDashboardOpen: true }),
     closeDashboard: () => set({ isDashboardOpen: false }),
 
-    restart: () => {
-      set({ ...initialState(), booted: true });
+    clearSessionMemory: () => {
+      const authState = {
+        isAuthenticated: get().isAuthenticated,
+        user: get().user,
+        authInited: get().authInited,
+      };
+      skipNextBrowserWrite = true;
+      clearBrowserMemory();
+      set({ ...initialState({ restore: false }), ...authState, booted: true });
       runExchange((state) => sendIntent(INTENTS.BOOT, null, state));
     },
   };
+});
+
+useSmartApplyStore.subscribe((state) => {
+  if (skipNextBrowserWrite) {
+    skipNextBrowserWrite = false;
+    return;
+  }
+  if (state.assistantStatus !== 'idle' || state.isAssistantSpeaking) return;
+  saveBrowserMemory(state);
 });
 
 /** Profile completion 0–100 for the insight panel progress ring. */

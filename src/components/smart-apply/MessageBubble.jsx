@@ -30,7 +30,14 @@ function RichBlock({ message, language }) {
   }
 }
 
-export default function MessageBubble({ message, language, actions = [], onAction }) {
+export default function MessageBubble({
+  message,
+  language,
+  actions = [],
+  onAction,
+  canGoBack = false,
+  onBack,
+}) {
   const isUser = message.role === 'user';
   const dir = dirFor(message.lang || language);
   const isNote = message.meta?.tone === 'note';
@@ -122,7 +129,13 @@ export default function MessageBubble({ message, language, actions = [], onActio
 
       {actions.length > 0 && (
         <div className="mt-3 sm:ps-11">
-          <DynamicActionButtons actions={actions} onSelect={onAction} />
+          <DynamicActionButtons
+            actions={actions}
+            onSelect={onAction}
+            showBack={canGoBack}
+            onBack={onBack}
+            lang={language}
+          />
         </div>
       )}
     </motion.div>

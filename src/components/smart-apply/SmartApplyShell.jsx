@@ -3,7 +3,7 @@
 // dashboard preview. One central AI interface — no menus, no long forms.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, RotateCcw, ExternalLink, X, Sparkles, LayoutGrid } from 'lucide-react';
+import { Send, ExternalLink, X, Sparkles, LayoutGrid } from 'lucide-react';
 import { L, dirFor } from '../../lib/lang';
 import { UI } from '../../i18n/ui';
 import { PRODUCT_NAME, MAIN_SITE_URL, LOGO_SRC } from '../../lib/constants';
@@ -27,7 +27,6 @@ export default function SmartApplyShell() {
   const goal = useSmartApplyStore((s) => s.goal);
   const studentProfile = useSmartApplyStore((s) => s.studentProfile);
   const boot = useSmartApplyStore((s) => s.boot);
-  const restart = useSmartApplyStore((s) => s.restart);
   const submitFreeText = useSmartApplyStore((s) => s.submitFreeText);
   const setVoiceActivity = useSmartApplyStore((s) => s.setVoiceActivity);
   const appendVoiceTranscript = useSmartApplyStore((s) => s.appendVoiceTranscript);
@@ -154,15 +153,6 @@ export default function SmartApplyShell() {
             >
               <Sparkles className="h-3.5 w-3.5 text-gold" />
               {L(UI.openInsight, language)}
-            </button>
-            <button
-              type="button"
-              onClick={restart}
-              title={L(UI.restart, language)}
-              aria-label={L(UI.restart, language)}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-navy/10 bg-white/70 text-navy/60 backdrop-blur-md transition hover:border-gold/50 hover:text-navy"
-            >
-              <RotateCcw className="h-4 w-4" />
             </button>
             <a
               href="/"

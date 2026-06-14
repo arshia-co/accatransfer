@@ -52,6 +52,8 @@ export default function ConversationPanel({ lang }) {
   const suggestedActions = useSmartApplyStore((s) => s.suggestedActions);
   const assistantStatus = useSmartApplyStore((s) => s.assistantStatus);
   const chooseAction = useSmartApplyStore((s) => s.chooseAction);
+  const canGoBack = useSmartApplyStore((s) => s.navigationHistory.length > 0);
+  const goBack = useSmartApplyStore((s) => s.goBack);
   const scrollRef = useRef(null);
   const endRef = useRef(null);
 
@@ -83,6 +85,8 @@ export default function ConversationPanel({ lang }) {
             language={lang}
             actions={message.id === activeActionMessageId && !busy ? suggestedActions : []}
             onAction={chooseAction}
+            canGoBack={message.id === activeActionMessageId && !busy && canGoBack}
+            onBack={goBack}
           />
         ))}
       </AnimatePresence>
