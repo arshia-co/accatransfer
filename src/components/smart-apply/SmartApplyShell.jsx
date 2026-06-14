@@ -11,6 +11,7 @@ import { sessionProgress, useSmartApplyStore } from '../../store/smartApplyStore
 import AIAssistantOrb from './AIAssistantOrb';
 import ConversationPanel from './ConversationPanel';
 import VoiceInputButton from './VoiceInputButton';
+import DictationButton from './DictationButton';
 import VoiceConversationOverlay from './VoiceConversationOverlay';
 import SessionInsightPanel from './SessionInsightPanel';
 import LoginGateModal from './LoginGateModal';
@@ -254,6 +255,14 @@ export default function SmartApplyShell() {
                 onSubmit={handleSubmit}
                 className="flex items-center gap-2 rounded-full border border-navy/10 bg-white/90 py-1.5 pe-1.5 ps-2 shadow-[0_10px_36px_rgba(7,26,61,0.065)] backdrop-blur-xl transition focus-within:border-emerald-700/25 focus-within:shadow-[0_12px_40px_rgba(5,150,105,0.10)] sm:gap-2.5"
               >
+                {/* Speech-to-text: speak → editable text → you send it. */}
+                <DictationButton
+                  baseText={draft}
+                  onText={setDraft}
+                  disabled={busy}
+                  lang={language}
+                />
+                {/* Live realtime voice conversation (separate button). */}
                 <VoiceInputButton
                   active={voiceOpen}
                   disabled={busy}

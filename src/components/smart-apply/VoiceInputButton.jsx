@@ -1,6 +1,8 @@
 // Entry point for the full-duplex OpenAI Realtime voice conversation.
+// Uses the waveform icon to signal LIVE voice — distinct from the plain-mic
+// dictation (speech-to-text) button next to it in the composer.
 import { motion } from 'framer-motion';
-import { AudioLines, Mic } from 'lucide-react';
+import { AudioLines } from 'lucide-react';
 import { L } from '../../lib/lang';
 import { UI } from '../../i18n/ui';
 
@@ -13,7 +15,7 @@ export default function VoiceInputButton({ active, disabled, onPress, lang }) {
       whileTap={{ scale: 0.92 }}
       title={L(UI.voiceTooltip, lang)}
       aria-label={L(UI.voiceTooltip, lang)}
-      className={`relative flex h-11 w-11 items-center justify-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
+      className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
         active
           ? 'border-emerald-500/60 bg-emerald-50 text-emerald-700'
           : 'border-navy/10 bg-white/80 text-navy hover:border-gold/50'
@@ -27,7 +29,7 @@ export default function VoiceInputButton({ active, disabled, onPress, lang }) {
           transition={{ duration: 1, repeat: Infinity, ease: 'easeOut' }}
         />
       )}
-      {active ? <AudioLines className="h-5 w-5" /> : <Mic className="h-5 w-5" strokeWidth={2.3} />}
+      <AudioLines className="h-5 w-5" />
     </motion.button>
   );
 }
