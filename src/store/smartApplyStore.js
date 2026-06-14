@@ -16,10 +16,30 @@ const nextMessageId = () => `msg_${String(++messageSeq).padStart(3, '0')}`;
 
 const newSessionId = () => `sa_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
+// Persist the chosen conversation language so a refresh never resets it.
+const LANG_KEY = 'acca_smart_apply_lang';
 const SESSION_MEMORY_KEY = 'acca_smart_apply_session_v1';
 const MAX_HISTORY_ENTRIES = 60;
 const SUPPORTED_LANGS = new Set(['fa', 'en', 'tr', 'ar']);
 let skipNextBrowserWrite = false;
+
+const loadSavedLanguage = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const v = window.localStorage.getItem(LANG_KEY);
+    return SUPPORTED_LANGS.has(v) ? v : null;
+  } catch {
+    return null;
+  }
+};
+const saveSavedLanguage = (lang) => {
+  if (typeof window === 'undefined' || !SUPPORTED_LANGS.has(lang)) return;
+  try {
+    window.localStorage.setItem(LANG_KEY, lang);
+  } catch {
+    /* private mode / quota — non-fatal */
+  }
+};
 
 const defaultStudentProfile = () => ({
   name: null,
@@ -50,6 +70,7 @@ const clearBrowserMemory = () => {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.removeItem(SESSION_MEMORY_KEY);
+    window.localStorage.removeItem(LANG_KEY);
   } catch {
     /* private mode / quota — non-fatal */
   }
@@ -87,7 +108,7 @@ const saveBrowserMemory = (state) => {
 const initialState = ({ restore = true } = {}) => {
   const base = {
     sessionId: newSessionId(),
-    language: 'fa',
+    language: restore ? (loadSavedLanguage() || 'fa') : 'fa',
     currentIntent: INTENTS.BOOT,
     currentStep: 'boot',
     messages: [],
@@ -219,6 +240,8 @@ export const useSmartApplyStore = create((set, get) => {
       isAssistantSpeaking: false,
       suggestedActions: lastDelivered?.actions || [],
     }));
+    if (patch.language) saveSavedLanguage(patch.language); // remember across refresh
+
     if (result?.effect === 'whatsapp') {
       window.open(WHATSAPP_URL, '_blank', 'noopener');
     }
@@ -251,7 +274,15 @@ export const useSmartApplyStore = create((set, get) => {
       set({ booted: true });
       get().initAuth();
       if (get().messages.length > 0) return;
-      runExchange((state) => sendIntent(INTENTS.BOOT, null, state));
+      // If the student already picked a language before, resume in it and skip
+      // the language question entirely (refresh must not reset the language).
+      const savedLang = loadSavedLanguage();
+      if (savedLang) {
+        set({ language: savedLang });
+        runExchange((state) => sendIntent(INTENTS.SET_LANGUAGE, savedLang, state));
+      } else {
+        runExchange((state) => sendIntent(INTENTS.BOOT, null, state));
+      }
     },
 
     /** Wire up real Supabase auth when configured (no-op in the mock demo). */

@@ -82,7 +82,9 @@ function RealAuthForm({ lang }) {
       )}
 
       {authError && (
-        <p className="px-1 text-[11px] font-bold text-rose-600">{L(UI.authError, lang)}</p>
+        <p className="px-1 text-[11px] font-bold leading-5 text-rose-600" dir="ltr">
+          {typeof authError === 'string' ? authError : L(UI.authError, lang)}
+        </p>
       )}
 
       <motion.button

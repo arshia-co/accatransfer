@@ -23,6 +23,7 @@ export const INTENTS = {
   DISCOVERY_SEE_UNIVERSITIES: 'discovery_see_universities',
   DISCOVERY_FREE_TEXT: 'discovery_free_text', // student typed instead of tapping → smart help
   DISCOVERY_RESHOW: 'discovery_reshow', // re-display the current question + options
+  DISCOVERY_EXPLAIN: 'discovery_explain', // "What does this mean?" → explain current question
 
   // Known major → universities
   KNOWN_MAJOR_CATEGORY: 'known_major_category',

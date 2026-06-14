@@ -12,6 +12,7 @@ import { INTENTS } from '../intents';
 import { aiMsg, action } from '../messageKit';
 import { L } from '../../lib/lang';
 import { DISCOVERY_QUESTIONS, DISCOVERY_TOTAL } from '../../data/discoveryQuestions';
+import { DISCOVERY_GLOSSARY } from '../../data/discoveryGlossary';
 import { computeDiscoveryResult, buildRecap } from '../scoring';
 import { classifyDiscoveryText } from '../discoveryAssistant';
 import { askDegreeStep } from './admissionFlow';
@@ -95,13 +96,74 @@ const UNSURE = {
 const TOTAL = DISCOVERY_TOTAL;
 const RECAP_STAGES = new Set([5, 10, 15, 20]);
 
+// "What does this mean?" — a distinct, different-colored helper on every
+// question, so students discover they can ask the AI to explain anything.
+const EXPLAIN_LABEL = { fa: 'یعنی چی؟', en: 'What does this mean?', tr: 'Bu ne demek?', ar: 'ماذا يعني هذا؟' };
+
+const EXPLAIN_LEAD = {
+  fa: 'بگذار ساده‌اش کنم 👇',
+  en: 'Let me put it simply 👇',
+  tr: 'Basitçe anlatayım 👇',
+  ar: 'دعني أبسّطها لك 👇',
+};
+
+// Plain-language explanation per question layer (when it isn't an MBTI axis
+// question, which is explained from the glossary instead). No right answers.
+const LAYER_EXPLAIN = {
+  riasec: {
+    fa: 'این سؤال فقط می‌سنجد چه نوع کار یا فعالیتی برایت جذاب‌تر است. پاسخ درست و غلط ندارد — به چیزی که واقعاً دوستش داری نزدیک‌تر فکر کن.',
+    en: 'This question just checks what kind of work or activity attracts you. There’s no right or wrong — pick whatever feels closest to what you actually enjoy.',
+    tr: 'Bu soru yalnızca ne tür bir iş veya etkinliğin seni çektiğini ölçer. Doğru ya da yanlış yok — gerçekten sevdiğine en yakın olanı düşün.',
+    ar: 'هذا السؤال يقيس فقط نوع العمل أو النشاط الذي يجذبك. لا صواب ولا خطأ — اختر الأقرب إلى ما تستمتع به فعلاً.',
+  },
+  traits: {
+    fa: 'این سؤال یک ویژگی شخصیتی ساده را می‌سنجد (مثل نظم یا علاقه به تجربه‌های تازه). صادقانه‌ترین پاسخ، دقیق‌ترین نتیجه را می‌سازد.',
+    en: 'This question checks one simple personality trait (like how organized you are, or how much you enjoy new experiences). The most honest answer gives the most accurate result.',
+    tr: 'Bu soru basit bir kişilik özelliğini ölçer (ne kadar düzenli olduğun ya da yeni deneyimleri ne kadar sevdiğin gibi). En dürüst yanıt en doğru sonucu verir.',
+    ar: 'هذا السؤال يقيس سمة شخصية بسيطة (مثل مدى تنظيمك أو حبك للتجارب الجديدة). الإجابة الأصدق تعطي أدق نتيجة.',
+  },
+  motiv: {
+    fa: 'این سؤال می‌پرسد چه چیزی در آینده برایت مهم‌تر است (مثل درآمد، امنیت، یا اثرگذاری). به ارزش‌های واقعی خودت فکر کن.',
+    en: 'This question asks what matters most to you in the future (like income, security, or making an impact). Think about your real values.',
+    tr: 'Bu soru gelecekte senin için en önemli şeyin ne olduğunu sorar (gelir, güvence ya da etki gibi). Gerçek değerlerini düşün.',
+    ar: 'هذا السؤال يسأل عمّا يهمك أكثر في المستقبل (كالدخل أو الأمان أو إحداث الأثر). فكّر في قيمك الحقيقية.',
+  },
+  academic: {
+    fa: 'این سؤال درباره نقطه قوت درسی توست — اینکه در کدام درس‌ها راحت‌تری. فقط یک حسِ کلی کافی است.',
+    en: 'This question is about your academic strength — which subjects come easiest to you. A rough sense is enough.',
+    tr: 'Bu soru akademik güçlü yönünle ilgili — hangi derslerde daha rahatsın. Genel bir his yeterli.',
+    ar: 'هذا السؤال عن نقطة قوتك الدراسية — أي المواد أسهل عليك. يكفي إحساس عام.',
+  },
+  reality: {
+    fa: 'این سؤال درباره نقطه شروع واقعی توست (معدل، بودجه، آمادگی). فقط یک تخمین کلی لازم است؛ بعداً دقیق‌ترش می‌کنیم.',
+    en: 'This question is about your realistic starting point (GPA, budget, readiness). Just a rough estimate is fine — we refine it later.',
+    tr: 'Bu soru gerçekçi başlangıç noktanla ilgili (not, bütçe, hazırlık). Kabaca bir tahmin yeterli — sonra netleştiririz.',
+    ar: 'هذا السؤال عن نقطة انطلاقك الواقعية (المعدل، الميزانية، الجاهزية). يكفي تقدير عام — وسنحسّنه لاحقاً.',
+  },
+};
+
 const currentQuestionIndex = (state) =>
   Math.min(TOTAL - 1, (state.discoveryAnswers || []).length);
 
+/** Plain-language explanation for a question: glossary for MBTI axes, else a
+ *  layer-based note. Never changes the question — only explains it. */
+function explanationForQuestion(q, lang) {
+  if (q.axis) {
+    const entry = DISCOVERY_GLOSSARY.find((e) => e.id === q.axis.toLowerCase());
+    if (entry) return L(entry.explain, lang);
+  }
+  const note = LAYER_EXPLAIN[q.layer] || LAYER_EXPLAIN.traits;
+  return L(note, lang);
+}
+
 function questionActions(lang, qIndex) {
-  return DISCOVERY_QUESTIONS[qIndex].options.map((opt) =>
-    action(lang, opt.label, opt.id, INTENTS.DISCOVERY_ANSWER),
-  );
+  return [
+    ...DISCOVERY_QUESTIONS[qIndex].options.map((opt) =>
+      action(lang, opt.label, opt.id, INTENTS.DISCOVERY_ANSWER),
+    ),
+    // Discoverability nudge: a different-colored "What does this mean?" helper.
+    action(lang, EXPLAIN_LABEL, 'explain', INTENTS.DISCOVERY_EXPLAIN, { variant: 'help', icon: 'MessageCircleQuestion' }),
+  ];
 }
 
 function questionMessage(lang, qIndex) {
@@ -198,6 +260,21 @@ export const majorDiscoveryFlow = {
     const qIndex = currentQuestionIndex(state);
     return {
       messages: [questionMessage(lang, qIndex)],
+      patch: { currentStep: `discovery_q_${qIndex}` },
+    };
+  },
+
+  // "What does this mean?" → explain the current question in plain language,
+  // then re-show it. Teaches students they can always ask the AI for help.
+  [INTENTS.DISCOVERY_EXPLAIN]: ({ state }) => {
+    const lang = state.language;
+    const qIndex = currentQuestionIndex(state);
+    const q = DISCOVERY_QUESTIONS[qIndex];
+    return {
+      messages: [
+        aiMsg(lang, `${L(EXPLAIN_LEAD, lang)}\n\n${explanationForQuestion(q, lang)}`, { meta: { tone: 'assist' } }),
+        questionMessage(lang, qIndex),
+      ],
       patch: { currentStep: `discovery_q_${qIndex}` },
     };
   },

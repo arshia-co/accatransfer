@@ -351,6 +351,8 @@ export const UI = {
   journeyDoneLabel: { fa: 'انجام شد', en: 'Done', tr: 'Tamam', ar: 'تم' },
 
   allServices: { fa: 'همه سرویس‌ها', en: 'All services', tr: 'Tüm hizmetler', ar: 'كل الخدمات' },
+  panelButton: { fa: 'پنل من', en: 'My panel', tr: 'Panelim', ar: 'لوحتي' },
+
   // ── Real authentication (email one-time code via Supabase) ──
   authEmailPlaceholder: { fa: 'ایمیلت را وارد کن', en: 'Enter your email', tr: 'E-postanı gir', ar: 'أدخل بريدك الإلكتروني' },
   authSendCode: { fa: 'ارسال کد ورود', en: 'Email me a login code', tr: 'Giriş kodu gönder', ar: 'أرسل رمز الدخول' },

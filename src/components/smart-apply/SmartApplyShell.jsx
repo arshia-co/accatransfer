@@ -3,7 +3,7 @@
 // dashboard preview. One central AI interface — no menus, no long forms.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, ExternalLink, X, Sparkles, LayoutGrid } from 'lucide-react';
+import { Send, ExternalLink, X, Sparkles, LayoutGrid, LayoutDashboard } from 'lucide-react';
 import { L, dirFor } from '../../lib/lang';
 import { UI } from '../../i18n/ui';
 import { PRODUCT_NAME, MAIN_SITE_URL, LOGO_SRC } from '../../lib/constants';
@@ -30,6 +30,7 @@ export default function SmartApplyShell() {
   const submitFreeText = useSmartApplyStore((s) => s.submitFreeText);
   const setVoiceActivity = useSmartApplyStore((s) => s.setVoiceActivity);
   const appendVoiceTranscript = useSmartApplyStore((s) => s.appendVoiceTranscript);
+  const openDashboard = useSmartApplyStore((s) => s.openDashboard);
   const progress = useSmartApplyStore(sessionProgress);
 
   const [draft, setDraft] = useState('');
@@ -144,29 +145,50 @@ export default function SmartApplyShell() {
             </span>
           </a>
 
-          <div className="flex items-center gap-2">
-            {/* mobile insight toggle */}
+          {/* All actions stay visible on mobile (icon-only), expanding to
+              labelled pills on larger screens. */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* user panel / dashboard */}
+            <button
+              type="button"
+              onClick={openDashboard}
+              title={L(UI.panelButton, language)}
+              aria-label={L(UI.panelButton, language)}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-navy px-2.5 text-[11px] font-black text-cream shadow-[0_8px_22px_rgba(7,26,61,0.25)] transition hover:bg-navy/90 sm:px-4"
+            >
+              <LayoutDashboard className="h-4 w-4 shrink-0 text-gold" />
+              <span className="hidden sm:inline">{L(UI.panelButton, language)}</span>
+            </button>
+            {/* session memory */}
             <button
               type="button"
               onClick={() => setInsightOpen(true)}
-              className="inline-flex items-center gap-2 rounded-full border border-navy/10 bg-white/70 px-3.5 py-2 text-[11px] font-black text-navy backdrop-blur-md transition hover:border-gold/50"
+              title={L(UI.openInsight, language)}
+              aria-label={L(UI.openInsight, language)}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-navy/10 bg-white/70 px-2.5 text-[11px] font-black text-navy backdrop-blur-md transition hover:border-gold/50 sm:px-3.5"
             >
-              <Sparkles className="h-3.5 w-3.5 text-gold" />
-              {L(UI.openInsight, language)}
+              <Sparkles className="h-4 w-4 shrink-0 text-gold" />
+              <span className="hidden sm:inline">{L(UI.openInsight, language)}</span>
             </button>
+            {/* all services / gateway */}
             <a
               href="/"
-              className="hidden h-10 items-center gap-2 rounded-full border border-navy/10 bg-white/70 px-4 text-[11px] font-black text-navy/70 backdrop-blur-md transition hover:border-gold/50 hover:text-navy sm:inline-flex"
+              title={L(UI.allServices, language)}
+              aria-label={L(UI.allServices, language)}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-navy/10 bg-white/70 px-2.5 text-[11px] font-black text-navy/70 backdrop-blur-md transition hover:border-gold/50 hover:text-navy lg:px-4"
             >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              {L(UI.allServices, language)}
+              <LayoutGrid className="h-4 w-4 shrink-0" />
+              <span className="hidden lg:inline">{L(UI.allServices, language)}</span>
             </a>
+            {/* ACCA EDU main site */}
             <a
               href={MAIN_SITE_URL}
-              className="hidden h-10 items-center gap-2 rounded-full border border-navy/10 bg-white/70 px-4 text-[11px] font-black text-navy/70 backdrop-blur-md transition hover:border-gold/50 hover:text-navy lg:inline-flex"
+              title={L(UI.backToSite, language)}
+              aria-label={L(UI.backToSite, language)}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-navy/10 bg-white/70 px-2.5 text-[11px] font-black text-navy/70 backdrop-blur-md transition hover:border-gold/50 hover:text-navy lg:px-4"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
-              {L(UI.backToSite, language)}
+              <ExternalLink className="h-4 w-4 shrink-0" />
+              <span className="hidden lg:inline">{L(UI.backToSite, language)}</span>
             </a>
           </div>
         </header>
