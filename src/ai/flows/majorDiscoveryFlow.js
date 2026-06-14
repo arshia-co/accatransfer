@@ -66,7 +66,6 @@ const CONFIRM_MAP = {
   ar: (label) => `إذن إن فهمتك صحيحاً، تقصد هذا الخيار:\n«${label}»\nأؤكّده وأختاره؟`,
 };
 const CONFIRM_YES = { fa: 'بله، همین درست است', en: 'Yes, that’s right', tr: 'Evet, doğru', ar: 'نعم، هذا صحيح' };
-const CONFIRM_NO = { fa: 'نه، گزینه‌ها را دوباره ببینم', en: 'No, show me the options', tr: 'Hayır, seçenekleri göster', ar: 'لا، أرني الخيارات' };
 
 const CLARIFY_BACK = {
   fa: 'حالا که روشن شد، همان سؤال را دوباره می‌گذارم 👇',
@@ -101,10 +100,48 @@ const RECAP_STAGES = new Set([5, 10, 15, 20]);
 const EXPLAIN_LABEL = { fa: 'یعنی چی؟', en: 'What does this mean?', tr: 'Bu ne demek?', ar: 'ماذا يعني هذا؟' };
 
 const EXPLAIN_LEAD = {
-  fa: 'بگذار ساده‌اش کنم 👇',
-  en: 'Let me put it simply 👇',
-  tr: 'Basitçe anlatayım 👇',
-  ar: 'دعني أبسّطها لك 👇',
+  fa: 'بگذار این سؤال را کامل برایت باز کنم 👇',
+  en: 'Let me fully unpack this question for you 👇',
+  tr: 'Bu soruyu senin için tam olarak açayım 👇',
+  ar: 'دعني أوضّح لك هذا السؤال بالكامل 👇',
+};
+
+// What each MBTI-style question is REALLY asking + its goal, in plain words.
+// (The glossary concept is appended after this for the term itself.)
+const AXIS_INTENT = {
+  EI: {
+    fa: 'این سؤال در واقع می‌پرسد انرژی‌ات را بیشتر از کجا می‌گیری — از بودن کنار آدم‌ها، یا از زمان آرام و تنها. هدفم این است که بفهمم در چه محیط تحصیلی‌ای راحت‌تری.',
+    en: 'This question is really asking where you get your energy — from being around people, or from calm, alone time. The goal is to learn which study environment suits you.',
+    tr: 'Bu soru aslında enerjini nereden aldığını soruyor — insanlarla birlikte olmaktan mı, yoksa sakin ve yalnız zamandan mı. Amaç, hangi öğrenme ortamının sana uyduğunu anlamak.',
+    ar: 'هذا السؤال يسأل في الحقيقة من أين تستمد طاقتك — من وجودك بين الناس أم من الوقت الهادئ بمفردك. الهدف معرفة بيئة الدراسة التي تناسبك.',
+  },
+  SN: {
+    fa: 'این سؤال می‌پرسد ذهنت با چه چیزی راحت‌تر است — جزئیات و مثال‌های واقعی، یا ایده‌ها و تصویر کلی. هدفم فهمیدن سبک یادگیری توست.',
+    en: 'This question asks what your mind prefers — concrete details and real examples, or ideas and the big picture. The goal is to understand your learning style.',
+    tr: 'Bu soru zihninin neyi tercih ettiğini soruyor — somut ayrıntılar ve gerçek örnekler mi, yoksa fikirler ve büyük resim mi. Amaç öğrenme tarzını anlamak.',
+    ar: 'هذا السؤال يسأل ما يفضّله عقلك — التفاصيل الملموسة والأمثلة الواقعية، أم الأفكار والصورة الكبرى. الهدف فهم أسلوب تعلّمك.',
+  },
+  TF: {
+    fa: 'این سؤال می‌پرسد وقتی تصمیم می‌گیری بیشتر به چه چیزی تکیه می‌کنی — منطق و معیارها، یا ارزش‌ها و اثر تصمیم روی آدم‌ها. هدفم فهمیدن سبک تصمیم‌گیری توست.',
+    en: 'This question asks what you lean on when you decide — logic and criteria, or values and the human impact of the choice. The goal is to understand your decision style.',
+    tr: 'Bu soru karar verirken neye dayandığını soruyor — mantık ve ölçütler mi, yoksa değerler ve kararın insanlara etkisi mi. Amaç karar tarzını anlamak.',
+    ar: 'هذا السؤال يسأل على ماذا تعتمد عند اتخاذ القرار — المنطق والمعايير، أم القيم وأثر القرار على الناس. الهدف فهم أسلوبك في القرار.',
+  },
+  JP: {
+    fa: 'این سؤال می‌پرسد با برنامه و نظم راحت‌تری یا با انعطاف و آزادی عمل. هدفم این است که نوع برنامه درسی مناسب تو را پیدا کنم.',
+    en: 'This question asks whether you’re more comfortable with a clear plan and structure, or with flexibility and open options. The goal is to find the kind of curriculum that fits you.',
+    tr: 'Bu soru net bir plan ve düzenle mi yoksa esneklik ve açık seçeneklerle mi daha rahat olduğunu soruyor. Amaç sana uygun müfredatı bulmak.',
+    ar: 'هذا السؤال يسأل هل ترتاح أكثر مع خطة ونظام واضح أم مع المرونة وحرية الخيارات. الهدف إيجاد نوع المنهج الذي يناسبك.',
+  },
+};
+
+// Always-shown closing line: ties the explanation back to the on-screen
+// options and reassures the student the options stay put.
+const CLOSE_TO_OPTIONS = {
+  fa: 'حالا با همین دید به گزینه‌های پایین نگاه کن و هر کدام بیشتر شبیه توست همان را بزن — گزینه‌ها همین‌جا می‌مانند تا هر وقت آماده بودی انتخاب کنی.',
+  en: 'Now, with that in mind, look at the options below and tap whichever is most like you — the options stay right here until you’re ready to choose.',
+  tr: 'Şimdi bunu aklında tutarak aşağıdaki seçeneklere bak ve sana en çok benzeyene dokun — seçenekler hazır olana kadar burada kalıyor.',
+  ar: 'الآن، وبهذا في ذهنك، انظر إلى الخيارات بالأسفل واضغط الأقرب إليك — تبقى الخيارات هنا حتى تكون مستعداً للاختيار.',
 };
 
 // Plain-language explanation per question layer (when it isn't an MBTI axis
@@ -145,12 +182,15 @@ const LAYER_EXPLAIN = {
 const currentQuestionIndex = (state) =>
   Math.min(TOTAL - 1, (state.discoveryAnswers || []).length);
 
-/** Plain-language explanation for a question: glossary for MBTI axes, else a
- *  layer-based note. Never changes the question — only explains it. */
+/** Plain-language explanation of what a question is really asking + its goal.
+ *  For MBTI-style questions it pairs the question's intent with the concept
+ *  (from the glossary). Never changes the question — only explains it. */
 function explanationForQuestion(q, lang) {
   if (q.axis) {
+    const intent = AXIS_INTENT[q.axis] ? L(AXIS_INTENT[q.axis], lang) : '';
     const entry = DISCOVERY_GLOSSARY.find((e) => e.id === q.axis.toLowerCase());
-    if (entry) return L(entry.explain, lang);
+    const concept = entry ? L(entry.explain, lang) : '';
+    return [intent, concept].filter(Boolean).join('\n\n');
   }
   const note = LAYER_EXPLAIN[q.layer] || LAYER_EXPLAIN.traits;
   return L(note, lang);
@@ -272,7 +312,7 @@ export const majorDiscoveryFlow = {
     const q = DISCOVERY_QUESTIONS[qIndex];
     return {
       messages: [
-        aiMsg(lang, `${L(EXPLAIN_LEAD, lang)}\n\n${explanationForQuestion(q, lang)}`, { meta: { tone: 'assist' } }),
+        aiMsg(lang, `${L(EXPLAIN_LEAD, lang)}\n\n${explanationForQuestion(q, lang)}\n\n${L(CLOSE_TO_OPTIONS, lang)}`, { meta: { tone: 'assist' } }),
         questionMessage(lang, qIndex),
       ],
       patch: { currentStep: `discovery_q_${qIndex}` },
@@ -291,13 +331,16 @@ export const majorDiscoveryFlow = {
     if (verdict.kind === 'map') {
       const option = question.options.find((o) => o.id === verdict.optionId);
       const label = L(option.label, lang);
+      // Keep ALL the original options on the confirm message, so the student can
+      // confirm the guess OR tap a different option directly — options never
+      // disappear while chatting.
       return {
         messages: [
           aiMsg(lang, CONFIRM_MAP[lang](label), {
             meta: { tone: 'assist' },
             actions: [
               action(lang, CONFIRM_YES, verdict.optionId, INTENTS.DISCOVERY_ANSWER, { variant: 'primary', icon: 'CheckCircle2' }),
-              action(lang, CONFIRM_NO, 'reshow', INTENTS.DISCOVERY_RESHOW, { icon: 'RotateCcw' }),
+              ...questionActions(lang, qIndex),
             ],
           }),
         ],

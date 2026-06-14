@@ -1,8 +1,8 @@
 // Speech-to-text "voice typing" — distinct from the live realtime voice button.
 // Press it, speak, and your words are transcribed INTO the composer input so you
 // can edit them and send yourself (like the mic in ChatGPT's text box). Uses the
-// browser's built-in SpeechRecognition — no backend, no API key. Degrades
-// gracefully when the browser doesn't support it.
+// browser's built-in SpeechRecognition — no backend, no API key. Surfaces a
+// clear reason when it can't run (permission, no mic, unsupported browser).
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mic, MicOff } from 'lucide-react';
@@ -13,15 +13,45 @@ const LOCALE = { fa: 'fa-IR', en: 'en-US', tr: 'tr-TR', ar: 'ar-SA' };
 const getSpeechRecognition = () =>
   typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
+// Map a SpeechRecognition error code to a friendly, localized message.
+const ERR_MESSAGES = {
+  'not-allowed': {
+    fa: 'دسترسی به میکروفون رد شد. از نوار آدرس مرورگر، میکروفون را برای این سایت اجازه بده.',
+    en: 'Microphone access was blocked. Allow the mic for this site from the browser address bar.',
+    tr: 'Mikrofon erişimi engellendi. Tarayıcı adres çubuğundan bu site için mikrofona izin ver.',
+    ar: 'تم حظر الوصول إلى الميكروفون. اسمح بالميكروفون لهذا الموقع من شريط العنوان.',
+  },
+  'audio-capture': {
+    fa: 'میکروفونی پیدا نشد. یک میکروفون وصل کن و دوباره امتحان کن.',
+    en: 'No microphone found. Connect a mic and try again.',
+    tr: 'Mikrofon bulunamadı. Bir mikrofon bağlayıp tekrar dene.',
+    ar: 'لم يُعثر على ميكروفون. صِل ميكروفوناً وحاول مجدداً.',
+  },
+  'no-speech': {
+    fa: 'صدایی نشنیدم. دوباره دکمه را بزن و واضح‌تر صحبت کن.',
+    en: 'I didn’t hear anything. Tap again and speak a bit louder.',
+    tr: 'Bir şey duymadım. Tekrar dokun ve biraz daha yüksek konuş.',
+    ar: 'لم أسمع شيئاً. اضغط مجدداً وتحدث بوضوح أكثر.',
+  },
+};
+
 export default function DictationButton({ baseText = '', onText, disabled, lang }) {
   const [listening, setListening] = useState(false);
-  const [unsupported, setUnsupported] = useState(false);
+  const [note, setNote] = useState('');
   const recRef = useRef(null);
   const baseRef = useRef('');
+  const noteTimer = useRef(null);
 
   useEffect(() => () => {
     try { recRef.current?.stop(); } catch { /* ignore */ }
+    if (noteTimer.current) clearTimeout(noteTimer.current);
   }, []);
+
+  const flashNote = (text) => {
+    setNote(text);
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => setNote(''), 5000);
+  };
 
   const toggle = () => {
     if (listening) {
@@ -31,8 +61,7 @@ export default function DictationButton({ baseText = '', onText, disabled, lang 
     }
     const SpeechRecognition = getSpeechRecognition();
     if (!SpeechRecognition) {
-      setUnsupported(true);
-      setTimeout(() => setUnsupported(false), 4000);
+      flashNote(L(UI.dictationUnsupported, lang));
       return;
     }
     const rec = new SpeechRecognition();
@@ -42,6 +71,7 @@ export default function DictationButton({ baseText = '', onText, disabled, lang 
     rec.maxAlternatives = 1;
     // Capture whatever is already typed, once, so transcription appends cleanly.
     baseRef.current = (baseText || '').trim();
+    setNote('');
 
     rec.onresult = (event) => {
       let transcript = '';
@@ -52,7 +82,11 @@ export default function DictationButton({ baseText = '', onText, disabled, lang 
       const base = baseRef.current;
       onText?.(base ? `${base} ${transcript}` : transcript);
     };
-    rec.onerror = () => setListening(false);
+    rec.onerror = (event) => {
+      const msg = ERR_MESSAGES[event?.error];
+      if (msg) flashNote(L(msg, lang));
+      setListening(false);
+    };
     rec.onend = () => setListening(false);
 
     recRef.current = rec;
@@ -66,9 +100,9 @@ export default function DictationButton({ baseText = '', onText, disabled, lang 
 
   return (
     <div className="relative shrink-0">
-      {unsupported && (
-        <span className="absolute bottom-full start-0 mb-2 w-52 rounded-xl border border-white/70 bg-white/95 px-3 py-2 text-[10px] font-bold leading-5 text-navy shadow-[0_12px_30px_rgba(7,26,61,0.18)]">
-          {L(UI.dictationUnsupported, lang)}
+      {note && (
+        <span className="absolute bottom-full start-0 z-10 mb-2 w-56 rounded-xl border border-white/70 bg-white/95 px-3 py-2 text-[10px] font-bold leading-5 text-navy shadow-[0_12px_30px_rgba(7,26,61,0.18)]">
+          {note}
         </span>
       )}
       <motion.button
