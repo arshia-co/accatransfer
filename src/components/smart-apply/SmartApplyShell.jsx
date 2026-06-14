@@ -1,7 +1,7 @@
 // Smart Apply page shell: ambient background, header, AI cockpit (orb +
 // conversation + composer), session insight panel, login gate and the
 // dashboard preview. One central AI interface — no menus, no long forms.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, RotateCcw, ExternalLink, X, Sparkles, LayoutGrid } from 'lucide-react';
 import { L, dirFor } from '../../lib/lang';
@@ -11,6 +11,7 @@ import { sessionProgress, useSmartApplyStore } from '../../store/smartApplyStore
 import AIAssistantOrb from './AIAssistantOrb';
 import ConversationPanel from './ConversationPanel';
 import VoiceInputButton from './VoiceInputButton';
+import VoiceConversationOverlay from './VoiceConversationOverlay';
 import SessionInsightPanel from './SessionInsightPanel';
 import LoginGateModal from './LoginGateModal';
 import SmartApplyProfilePreview from './SmartApplyProfilePreview';
@@ -20,15 +21,22 @@ export default function SmartApplyShell() {
   const currentStep = useSmartApplyStore((s) => s.currentStep);
   const assistantStatus = useSmartApplyStore((s) => s.assistantStatus);
   const isListening = useSmartApplyStore((s) => s.isListening);
-  const voiceNotice = useSmartApplyStore((s) => s.voiceNotice);
+  const isAssistantSpeaking = useSmartApplyStore((s) => s.isAssistantSpeaking);
+  const sessionId = useSmartApplyStore((s) => s.sessionId);
+  const messages = useSmartApplyStore((s) => s.messages);
+  const goal = useSmartApplyStore((s) => s.goal);
+  const studentProfile = useSmartApplyStore((s) => s.studentProfile);
   const boot = useSmartApplyStore((s) => s.boot);
   const restart = useSmartApplyStore((s) => s.restart);
   const submitFreeText = useSmartApplyStore((s) => s.submitFreeText);
-  const pressVoice = useSmartApplyStore((s) => s.pressVoice);
+  const setVoiceActivity = useSmartApplyStore((s) => s.setVoiceActivity);
+  const appendVoiceTranscript = useSmartApplyStore((s) => s.appendVoiceTranscript);
   const progress = useSmartApplyStore(sessionProgress);
 
   const [draft, setDraft] = useState('');
   const [insightOpen, setInsightOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [voiceContextSnapshot, setVoiceContextSnapshot] = useState('');
 
   const dir = dirFor(language);
   const busy = assistantStatus !== 'idle';
@@ -54,6 +62,8 @@ export default function SmartApplyShell() {
 
   const statusLabel = isListening
     ? L(UI.statusListening, language)
+    : isAssistantSpeaking
+      ? L(UI.statusSpeaking, language)
     : assistantStatus === 'thinking'
       ? L(UI.statusThinking, language)
       : assistantStatus === 'typing'
@@ -66,6 +76,34 @@ export default function SmartApplyShell() {
     submitFreeText(draft);
     setDraft('');
   };
+
+  const voiceContext = useMemo(() => {
+    const profile = [
+      goal ? `goal=${goal}` : '',
+      studentProfile?.degree ? `degree=${studentProfile.degree}` : '',
+      studentProfile?.country ? `country=${studentProfile.country}` : '',
+      studentProfile?.knownMajor ? `major=${studentProfile.knownMajor}` : '',
+    ].filter(Boolean).join(', ');
+    const recent = messages
+      .filter((message) => message.content && (message.role === 'user' || message.role === 'assistant'))
+      .slice(-8)
+      .map((message) => `${message.role}: ${message.content}`)
+      .join('\n');
+    return [profile, recent].filter(Boolean).join('\n\n');
+  }, [goal, messages, studentProfile]);
+
+  const handleVoiceTranscript = useCallback((role, text, sourceId) => {
+    appendVoiceTranscript(role, text, sourceId);
+  }, [appendVoiceTranscript]);
+
+  const handleVoiceActivity = useCallback((activity) => {
+    setVoiceActivity(activity);
+  }, [setVoiceActivity]);
+
+  const handleOpenVoice = useCallback(() => {
+    setVoiceContextSnapshot(voiceContext);
+    setVoiceOpen(true);
+  }, [voiceContext]);
 
   return (
     <div dir={dir} className="relative min-h-screen overflow-hidden bg-cream text-navy">
@@ -155,7 +193,11 @@ export default function SmartApplyShell() {
             {/* assistant header */}
             <div className="relative border-b border-navy/[0.055] bg-white/64 px-4 pb-3.5 pt-4 sm:px-6 sm:pb-4">
               <div className="flex items-center gap-3.5 sm:gap-4">
-                <AIAssistantOrb size="hero" status={assistantStatus} listening={isListening} />
+                <AIAssistantOrb
+                  size="hero"
+                  status={isAssistantSpeaking ? 'typing' : assistantStatus}
+                  listening={isListening}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gold sm:text-[10px]">{L(UI.guidedSession, language)}</p>
                   <h1 className="mt-0.5 truncate text-base font-black text-navy sm:text-lg">{L(UI.assistantName, language)}</h1>
@@ -201,9 +243,9 @@ export default function SmartApplyShell() {
                 className="flex items-center gap-2 rounded-full border border-navy/10 bg-white/90 py-1.5 pe-1.5 ps-2 shadow-[0_10px_36px_rgba(7,26,61,0.065)] backdrop-blur-xl transition focus-within:border-emerald-700/25 focus-within:shadow-[0_12px_40px_rgba(5,150,105,0.10)] sm:gap-2.5"
               >
                 <VoiceInputButton
-                  listening={isListening}
-                  notice={voiceNotice}
-                  onPress={pressVoice}
+                  active={voiceOpen}
+                  disabled={busy}
+                  onPress={handleOpenVoice}
                   lang={language}
                 />
                 <input
@@ -269,6 +311,15 @@ export default function SmartApplyShell() {
       {/* ---- overlays ---- */}
       <LoginGateModal lang={language} />
       <SmartApplyProfilePreview lang={language} />
+      <VoiceConversationOverlay
+        open={voiceOpen}
+        lang={language}
+        sessionId={sessionId}
+        context={voiceContextSnapshot}
+        onTranscript={handleVoiceTranscript}
+        onActivity={handleVoiceActivity}
+        onClose={() => setVoiceOpen(false)}
+      />
     </div>
   );
 }

@@ -226,14 +226,27 @@ export const useSmartApplyStore = create((set, get) => {
       runExchange((state) => sendText(trimmed, state), { echoLabel: trimmed });
     },
 
-    /** Voice button: animated listening state + honest placeholder note. */
-    pressVoice: async () => {
-      if (get().isListening) return;
-      set({ voiceMode: true, isListening: true, voiceNotice: false });
-      await delay(2300);
-      set({ isListening: false, voiceNotice: true });
-      await delay(4200);
-      set({ voiceNotice: false });
+    setVoiceActivity: ({ listening = false, speaking = false }) => {
+      set({
+        voiceMode: listening || speaking,
+        isListening: listening,
+        isAssistantSpeaking: speaking,
+        voiceNotice: false,
+      });
+    },
+
+    appendVoiceTranscript: (role, content, sourceId) => {
+      const text = String(content || '').trim();
+      if (!text || (role !== 'user' && role !== 'assistant')) return;
+      const duplicate = get().messages.some((message) => message.meta?.voiceSourceId === sourceId);
+      if (duplicate) return;
+      pushMessage({
+        role,
+        content: text,
+        lang: get().language,
+        meta: { voice: true, voiceSourceId: sourceId },
+      });
+      set({ suggestedActions: [] });
     },
 
     openLoginGate: () => set({ isLoginGateOpen: true }),
