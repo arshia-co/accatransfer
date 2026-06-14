@@ -64,18 +64,28 @@ Deno.serve(async (req) => {
 
   await supabase.from("transfer_assessments").update({ status: "analyzing" }).eq("id", assessment.id);
   await supabase.from("student_documents").update({ status: "processing" }).eq("id", document.id);
-  const { data: signed, error: signedError } = await supabase.storage.from(document.bucket_id).createSignedUrl(document.object_path, 300);
-  if (signedError || !signed?.signedUrl) return json(req, { error: "Could not prepare the document." }, 500);
+  let fileContent: Record<string, unknown> | null = null;
+  if (!document.ai_extraction) {
+    const { data: signed, error: signedError } = await supabase.storage.from(document.bucket_id).createSignedUrl(document.object_path, 300);
+    if (signedError || !signed?.signedUrl) return json(req, { error: "Could not prepare the document." }, 500);
+    fileContent = document.mime_type === "application/pdf"
+      ? { type: "input_file", file_url: signed.signedUrl }
+      : { type: "input_image", image_url: signed.signedUrl, detail: "high" };
+  }
 
-  const fileContent = document.mime_type === "application/pdf"
-    ? { type: "input_file", file_url: signed.signedUrl }
-    : { type: "input_image", image_url: signed.signedUrl, detail: "high" };
+  const extractionContext = document.ai_extraction
+    ? JSON.stringify(document.ai_extraction).slice(0, 120_000)
+    : "No separate OCR result is available. Read the attached private document directly.";
   const prompt = `Review this academic document for preliminary transfer guidance.
 Current university: ${assessment.current_university ?? "not provided"}
 Current program: ${assessment.current_program ?? "not provided"}
 Target country: ${assessment.target_country ?? "not provided"}
 Target program: ${assessment.target_program ?? "not provided"}
-Be conservative and do not invent unreadable values. This is educational guidance, not official OCR, course equivalency, admission, or a university decision. Return only valid JSON.`;
+Document review status: ${document.review_status ?? "not reviewed"}
+OCR confidence: ${document.ocr_confidence ?? "not available"}
+Structured OCR result: ${extractionContext}
+
+Use the structured OCR result as preliminary evidence, not verified truth. Be conservative and do not invent unreadable values. Lower the transfer fit when the document is unconfirmed, low-confidence, incomplete, or queued for human review. This is educational guidance, not official OCR, course equivalency, admission, or a university decision. Return only valid JSON.`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -84,7 +94,13 @@ Be conservative and do not invent unreadable values. This is educational guidanc
       body: JSON.stringify({
         model: OPENAI_MODEL,
         instructions: "You are ACCA AI Transfer, a careful international university transfer guidance assistant.",
-        input: [{ role: "user", content: [{ type: "input_text", text: prompt }, fileContent] }],
+        input: [{
+          role: "user",
+          content: [
+            { type: "input_text", text: prompt },
+            ...(fileContent ? [fileContent] : []),
+          ],
+        }],
         text: { format: {
           type: "json_schema", name: "transfer_preliminary_result", strict: true,
           schema: {
@@ -104,6 +120,7 @@ Be conservative and do not invent unreadable values. This is educational guidanc
           },
         }},
         max_output_tokens: 1100,
+        store: false,
       }),
     });
     if (!response.ok) {

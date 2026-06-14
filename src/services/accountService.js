@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import { inspectDocumentQuality } from './documentQualityService';
 
 const DOCUMENT_BUCKET = 'student-documents';
 const GUEST_TRANSFER_KEY = 'acca-transfer-guest-assessment';
@@ -134,17 +135,29 @@ export async function listCentralAccountData(userId) {
   };
 }
 
-export async function uploadStudentDocument({ user, product, kind, file, assessmentId = null, onProgress }) {
+export async function uploadStudentDocument({
+  user,
+  product,
+  kind,
+  file,
+  assessmentId = null,
+  onProgress,
+  onStage,
+}) {
   validateDocument(file);
   const client = requireClient();
+  onStage?.('quality');
+  onProgress?.(6);
+  const qualityReport = await inspectDocumentQuality(file);
   const objectPath = `${user.id}/${product}/${assessmentId || 'general'}/${crypto.randomUUID()}-${safeFilename(file.name)}`;
-  onProgress?.(20);
+  onStage?.('upload');
+  onProgress?.(18);
 
   const { error: uploadError } = await client.storage
     .from(DOCUMENT_BUCKET)
     .upload(objectPath, file, { cacheControl: '3600', upsert: false, contentType: file.type });
   if (uploadError) throw uploadError;
-  onProgress?.(72);
+  onProgress?.(62);
 
   const { data, error: rowError } = await client
     .from('student_documents')
@@ -158,6 +171,7 @@ export async function uploadStudentDocument({ user, product, kind, file, assessm
       mime_type: file.type,
       size_bytes: file.size,
       status: 'uploaded',
+      quality_report: qualityReport,
     })
     .select()
     .single();
@@ -166,8 +180,23 @@ export async function uploadStudentDocument({ user, product, kind, file, assessm
     await client.storage.from(DOCUMENT_BUCKET).remove([objectPath]);
     throw rowError;
   }
-  onProgress?.(100);
-  return data;
+  onStage?.('ocr');
+  onProgress?.(76);
+
+  try {
+    const ocr = await requestDocumentOcr({ documentId: data.id });
+    onProgress?.(100);
+    return { ...ocr.document, ocrResult: ocr.result, qualityReport, ocrError: null };
+  } catch (error) {
+    onProgress?.(100);
+    return {
+      ...data,
+      quality_report: qualityReport,
+      qualityReport,
+      ocrResult: null,
+      ocrError: error?.message || 'OCR could not be completed.',
+    };
+  }
 }
 
 export async function createTransferAssessment(user, fields = {}) {
@@ -195,6 +224,49 @@ export async function requestTransferAnalysis({ assessmentId, documentId }) {
   });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function requestDocumentOcr({ documentId, force = false }) {
+  const client = requireClient();
+  const { data, error } = await client.functions.invoke('document-ocr', {
+    body: { documentId, force },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function confirmDocumentExtraction(document) {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('student_documents')
+    .update({
+      status: 'verified',
+      review_status: 'confirmed',
+      confirmed_extraction: document.ai_extraction,
+      confirmed_at: new Date().toISOString(),
+      review_notes: null,
+    })
+    .eq('id', document.id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function requestHumanDocumentReview(documentId) {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('student_documents')
+    .update({
+      review_status: 'admin_review',
+      review_notes: 'Student requested a human review.',
+    })
+    .eq('id', documentId)
+    .select()
+    .single();
+  if (error) throw error;
   return data;
 }
 

@@ -11,3 +11,7 @@ verify_jwt = false
 [functions.transfer-analyze]
 # Explicit bearer validation is performed with supabase.auth.getUser().
 verify_jwt = false
+
+[functions.document-ocr]
+# Explicit bearer validation is performed with supabase.auth.getUser().
+verify_jwt = false

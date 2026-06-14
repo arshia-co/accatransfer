@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  ArrowLeft, BrainCircuit, CheckCircle2, Clock3, CloudUpload, Compass,
+  AlertTriangle, ArrowLeft, BadgeCheck, BrainCircuit, CheckCircle2, Clock3, CloudUpload, Compass,
   FileText, FolderLock, GraduationCap, LayoutGrid, LoaderCircle, LogOut,
-  RefreshCw, ShieldCheck, Sparkles, UserRound,
+  RefreshCw, ScanText, ShieldCheck, Sparkles, UserRound,
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import {
+  confirmDocumentExtraction,
   createTransferAssessment,
   listCentralAccountData,
+  requestDocumentOcr,
+  requestHumanDocumentReview,
   requestTransferAnalysis,
   uploadStudentDocument,
 } from '../../services/accountService';
@@ -44,6 +47,7 @@ function StatusPill({ status = 'draft' }) {
 function DocumentUpload({ product, user, assessmentId, onUploaded }) {
   const [kind, setKind] = useState(product === 'ai_transfer' ? 'transcript' : 'passport');
   const [progress, setProgress] = useState(0);
+  const [stage, setStage] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -51,17 +55,36 @@ function DocumentUpload({ product, user, assessmentId, onUploaded }) {
     if (!file) return;
     setBusy(true);
     setError('');
+    setStage('quality');
     setProgress(5);
     try {
-      await uploadStudentDocument({ user, product, kind, file, assessmentId, onProgress: setProgress });
+      const uploaded = await uploadStudentDocument({
+        user,
+        product,
+        kind,
+        file,
+        assessmentId,
+        onProgress: setProgress,
+        onStage: setStage,
+      });
+      if (uploaded.ocrError) {
+        setError('فایل امن ذخیره شد، اما OCR کامل نشد. می‌توانید دوباره پردازش را اجرا کنید.');
+      }
       await onUploaded();
     } catch (err) {
       setError(err?.message || 'آپلود انجام نشد.');
     } finally {
       setBusy(false);
+      setStage('');
       window.setTimeout(() => setProgress(0), 700);
     }
   };
+
+  const stageLabel = {
+    quality: 'بررسی کیفیت',
+    upload: 'آپلود امن',
+    ocr: 'خواندن هوشمند مدرک',
+  }[stage];
 
   return (
     <div className="account-product-upload">
@@ -85,7 +108,7 @@ function DocumentUpload({ product, user, assessmentId, onUploaded }) {
       </select>
       <label>
         {busy ? <LoaderCircle className="account-spin" size={17} /> : <CloudUpload size={17} />}
-        {busy ? `${progress}%` : 'آپلود مدرک'}
+        {busy ? `${stageLabel || 'در حال پردازش'} · ${progress}%` : 'آپلود و بررسی مدرک'}
         <input type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={busy} onChange={(event) => upload(event.target.files?.[0])} />
       </label>
       {progress > 0 && <div className="account-progress"><span style={{ width: `${progress}%` }} /></div>}
@@ -94,22 +117,95 @@ function DocumentUpload({ product, user, assessmentId, onUploaded }) {
   );
 }
 
-function DocumentList({ documents }) {
+const EXTRACTION_FIELDS = [
+  ['student_name', 'نام دانشجو'],
+  ['institution', 'دانشگاه / مؤسسه'],
+  ['program', 'رشته'],
+  ['gpa', 'معدل'],
+  ['gpa_scale', 'مقیاس معدل'],
+  ['total_credits', 'واحدهای ثبت‌شده'],
+  ['document_number', 'شماره مدرک'],
+];
+
+function DocumentList({ documents, busyId, onConfirm, onReview, onRetry }) {
   if (!documents.length) {
     return <div className="account-product-empty"><FolderLock size={22} /><span>هنوز مدرکی در این بخش ثبت نشده است.</span></div>;
   }
   return (
     <div className="account-document-list">
-      {documents.map((document) => (
-        <article key={document.id}>
-          <span><FileText size={18} /></span>
-          <div>
-            <b>{document.original_name}</b>
-            <small>{formatSize(document.size_bytes)} · {formatDate(document.created_at)}</small>
-          </div>
-          <StatusPill status={document.status} />
-        </article>
-      ))}
+      {documents.map((document) => {
+        const extraction = document.ai_extraction;
+        const fields = extraction?.fields || {};
+        const visibleFields = EXTRACTION_FIELDS.filter(([key]) => fields[key]);
+        const confidence = document.ocr_confidence ?? extraction?.overall_confidence;
+        const quality = extraction?.quality || document.quality_report;
+        const isBusy = busyId === document.id;
+        const needsHuman = document.review_status === 'admin_review';
+        const confirmed = document.review_status === 'confirmed';
+
+        return (
+          <article key={document.id} className="account-document-card">
+            <div className="account-document-main">
+              <span><FileText size={18} /></span>
+              <div>
+                <b>{document.original_name}</b>
+                <small>{formatSize(document.size_bytes)} · {formatDate(document.created_at)}</small>
+              </div>
+              <StatusPill status={document.status} />
+            </div>
+
+            {extraction ? (
+              <div className="account-ocr-panel">
+                <div className="account-ocr-head">
+                  <span><ScanText size={15} /> OCR هوشمند</span>
+                  <div>
+                    {Number.isFinite(Number(confidence)) && <b>{confidence}% اطمینان</b>}
+                    <span className={needsHuman ? 'is-review' : confirmed ? 'is-confirmed' : ''}>
+                      {needsHuman ? 'نیازمند بررسی انسانی' : confirmed ? 'تأیید دانشجو' : 'منتظر تأیید دانشجو'}
+                    </span>
+                  </div>
+                </div>
+
+                {visibleFields.length > 0 && (
+                  <dl className="account-ocr-fields">
+                    {visibleFields.map(([key, label]) => (
+                      <div key={key}><dt>{label}</dt><dd dir={key === 'student_name' ? 'auto' : 'ltr'}>{fields[key]}</dd></div>
+                    ))}
+                  </dl>
+                )}
+
+                <p className="account-ocr-summary">{extraction.summary}</p>
+                {quality?.student_action && quality.status !== 'good' && (
+                  <p className="account-ocr-warning"><AlertTriangle size={14} />{quality.student_action}</p>
+                )}
+
+                {!confirmed && (
+                  <div className="account-ocr-actions">
+                    <button type="button" onClick={() => onConfirm(document)} disabled={isBusy || needsHuman}>
+                      {isBusy ? <LoaderCircle className="account-spin" size={14} /> : <BadgeCheck size={14} />}
+                      اطلاعات با مدرک مطابقت دارد
+                    </button>
+                    <button type="button" className="secondary" onClick={() => onReview(document)} disabled={isBusy}>
+                      درخواست بررسی انسانی
+                    </button>
+                  </div>
+                )}
+                <small className="account-ocr-disclaimer">
+                  خروجی OCR مقدماتی است. نام، شماره مدرک، معدل و نمرات را پیش از استفاده تأیید کنید.
+                </small>
+              </div>
+            ) : (
+              <div className="account-ocr-pending">
+                <span><AlertTriangle size={15} />هنوز خروجی OCR آماده نیست.</span>
+                <button type="button" onClick={() => onRetry(document)} disabled={isBusy}>
+                  {isBusy ? <LoaderCircle className="account-spin" size={14} /> : <RefreshCw size={14} />}
+                  اجرای دوباره OCR
+                </button>
+              </div>
+            )}
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -157,6 +253,7 @@ export default function AccountPortal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [analysisBusy, setAnalysisBusy] = useState(false);
+  const [documentBusyId, setDocumentBusyId] = useState(null);
 
   const refresh = useCallback(async () => {
     if (!user) return;
@@ -203,6 +300,21 @@ export default function AccountPortal() {
       setError(err?.message || 'تحلیل اولیه انتقالی انجام نشد.');
     } finally {
       setAnalysisBusy(false);
+    }
+  };
+
+  const updateDocumentReview = async (document, action) => {
+    setDocumentBusyId(document.id);
+    setError('');
+    try {
+      if (action === 'confirm') await confirmDocumentExtraction(document);
+      if (action === 'review') await requestHumanDocumentReview(document.id);
+      if (action === 'retry') await requestDocumentOcr({ documentId: document.id, force: true });
+      await refresh();
+    } catch (err) {
+      setError(err?.message || 'به‌روزرسانی بررسی مدرک انجام نشد.');
+    } finally {
+      setDocumentBusyId(null);
     }
   };
 
@@ -281,7 +393,13 @@ export default function AccountPortal() {
 
           <ResultCard result={smartSession?.result} type="smart" />
           <DocumentUpload product="smart_apply" user={user} onUploaded={refresh} />
-          <DocumentList documents={smartDocuments} />
+          <DocumentList
+            documents={smartDocuments}
+            busyId={documentBusyId}
+            onConfirm={(document) => updateDocumentReview(document, 'confirm')}
+            onReview={(document) => updateDocumentReview(document, 'review')}
+            onRetry={(document) => updateDocumentReview(document, 'retry')}
+          />
         </section>
 
         <section className="account-product-space account-product-transfer">
@@ -312,13 +430,22 @@ export default function AccountPortal() {
               assessmentId={transferAssessment?.id || null}
               onUploaded={refresh}
             />
-            <button type="button" onClick={runTransferAnalysis} disabled={!transferTranscript || analysisBusy}>
+            <button type="button" onClick={runTransferAnalysis} disabled={!transferTranscript?.ai_extraction || analysisBusy}>
               {analysisBusy ? <LoaderCircle className="account-spin" size={17} /> : <Sparkles size={17} />}
               {analysisBusy ? 'در حال تحلیل...' : transferAssessment?.ai_result ? 'تحلیل دوباره' : 'تحلیل اولیه ریزنمرات'}
             </button>
           </div>
           {!transferTranscript && <p className="account-tool-note">برای فعال شدن تحلیل اولیه، یک فایل ریزنمرات آپلود کنید.</p>}
-          <DocumentList documents={transferDocuments} />
+          {transferTranscript && !transferTranscript.ai_extraction && (
+            <p className="account-tool-note">ابتدا OCR ریزنمرات را کامل کنید؛ سپس تحلیل انتقالی فعال می‌شود.</p>
+          )}
+          <DocumentList
+            documents={transferDocuments}
+            busyId={documentBusyId}
+            onConfirm={(document) => updateDocumentReview(document, 'confirm')}
+            onReview={(document) => updateDocumentReview(document, 'review')}
+            onRetry={(document) => updateDocumentReview(document, 'retry')}
+          />
         </section>
 
         {loading && <div className="account-loading-line"><LoaderCircle className="account-spin" size={18} /> در حال همگام‌سازی حساب...</div>}
