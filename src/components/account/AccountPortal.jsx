@@ -821,7 +821,7 @@ export default function AccountPortal() {
             busy={submissionBusy}
             onSubmit={submitApplication}
           />
-          {smartSubmission && (
+          {(smartSubmission || acceptanceDoc) && (
             <AcceptanceJourneyPanel
               submission={smartSubmission}
               acceptanceDoc={acceptanceDoc}
