@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   LogIn,
   Menu,
+  Sparkles,
   UserPlus,
   X,
 } from 'lucide-react';
@@ -163,15 +164,23 @@ export function Navbar() {
             </button>
             <button
               onClick={() => openModal('memory')}
-              className="relative hidden md:inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-[#D6A46B] to-[#C8965F] text-[#0B2F42] text-[12.5px] font-medium px-4 py-2 ring-1 ring-white/15 shadow-[0_8px_30px_-8px_rgba(185,130,69,0.7)] hover:brightness-110 transition"
+              className="relative hidden md:inline-flex items-center gap-1.5 rounded-full border border-[color:var(--ta-gold)]/35 bg-white/60 backdrop-blur text-[#0B2F42] text-[12.5px] font-medium px-3.5 py-2 hover:bg-white/80 transition"
             >
-              <Database className="w-3.5 h-3.5" />
+              <Database className="w-3.5 h-3.5 text-[#B98245]" />
               {lang === 'fa' ? 'حافظه فرم' : 'Form Memory'}
               {memoryProgress > 0 && (
-                <span className="ms-1 rounded-full bg-white/70 px-1.5 py-0.5 text-[9px] font-bold">
+                <span className="ms-1 rounded-full bg-[color:var(--ta-gold)]/15 px-1.5 py-0.5 text-[9px] font-bold text-[#0B2F42]">
                   {memoryProgress}%
                 </span>
               )}
+            </button>
+
+            <button
+              onClick={() => openModal('assessment')}
+              className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-[#D6A46B] to-[#C8965F] text-[#0B2F42] text-[12.5px] font-semibold px-4 py-2 ring-1 ring-white/15 shadow-[0_8px_30px_-8px_rgba(185,130,69,0.7)] hover:brightness-110 transition"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              {tr('ctaCheckEligibility')}
             </button>
 
             <a
@@ -224,11 +233,21 @@ export function Navbar() {
               <button
                 onClick={() => {
                   setOpen(false);
+                  openModal('assessment');
+                }}
+                className="mt-3 inline-flex justify-center items-center gap-1.5 rounded-xl bg-gradient-to-b from-[#D6A46B] to-[#C8965F] text-[#0B2F42] text-sm font-semibold px-4 py-3 ring-1 ring-white/15 shadow-[0_8px_30px_-8px_rgba(185,130,69,0.7)]"
+              >
+                <Sparkles className="w-4 h-4" />
+                {tr('ctaCheckEligibility')}
+              </button>
+              <button
+                onClick={() => {
+                  setOpen(false);
                   openModal('memory');
                 }}
-                className="mt-3 inline-flex justify-center items-center gap-1.5 rounded-xl bg-gradient-to-b from-[#D6A46B] to-[#C8965F] text-[#0B2F42] text-sm font-medium px-4 py-3"
+                className="mt-2 inline-flex justify-center items-center gap-1.5 rounded-xl border border-[color:var(--ta-gold)]/35 bg-white/70 text-[#0B2F42] text-sm font-medium px-4 py-3"
               >
-                <Database className="w-4 h-4" />
+                <Database className="w-4 h-4 text-[#B98245]" />
                 {lang === 'fa' ? 'حافظه فرم' : 'Form Memory'}
                 {memoryProgress > 0 && <span className="ms-1 text-xs">{memoryProgress}%</span>}
               </button>

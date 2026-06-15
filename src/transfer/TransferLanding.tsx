@@ -3,7 +3,6 @@ import { MotionConfig } from 'framer-motion';
 import { Navbar } from '@/components/landing/Navbar';
 import { Hero } from '@/components/landing/Hero';
 import {
-  ProblemSection,
   ProcessSection,
   DashboardPreview,
   RolesSection,
@@ -45,12 +44,11 @@ function TransferExperience() {
         <Navbar />
         <main>
           <Hero />
-          <ProblemSection />
           <ProcessSection />
+          <MatchingSection />
           <DashboardPreview />
           <DashboardTabsSection />
           <RolesSection />
-          <MatchingSection />
           <UniversitiesSection />
           <TrustSection />
           <PricingSection />
