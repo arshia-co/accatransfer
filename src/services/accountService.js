@@ -53,6 +53,7 @@ export async function migrateGuestTransferDraft(user) {
   }
 
   const client = requireClient();
+  const guestResult = draft.preliminaryResult || null;
   const { data, error } = await client
     .from('transfer_assessments')
     .upsert({
@@ -62,7 +63,26 @@ export async function migrateGuestTransferDraft(user) {
       current_program: draft.answers?.currentProgram || null,
       target_country: draft.answers?.targetCountry || null,
       target_program: draft.answers?.targetProgram || null,
-      status: 'draft',
+      status: guestResult ? 'preliminary_result' : 'draft',
+      ai_result: guestResult ? {
+        headline: 'نتیجه مقدماتی انتقالی شما',
+        overview: guestResult.overview,
+        estimated_transfer_match: guestResult.estimatedTransferMatch,
+        estimated_entry_level: guestResult.estimatedEntryLevel,
+        likely_recognized_courses: guestResult.likelyRecognizedCourses,
+        missing_documents_count: guestResult.missingDocumentsCount,
+        ai_confidence: guestResult.aiConfidence,
+        risk_level: guestResult.riskLevel,
+        preliminary_transfer_fit: guestResult.classification,
+        next_steps: guestResult.nextSteps,
+        admission_reality_note: guestResult.disclaimer,
+        source_boundaries: {
+          provided_by_student: guestResult.providedFacts,
+          estimated_by_ai: guestResult.estimatedFacts,
+          requires_university_decision: guestResult.universityDecision,
+        },
+        guest_answers: draft.answers || {},
+      } : null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,guest_draft_id' })
     .select()
@@ -117,22 +137,138 @@ export async function listAccountData(userId, product) {
 
 export async function listCentralAccountData(userId) {
   const client = requireClient();
-  const [profile, documents, smartApply, transfer] = await Promise.all([
+  const [profile, documents, smartApply, deepFit, transfer, selections, submissions] = await Promise.all([
     client.from('profiles').select('*').eq('id', userId).maybeSingle(),
     client.from('student_documents').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
     client.from('smart_apply_sessions').select('*').eq('user_id', userId).order('updated_at', { ascending: false }),
+    client.from('smart_apply_deep_profiles').select('*').eq('user_id', userId).maybeSingle(),
     client.from('transfer_assessments').select('*').eq('user_id', userId).order('updated_at', { ascending: false }),
+    client.from('student_program_selections').select('*').eq('user_id', userId).order('updated_at', { ascending: false }),
+    client.from('application_submissions').select('*').eq('user_id', userId).order('submitted_at', { ascending: false }),
   ]);
 
-  const failure = [profile, documents, smartApply, transfer].find((result) => result.error);
+  const failure = [profile, documents, smartApply, deepFit, transfer, selections, submissions]
+    .find((result) => result.error);
   if (failure?.error) throw failure.error;
 
   return {
     profile: profile.data || null,
     documents: documents.data || [],
     smartApply: smartApply.data || [],
+    deepFit: deepFit.data || null,
     transfer: transfer.data || [],
+    selections: selections.data || [],
+    submissions: submissions.data || [],
   };
+}
+
+export async function upsertProgramSelection(user, product, selection) {
+  const client = requireClient();
+  if (!user?.id) throw new Error('برای ذخیره انتخاب وارد حساب شوید.');
+  if (!['smart_apply', 'ai_transfer'].includes(product)) throw new Error('سرویس انتخاب‌شده معتبر نیست.');
+
+  // Accepts a single program (legacy) or a shortlist array. The first item is
+  // the primary; the full list is kept inside catalog_snapshot.items so the
+  // single-row schema (unique user_id+product) stays unchanged.
+  const items = (Array.isArray(selection) ? selection : [selection]).filter(Boolean);
+  if (!items.length) throw new Error('حداقل یک رشته و دانشگاه را انتخاب کنید.');
+  if (!items.every((item) => ['Turkey', 'KKTC'].includes(item?.country))) {
+    throw new Error('فقط دانشگاه‌های ترکیه و قبرس شمالی قابل انتخاب هستند.');
+  }
+  const program = items[0];
+
+  const payload = {
+    user_id: user.id,
+    product,
+    catalog_program_id: String(program.id),
+    country: program.country,
+    city: program.city || null,
+    university_name: program.university,
+    program_name: program.program,
+    degree: program.degree || null,
+    language: program.language || null,
+    tuition_fee: program.tuitionFee || null,
+    cash_fee: program.cashFees || null,
+    university_logo: program.universityLogo || null,
+    official_url: program.universityUrl || null,
+    source: 'accaco',
+    catalog_snapshot: { ...program, items },
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await client
+    .from('student_program_selections')
+    .upsert(payload, { onConflict: 'user_id,product' })
+    .select()
+    .single();
+  if (error) throw error;
+
+  if (product === 'ai_transfer') {
+    const transferTarget = {
+      target_country: program.country,
+      target_university: program.university,
+      target_program: program.program,
+      target_program_id: String(program.id),
+      target_program_snapshot: program,
+      updated_at: new Date().toISOString(),
+    };
+    const { data: latest, error: latestError } = await client
+      .from('transfer_assessments')
+      .select('id')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestError) throw latestError;
+
+    const transferResult = latest?.id
+      ? await client.from('transfer_assessments').update({
+          ...transferTarget,
+          status: 'draft',
+          ai_result: null,
+        }).eq('id', latest.id)
+      : await client.from('transfer_assessments').insert({
+          user_id: user.id,
+          ...transferTarget,
+          status: 'draft',
+        });
+    if (transferResult.error) throw transferResult.error;
+  }
+
+  return data;
+}
+
+export async function loadSmartApplyDeepProfile(userId) {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('smart_apply_deep_profiles')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function saveSmartApplyDeepProfile(user, state) {
+  const client = requireClient();
+  const completed = state.deepFitStatus === 'completed' && Boolean(state.deepFitResult);
+  const { data, error } = await client
+    .from('smart_apply_deep_profiles')
+    .upsert({
+      user_id: user.id,
+      status: completed ? 'completed' : 'in_progress',
+      answers: state.deepFitAnswers || [],
+      adaptive_question_ids: state.deepFitAdaptiveIds || [],
+      result: state.deepFitResult || null,
+      completed_at: completed
+        ? (state.deepFitResult?.completedAt || new Date().toISOString())
+        : null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function uploadStudentDocument({
@@ -208,7 +344,10 @@ export async function createTransferAssessment(user, fields = {}) {
       current_university: fields.currentUniversity || null,
       current_program: fields.currentProgram || null,
       target_country: fields.targetCountry || null,
+      target_university: fields.targetUniversity || null,
       target_program: fields.targetProgram || null,
+      target_program_id: fields.targetProgramId || null,
+      target_program_snapshot: fields.targetProgramSnapshot || null,
       status: 'draft',
     })
     .select()
@@ -275,4 +414,19 @@ export async function createDocumentSignedUrl(objectPath) {
   const { data, error } = await client.storage.from(DOCUMENT_BUCKET).createSignedUrl(objectPath, 60);
   if (error) throw error;
   return data.signedUrl;
+}
+
+export async function requestApplicationSubmission({
+  product = 'smart_apply',
+  intent = 'apply',
+  consent = false,
+  dryRun = false,
+}) {
+  const client = requireClient();
+  const { data, error } = await client.functions.invoke('submit-application', {
+    body: { product, intent, consent, dryRun },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
 }

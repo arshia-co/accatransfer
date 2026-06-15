@@ -46,6 +46,12 @@ const RESULT_INTRO = {
 };
 
 const CTA_SAVE = { fa: 'ذخیره نتیجه من', en: 'Save my result', tr: 'Sonucumu kaydet', ar: 'احفظ نتيجتي' };
+const CTA_DEEP_FIT = {
+  fa: 'ادامه با تحلیل عمیق ۵۲ سؤالی',
+  en: 'Continue with the 52-question Deep Fit',
+  tr: '52 soruluk Deep Fit ile devam et',
+  ar: 'تابع مع تحليل Deep Fit المكوّن من 52 سؤالاً',
+};
 const CTA_UNIVERSITIES = { fa: 'دیدن دانشگاه‌های منطبق', en: 'See matching universities', tr: 'Eşleşen üniversiteleri gör', ar: 'عرض الجامعات المطابقة' };
 const CTA_DOCS = { fa: 'بارگذاری مدارک', en: 'Upload documents', tr: 'Belgeleri yükle', ar: 'رفع المستندات' };
 const CTA_COUNSELOR = { fa: 'گفت‌وگو با مشاور', en: 'Talk to a counselor', tr: 'Danışmanla görüş', ar: 'تحدث مع مستشار' };
@@ -275,6 +281,7 @@ export const majorDiscoveryFlow = {
           component: 'major_result',
           payload: result,
           actions: [
+            action(lang, CTA_DEEP_FIT, 'deep_fit', INTENTS.DEEP_FIT_START, { variant: 'primary', icon: 'BrainCircuit' }),
             action(lang, CTA_SAVE, 'login', INTENTS.OPEN_LOGIN_GATE, { variant: 'primary', icon: 'LogIn' }),
             action(lang, CTA_UNIVERSITIES, 'universities', INTENTS.DISCOVERY_SEE_UNIVERSITIES, { icon: 'Building2' }),
             action(lang, CTA_DOCS, 'docs', INTENTS.DOCUMENTS_OVERVIEW, { icon: 'FileText' }),

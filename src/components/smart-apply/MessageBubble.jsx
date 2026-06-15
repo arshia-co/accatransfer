@@ -10,6 +10,7 @@ import UniversityMatchCards from './UniversityMatchCards';
 import AdmissionTimelinePreview from './AdmissionTimelinePreview';
 import DocumentUploadPlaceholder from './DocumentUploadPlaceholder';
 import JourneyPreview from './JourneyPreview';
+import DeepFitResultPreview from './DeepFitResultPreview';
 
 const QUESTION_WORD = { fa: 'سؤال', en: 'Question', tr: 'Soru', ar: 'السؤال' };
 
@@ -17,6 +18,8 @@ function RichBlock({ message, language }) {
   switch (message.component) {
     case 'major_result':
       return <MajorResultPreview result={message.payload} lang={language} />;
+    case 'deep_fit_result':
+      return <DeepFitResultPreview result={message.payload} lang={language} />;
     case 'university_list':
       return <UniversityMatchCards programIds={message.payload?.programIds || []} lang={language} />;
     case 'timeline':

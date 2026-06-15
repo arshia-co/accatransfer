@@ -76,16 +76,29 @@ Deno.serve(async (req) => {
   const extractionContext = document.ai_extraction
     ? JSON.stringify(document.ai_extraction).slice(0, 120_000)
     : "No separate OCR result is available. Read the attached private document directly.";
-  const prompt = `Review this academic document for preliminary transfer guidance.
+  const prompt = `Review this academic document for an explainable preliminary university-transfer assessment.
 Current university: ${assessment.current_university ?? "not provided"}
 Current program: ${assessment.current_program ?? "not provided"}
 Target country: ${assessment.target_country ?? "not provided"}
+Target university: ${assessment.target_university ?? "not provided"}
 Target program: ${assessment.target_program ?? "not provided"}
 Document review status: ${document.review_status ?? "not reviewed"}
 OCR confidence: ${document.ocr_confidence ?? "not available"}
 Structured OCR result: ${extractionContext}
 
-Use the structured OCR result as preliminary evidence, not verified truth. Be conservative and do not invent unreadable values. Lower the transfer fit when the document is unconfirmed, low-confidence, incomplete, or queued for human review. This is educational guidance, not official OCR, course equivalency, admission, or a university decision. Return only valid JSON.`;
+Analysis rules:
+- Act as an academic transfer pre-review assistant, not a final admissions authority.
+- Separate facts extracted from the document, facts provided by the student, AI estimates, items requiring human review, and items reserved for the university.
+- Use the structured OCR result as preliminary evidence, not verified truth.
+- Never invent unreadable values, university rules, deadlines, tuition, recognition status, course equivalency, or admission outcomes.
+- Transfer match estimates suitability for review. AI confidence measures the reliability of the available evidence. Never combine these into one concept.
+- Lower confidence when the transcript is unconfirmed, incomplete, low quality, missing credits, missing GPA scale, or queued for human review.
+- Only suggest course recognition when a source course is visible. Without a target curriculum or syllabus, use "Insufficient Data" or "Needs Syllabus Review".
+- Entry level is advisory and must be based on visible credits, course volume, and missing core-course risk.
+- Recommend human ACCA advisor review for regulated fields, uncertain equivalency, recognition concerns, failed/repeated core courses, or any submission-ready request.
+- Never say accepted, eligible, approved, guaranteed, or officially recognized.
+- Return concise student-facing text in Persian when the supplied case data is predominantly Persian; otherwise use English.
+- Return only valid JSON matching the schema.`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -93,7 +106,10 @@ Use the structured OCR result as preliminary evidence, not verified truth. Be co
       headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: OPENAI_MODEL,
-        instructions: "You are ACCA AI Transfer, a careful international university transfer guidance assistant.",
+        instructions: `You are ACCA AI Transfer, a careful academic transfer analyst and admissions pre-review assistant.
+Your work is advisory, cautious, explainable, and human-reviewable.
+The receiving university always decides admission, course recognition, and year placement.
+Use confidence labels and clearly communicate missing evidence.`,
         input: [{
           role: "user",
           content: [
@@ -109,17 +125,151 @@ Use the structured OCR result as preliminary evidence, not verified truth. Be co
               headline: { type: "string" }, overview: { type: "string" },
               document_quality: { type: "string", enum: ["clear", "partially_readable", "insufficient"] },
               detected_program: { type: ["string", "null"] }, detected_gpa: { type: ["string", "null"] },
+              detected_gpa_scale: { type: ["string", "null"] },
+              detected_completed_credits: { type: ["string", "null"] },
               completed_course_count: { type: ["integer", "null"] },
-              preliminary_transfer_fit: { type: "string", enum: ["promising", "needs_review", "insufficient_information"] },
+              estimated_transfer_match: { type: "integer", minimum: 0, maximum: 100 },
+              ai_confidence: { type: "string", enum: ["High", "Medium", "Low"] },
+              risk_level: { type: "string", enum: ["High", "Medium", "Low"] },
+              estimated_entry_level: { type: "string" },
+              likely_recognized_courses: { type: "string" },
+              preliminary_transfer_fit: {
+                type: "string",
+                enum: [
+                  "Strong Candidate for Transfer Review",
+                  "Good Candidate with Document Review Needed",
+                  "Possible Candidate with Significant Risks",
+                  "Weak Transfer Fit",
+                  "Not Enough Data",
+                ],
+              },
               strengths: { type: "array", items: { type: "string" }, maxItems: 4 },
               missing_information: { type: "array", items: { type: "string" }, maxItems: 5 },
+              missing_documents: {
+                type: "array",
+                maxItems: 8,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    document_name: { type: "string" },
+                    reason: { type: "string" },
+                    priority: { type: "string", enum: ["High", "Medium", "Low"] },
+                    needed_when: { type: "string", enum: ["Now", "Before advisor review", "Before university submission"] },
+                    affects_confidence: { type: "boolean" },
+                  },
+                  required: ["document_name", "reason", "priority", "needed_when", "affects_confidence"],
+                },
+              },
+              risk_factors: {
+                type: "array",
+                maxItems: 8,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    title: { type: "string" },
+                    explanation: { type: "string" },
+                    severity: { type: "string", enum: ["High", "Medium", "Low"] },
+                    recommended_action: { type: "string" },
+                  },
+                  required: ["title", "explanation", "severity", "recommended_action"],
+                },
+              },
+              course_equivalency_preview: {
+                type: "array",
+                maxItems: 12,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    source_course: { type: "string" },
+                    suggested_target_course: { type: ["string", "null"] },
+                    match_score: { type: ["integer", "null"], minimum: 0, maximum: 100 },
+                    confidence: { type: "string", enum: ["High", "Medium", "Low"] },
+                    status: {
+                      type: "string",
+                      enum: [
+                        "Likely Recognized",
+                        "Needs Syllabus Review",
+                        "Needs Human Review",
+                        "Weak Match",
+                        "Not Recommended for Recognition",
+                        "Insufficient Data",
+                      ],
+                    },
+                    explanation: { type: "string" },
+                    required_next_action: { type: "string" },
+                  },
+                  required: [
+                    "source_course",
+                    "suggested_target_course",
+                    "match_score",
+                    "confidence",
+                    "status",
+                    "explanation",
+                    "required_next_action",
+                  ],
+                },
+              },
+              source_boundaries: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  confirmed_from_document: { type: "array", items: { type: "string" }, maxItems: 8 },
+                  provided_by_student: { type: "array", items: { type: "string" }, maxItems: 8 },
+                  estimated_by_ai: { type: "array", items: { type: "string" }, maxItems: 8 },
+                  requires_human_review: { type: "array", items: { type: "string" }, maxItems: 8 },
+                  requires_university_decision: { type: "array", items: { type: "string" }, maxItems: 8 },
+                },
+                required: [
+                  "confirmed_from_document",
+                  "provided_by_student",
+                  "estimated_by_ai",
+                  "requires_human_review",
+                  "requires_university_decision",
+                ],
+              },
               next_steps: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 5 },
+              human_review_status: {
+                type: "string",
+                enum: [
+                  "Needs document completion first",
+                  "Advisor review recommended",
+                  "Ready for advisor review",
+                  "Ready for university pre-review",
+                ],
+              },
               admission_reality_note: { type: "string" },
             },
-            required: ["headline", "overview", "document_quality", "detected_program", "detected_gpa", "completed_course_count", "preliminary_transfer_fit", "strengths", "missing_information", "next_steps", "admission_reality_note"],
+            required: [
+              "headline",
+              "overview",
+              "document_quality",
+              "detected_program",
+              "detected_gpa",
+              "detected_gpa_scale",
+              "detected_completed_credits",
+              "completed_course_count",
+              "estimated_transfer_match",
+              "ai_confidence",
+              "risk_level",
+              "estimated_entry_level",
+              "likely_recognized_courses",
+              "preliminary_transfer_fit",
+              "strengths",
+              "missing_information",
+              "missing_documents",
+              "risk_factors",
+              "course_equivalency_preview",
+              "source_boundaries",
+              "next_steps",
+              "human_review_status",
+              "admission_reality_note",
+            ],
           },
         }},
-        max_output_tokens: 1100,
+        max_output_tokens: 2600,
         store: false,
       }),
     });
@@ -132,7 +282,7 @@ Use the structured OCR result as preliminary evidence, not verified truth. Be co
     const result = JSON.parse(extractText(await response.json()));
     await Promise.all([
       supabase.from("transfer_assessments").update({ status: "preliminary_result", ai_result: result }).eq("id", assessment.id),
-      supabase.from("student_documents").update({ status: "review_ready", ai_extraction: result }).eq("id", document.id),
+      supabase.from("student_documents").update({ status: "review_ready" }).eq("id", document.id),
     ]);
     return json(req, { result, model: OPENAI_MODEL });
   } catch (error) {

@@ -10,6 +10,7 @@ import { majorDiscoveryFlow } from './flows/majorDiscoveryFlow';
 import { admissionFlow } from './flows/admissionFlow';
 import { documentFlow } from './flows/documentFlow';
 import { faqFlow } from './flows/faqFlow';
+import { deepFitFlow } from './flows/deepFitFlow';
 import { matchKnowledge } from '../data/knowledgeBase';
 import { answerFromKnowledge } from './flows/faqFlow';
 import { cancelGuidedConfirmation, pendingConfirmationRoute } from './guidedSelection';
@@ -21,6 +22,7 @@ const HANDLERS = {
   ...admissionFlow,
   ...documentFlow,
   ...faqFlow,
+  ...deepFitFlow,
 };
 
 /** Runs one intent through its flow handler. */

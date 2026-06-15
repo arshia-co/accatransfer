@@ -9,7 +9,12 @@ import { WHATSAPP_URL } from '../lib/constants';
 import { L } from '../lib/lang';
 import { UI } from '../i18n/ui';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
-import { saveSmartApplySession, upsertProfile } from '../services/accountService';
+import {
+  loadSmartApplyDeepProfile,
+  saveSmartApplyDeepProfile,
+  saveSmartApplySession,
+  upsertProfile,
+} from '../services/accountService';
 
 let messageSeq = 0;
 const nextMessageId = () => `msg_${String(++messageSeq).padStart(3, '0')}`;
@@ -22,6 +27,7 @@ const SESSION_MEMORY_KEY = 'acca_smart_apply_session_v1';
 const MAX_HISTORY_ENTRIES = 60;
 const SUPPORTED_LANGS = new Set(['fa', 'en', 'tr', 'ar']);
 let skipNextBrowserWrite = false;
+let persistenceTimer = null;
 
 const loadSavedLanguage = () => {
   if (typeof window === 'undefined') return null;
@@ -87,6 +93,10 @@ const persistentState = (state) => ({
   recommendedMajors: state.recommendedMajors,
   discoveryAnswers: state.discoveryAnswers,
   discoveryResult: state.discoveryResult,
+  deepFitAnswers: state.deepFitAnswers,
+  deepFitAdaptiveIds: state.deepFitAdaptiveIds,
+  deepFitResult: state.deepFitResult,
+  deepFitStatus: state.deepFitStatus,
   directionPrograms: state.directionPrograms,
   goal: state.goal,
   pendingOptionConfirmation: state.pendingOptionConfirmation,
@@ -118,6 +128,11 @@ const initialState = ({ restore = true } = {}) => {
     recommendedMajors: [],
     discoveryAnswers: [],
     discoveryResult: null,
+    deepFitAnswers: [],
+    deepFitAdaptiveIds: [],
+    deepFitResult: null,
+    deepFitStatus: 'locked',
+    pendingDeepFitStart: false,
     directionPrograms: [],
     goal: null,
     pendingOptionConfirmation: null,
@@ -159,6 +174,10 @@ const initialState = ({ restore = true } = {}) => {
     suggestedActions: Array.isArray(stored.suggestedActions) ? stored.suggestedActions : [],
     recommendedMajors: Array.isArray(stored.recommendedMajors) ? stored.recommendedMajors : [],
     discoveryAnswers: Array.isArray(stored.discoveryAnswers) ? stored.discoveryAnswers : [],
+    deepFitAnswers: Array.isArray(stored.deepFitAnswers) ? stored.deepFitAnswers : [],
+    deepFitAdaptiveIds: Array.isArray(stored.deepFitAdaptiveIds) ? stored.deepFitAdaptiveIds : [],
+    deepFitResult: stored.deepFitResult || null,
+    deepFitStatus: stored.deepFitStatus || 'locked',
     directionPrograms: Array.isArray(stored.directionPrograms) ? stored.directionPrograms : [],
     navigationHistory: Array.isArray(stored.navigationHistory) ? stored.navigationHistory : [],
     assistantStatus: 'idle',
@@ -180,6 +199,10 @@ const captureNavigationSnapshot = (state) => ({
   recommendedMajors: cloneData(state.recommendedMajors),
   discoveryAnswers: cloneData(state.discoveryAnswers),
   discoveryResult: cloneData(state.discoveryResult),
+  deepFitAnswers: cloneData(state.deepFitAnswers),
+  deepFitAdaptiveIds: cloneData(state.deepFitAdaptiveIds),
+  deepFitResult: cloneData(state.deepFitResult),
+  deepFitStatus: state.deepFitStatus,
   directionPrograms: cloneData(state.directionPrograms),
   goal: state.goal,
   pendingOptionConfirmation: cloneData(state.pendingOptionConfirmation),
@@ -252,6 +275,7 @@ export const useSmartApplyStore = create((set, get) => {
       await delay(700);
       set({ isDashboardOpen: true });
     }
+    scheduleSignedInPersistence();
   };
 
   /** Save the signed-in student's profile + discovery result to Supabase. */
@@ -264,9 +288,56 @@ export const useSmartApplyStore = create((set, get) => {
         language: s.language,
       });
       await saveSmartApplySession(s.user, s);
+      if (s.deepFitStatus !== 'locked' || s.deepFitAnswers?.length || s.deepFitResult) {
+        await saveSmartApplyDeepProfile(s.user, s);
+      }
     } catch {
       /* best-effort; never block the UI on persistence */
     }
+  };
+
+  const scheduleSignedInPersistence = () => {
+    if (!get().user || !supabase) return;
+    if (persistenceTimer) window.clearTimeout(persistenceTimer);
+    persistenceTimer = window.setTimeout(() => {
+      persistenceTimer = null;
+      persistSession();
+    }, 450);
+  };
+
+  const hydrateDeepProfile = async (user) => {
+    if (!user?.id || !supabase) return;
+    try {
+      const remote = await loadSmartApplyDeepProfile(user.id);
+      if (!remote) return;
+      const localCount = get().deepFitAnswers?.length || 0;
+      const remoteAnswers = Array.isArray(remote.answers) ? remote.answers : [];
+      const remoteWins = remote.status === 'completed' || remoteAnswers.length > localCount;
+      if (!remoteWins) return;
+      set({
+        deepFitAnswers: remoteAnswers,
+        deepFitAdaptiveIds: Array.isArray(remote.adaptive_question_ids)
+          ? remote.adaptive_question_ids
+          : [],
+        deepFitResult: remote.result || null,
+        deepFitStatus: remote.status || 'in_progress',
+      });
+    } catch {
+      /* The local memory remains usable while the remote profile is unavailable. */
+    }
+  };
+
+  const startDeepFit = async () => {
+    if (!get().isAuthenticated || !get().user) {
+      set({ isLoginGateOpen: true, pendingDeepFitStart: true });
+      return;
+    }
+    await hydrateDeepProfile(get().user);
+    set({ pendingDeepFitStart: false, isDashboardOpen: false });
+    await runExchange(
+      (state) => sendIntent(INTENTS.DEEP_FIT_START, null, state),
+      { remember: true },
+    );
   };
 
   return {
@@ -290,17 +361,28 @@ export const useSmartApplyStore = create((set, get) => {
 
     /** Wire up real Supabase auth when configured (no-op in the mock demo). */
     initAuth: async () => {
-      if (!isSupabaseConfigured || get().authInited) return;
-      set({ authInited: true });
+      if (get().authInited) return;
+      if (!isSupabaseConfigured) {
+        set({ authInited: true });
+        return;
+      }
       try {
         const { data } = await supabase.auth.getSession();
-        if (data?.session?.user) set({ isAuthenticated: true, user: data.session.user });
+        if (data?.session?.user) {
+          set({ isAuthenticated: true, user: data.session.user });
+          await hydrateDeepProfile(data.session.user);
+        }
         supabase.auth.onAuthStateChange((_event, session) => {
           set({ isAuthenticated: !!session?.user, user: session?.user ?? null });
-          if (session?.user) persistSession();
+          if (session?.user) {
+            hydrateDeepProfile(session.user).finally(() => persistSession());
+          }
         });
       } catch {
         /* offline / misconfigured — stay in guest mode */
+      } finally {
+        // Query-string actions must wait until the existing session check is done.
+        set({ authInited: true });
       }
     },
 
@@ -336,12 +418,21 @@ export const useSmartApplyStore = create((set, get) => {
           set({ authBusy: false, authError: error.message || true });
           return;
         }
-        set({ authBusy: false, isAuthenticated: true, user: data.user, authStage: 'idle', isLoginGateOpen: false });
+        const shouldStartDeepFit = get().pendingDeepFitStart;
+        set({
+          authBusy: false,
+          isAuthenticated: true,
+          user: data.user,
+          authStage: 'idle',
+          isLoginGateOpen: false,
+        });
+        await hydrateDeepProfile(data.user);
         pushMessage({ role: 'assistant', lang: get().language, content: L(UI.realWelcome, get().language) });
         set({ suggestedActions: [] });
         await persistSession();
-        await delay(700);
-        set({ isDashboardOpen: true });
+        await delay(500);
+        if (shouldStartDeepFit) startDeepFit();
+        else set({ isDashboardOpen: true });
       } catch {
         set({ authBusy: false, authError: true });
       }
@@ -358,6 +449,10 @@ export const useSmartApplyStore = create((set, get) => {
 
     /** Student taps a dynamic action button. */
     chooseAction: (action) => {
+      if (action.nextIntent === INTENTS.DEEP_FIT_START) {
+        startDeepFit();
+        return;
+      }
       // Gate/dashboard opens are local UI state — no AI round-trip, no echo.
       if (action.nextIntent === INTENTS.OPEN_LOGIN_GATE) {
         set({ isLoginGateOpen: true });
@@ -365,6 +460,10 @@ export const useSmartApplyStore = create((set, get) => {
       }
       if (action.nextIntent === INTENTS.OPEN_DASHBOARD) {
         set({ isDashboardOpen: true });
+        return;
+      }
+      if (action.nextIntent === INTENTS.OPEN_ACCOUNT) {
+        window.location.assign('/account');
         return;
       }
       runExchange(
@@ -396,6 +495,10 @@ export const useSmartApplyStore = create((set, get) => {
         recommendedMajors: cloneData(previous.recommendedMajors),
         discoveryAnswers: cloneData(previous.discoveryAnswers),
         discoveryResult: cloneData(previous.discoveryResult),
+        deepFitAnswers: cloneData(previous.deepFitAnswers),
+        deepFitAdaptiveIds: cloneData(previous.deepFitAdaptiveIds),
+        deepFitResult: cloneData(previous.deepFitResult),
+        deepFitStatus: previous.deepFitStatus,
         directionPrograms: cloneData(previous.directionPrograms),
         goal: previous.goal,
         pendingOptionConfirmation: cloneData(previous.pendingOptionConfirmation),
@@ -404,6 +507,7 @@ export const useSmartApplyStore = create((set, get) => {
         isAssistantSpeaking: false,
         isListening: false,
       }));
+      scheduleSignedInPersistence();
     },
 
     setVoiceActivity: ({ listening = false, speaking = false }) => {
@@ -450,6 +554,7 @@ export const useSmartApplyStore = create((set, get) => {
 
     openDashboard: () => set({ isDashboardOpen: true }),
     closeDashboard: () => set({ isDashboardOpen: false }),
+    startDeepFit,
 
     clearSessionMemory: () => {
       const authState = {
@@ -493,6 +598,11 @@ export function profileProgress(state) {
 /** Guided-session progress shown in the central assistant header. */
 export function sessionProgress(state) {
   const p = state.studentProfile;
+
+  if (state.deepFitResult || state.deepFitStatus === 'completed') return 100;
+  if (state.deepFitStatus === 'in_progress' || String(state.currentStep || '').startsWith('deep_fit_')) {
+    return Math.min(98, Math.round(((state.deepFitAnswers?.length || 0) / 56) * 100));
+  }
 
   if (!p.preferredLanguage) return 5;
   if (!state.goal) return 15;

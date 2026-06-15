@@ -1,7 +1,7 @@
 // Smart Apply page shell: ambient background, header, AI cockpit (orb +
 // conversation + composer), session insight panel, login gate and the
 // dashboard preview. One central AI interface — no menus, no long forms.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, ExternalLink, X, Sparkles, LayoutGrid, LayoutDashboard } from 'lucide-react';
 import { L, dirFor } from '../../lib/lang';
@@ -32,12 +32,16 @@ export default function SmartApplyShell() {
   const setVoiceActivity = useSmartApplyStore((s) => s.setVoiceActivity);
   const appendVoiceTranscript = useSmartApplyStore((s) => s.appendVoiceTranscript);
   const openDashboard = useSmartApplyStore((s) => s.openDashboard);
+  const isAuthenticated = useSmartApplyStore((s) => s.isAuthenticated);
+  const authInited = useSmartApplyStore((s) => s.authInited);
+  const startDeepFit = useSmartApplyStore((s) => s.startDeepFit);
   const progress = useSmartApplyStore(sessionProgress);
 
   const [draft, setDraft] = useState('');
   const [insightOpen, setInsightOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceContextSnapshot, setVoiceContextSnapshot] = useState('');
+  const deepFitQueryHandled = useRef(false);
 
   const dir = dirFor(language);
   const busy = assistantStatus !== 'idle';
@@ -55,6 +59,17 @@ export default function SmartApplyShell() {
   useEffect(() => {
     boot();
   }, [boot]);
+
+  useEffect(() => {
+    if (deepFitQueryHandled.current || !authInited) return;
+    const requested = new URLSearchParams(window.location.search).get('deep-fit') === '1';
+    if (!requested) {
+      deepFitQueryHandled.current = true;
+      return;
+    }
+    deepFitQueryHandled.current = true;
+    startDeepFit();
+  }, [authInited, isAuthenticated, startDeepFit]);
 
   useEffect(() => {
     document.documentElement.lang = language;

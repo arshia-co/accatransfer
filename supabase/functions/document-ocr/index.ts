@@ -242,7 +242,8 @@ Rules:
 - For a transcript, extract every clearly readable course row, up to 80.
 - Check whether the actual document matches the expected kind.
 - Treat all identity, academic, and score fields as requiring student confirmation.
-- Set human review when confidence is below 70, the type is wrong, pages are incomplete, or important text is unclear.
+- Set human review when confidence is 50 or lower, the type is wrong, pages are incomplete, or important text is too unclear for safe educational use.
+- Confidence above 50 may continue to student confirmation when the document type matches and quality is not poor. You may still recommend human review for uncertain fields without blocking the next step.
 - This is preliminary educational document guidance, not official verification, admission, equivalency, or a guaranteed result.`;
 
   const content: Array<Record<string, unknown>> = [{
@@ -389,13 +390,12 @@ Deno.serve(async (req) => {
     }
 
     const confidence = Math.max(0, Math.min(100, Number(result.overall_confidence) || 0));
-    const needsHumanReview = Boolean(
-      result.requires_human_review
-      || !result.matches_expected_type
+    const blocksAutomaticProgress = Boolean(
+      !result.matches_expected_type
       || result.quality.status === "poor"
-      || confidence < 70,
+      || confidence <= 50
     );
-    const reviewStatus = needsHumanReview ? "admin_review" : "student_confirmation";
+    const reviewStatus = blocksAutomaticProgress ? "admin_review" : "student_confirmation";
     const provider = googleText ? "google_vision+openai" : "openai_vision";
 
     const { data: updated, error: updateError } = await supabase

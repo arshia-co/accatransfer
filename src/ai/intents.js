@@ -28,6 +28,12 @@ export const INTENTS = {
   DISCOVERY_EXPLAIN: 'discovery_explain', // "What does this mean?" → explain current question
 
   // Known major → universities
+  // Signed-in deep educational profile
+  DEEP_FIT_START: 'deep_fit_start',
+  DEEP_FIT_ANSWER: 'deep_fit_answer',
+  DEEP_FIT_RESHOW: 'deep_fit_reshow',
+  DEEP_FIT_EXPLAIN: 'deep_fit_explain',
+
   KNOWN_MAJOR_CATEGORY: 'known_major_category',
   KNOWN_MAJOR_PICK: 'known_major_pick',
 
@@ -52,6 +58,7 @@ export const INTENTS = {
   CONTINUE_GUEST: 'continue_guest',
   TALK_TO_COUNSELOR: 'talk_to_counselor',
   OPEN_DASHBOARD: 'open_dashboard',
+  OPEN_ACCOUNT: 'open_account',
 };
 
 export const GOALS = {
