@@ -160,7 +160,7 @@ export default function MajorResultPreview({ result, lang }) {
     isAuthenticated
       ? {
           key: 'panel', primary: true, icon: LogIn,
-          label: L({ fa: 'ورود به پنل کاربری', en: 'Open my panel', tr: 'Panelime gir', ar: 'افتح لوحتي' }, lang),
+          label: L({ fa: 'پنل کامل من', en: 'My full panel', tr: 'Tam panelim', ar: 'لوحتي الكاملة' }, lang),
           run: () => window.location.assign('/account'),
         }
       : {
