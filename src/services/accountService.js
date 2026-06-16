@@ -82,6 +82,7 @@ export async function migrateGuestTransferDraft(user) {
           requires_university_decision: guestResult.universityDecision,
         },
         guest_answers: draft.answers || {},
+        guest_courses: Array.isArray(draft.courses) ? draft.courses : [],
       } : null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,guest_draft_id' })
