@@ -43,7 +43,7 @@ export const ADMISSION_TIMELINE = [
   {
     id: 't1',
     title: { fa: 'پروفایل و انتخاب رشته', en: 'Profile & major selection', tr: 'Profil ve bölüm seçimi', ar: 'الملف واختيار التخصص' },
-    hint: { fa: 'هفته ۱', en: 'Week 1', tr: '1. hafta', ar: 'الأسبوع 1' },
+    hint: { fa: 'روز ۱', en: 'Day 1', tr: '1. gün', ar: 'اليوم 1' },
     desc: {
       fa: 'تکمیل پروفایل هوشمند و نهایی کردن رشته و مقطع با مشاور.',
       en: 'Complete your smart profile and lock the major and degree with a counselor.',
@@ -54,7 +54,7 @@ export const ADMISSION_TIMELINE = [
   {
     id: 't2',
     title: { fa: 'فهرست دانشگاه‌ها و بورسیه', en: 'University shortlist & scholarships', tr: 'Üniversite listesi ve burslar', ar: 'قائمة الجامعات والمنح' },
-    hint: { fa: 'هفته ۱–۲', en: 'Weeks 1–2', tr: '1–2. hafta', ar: 'الأسبوع 1–2' },
+    hint: { fa: 'روز ۲–۳', en: 'Days 2–3', tr: '2–3. gün', ar: 'اليوم 2–3' },
     desc: {
       fa: 'مقایسه شهریه‌ها، زبان تحصیل و گزینه‌های بورسیه دانشگاه‌های همکار.',
       en: 'Compare tuitions, teaching language and scholarship options across partners.',
@@ -65,7 +65,7 @@ export const ADMISSION_TIMELINE = [
   {
     id: 't3',
     title: { fa: 'ارسال درخواست و مدارک', en: 'Application & documents', tr: 'Başvuru ve belgeler', ar: 'الطلب والمستندات' },
-    hint: { fa: 'هفته ۲–۳', en: 'Weeks 2–3', tr: '2–3. hafta', ar: 'الأسبوع 2–3' },
+    hint: { fa: 'روز ۴', en: 'Day 4', tr: '4. gün', ar: 'اليوم 4' },
     desc: {
       fa: 'بارگذاری پاسپورت، دیپلم و ریزنمرات؛ ثبت رسمی درخواست توسط آکا ادو.',
       en: 'Upload passport, diploma and transcripts; ACCA EDU files the official application.',
@@ -76,7 +76,7 @@ export const ADMISSION_TIMELINE = [
   {
     id: 't4',
     title: { fa: 'دریافت پذیرش', en: 'Acceptance letter', tr: 'Kabul mektubu', ar: 'خطاب القبول' },
-    hint: { fa: 'هفته ۳–۵', en: 'Weeks 3–5', tr: '3–5. hafta', ar: 'الأسبوع 3–5' },
+    hint: { fa: '۳ تا ۷ روز کاری', en: '3–7 working days', tr: '3–7 iş günü', ar: '3–7 أيام عمل' },
     desc: {
       fa: 'صدور نامه پذیرش اولیه و سپس پذیرش نهایی پس از پیش‌پرداخت شهریه.',
       en: 'Conditional letter first, then the final acceptance after the tuition deposit.',
@@ -87,20 +87,20 @@ export const ADMISSION_TIMELINE = [
   {
     id: 't5',
     title: { fa: 'ثبت‌نام و ویزا', en: 'Enrollment & visa', tr: 'Kayıt ve vize', ar: 'التسجيل والتأشيرة' },
-    hint: { fa: 'ماه ۲–۳', en: 'Months 2–3', tr: '2–3. ay', ar: 'الشهر 2–3' },
+    hint: { fa: '۱ تا ۲ هفته پس از پذیرش', en: '1–2 weeks after acceptance', tr: 'Kabulden 1–2 hafta sonra', ar: '1–2 أسبوع بعد القبول' },
     desc: {
-      fa: 'ثبت‌نام نهایی در دانشگاه و در صورت نیاز، دریافت ویزای تحصیلی.',
-      en: 'Final university registration and, if needed, the student visa.',
-      tr: 'Üniversiteye kesin kayıt ve gerekiyorsa öğrenci vizesi.',
-      ar: 'التسجيل النهائي في الجامعة، والحصول على التأشيرة إذا لزم.',
+      fa: 'حداکثر تا یک‌-دو هفته پس از پذیرش باید در دانشگاه حاضر شوید و ثبت‌نام را کامل کنید؛ ویزای تحصیلی فقط در صورت نیاز (کشورهای معاف از ویزای ترکیه نیازی ندارند).',
+      en: 'Within 1–2 weeks of acceptance you attend the university and complete registration; a student visa only if required (visa-free nationalities don’t need one).',
+      tr: 'Kabulden en geç 1–2 hafta sonra üniversitede bulunup kaydı tamamlamalısınız; öğrenci vizesi yalnızca gerekiyorsa.',
+      ar: 'خلال 1–2 أسبوع من القبول يجب الحضور إلى الجامعة وإكمال التسجيل؛ تأشيرة الطالب فقط عند الحاجة.',
     },
   },
   {
     id: 't6',
     title: { fa: 'ورود، اسکان و اقامت', en: 'Arrival, housing & residence', tr: 'Varış, konaklama ve ikamet', ar: 'الوصول والسكن والإقامة' },
-    hint: { fa: 'ماه ۳–۴', en: 'Months 3–4', tr: '3–4. ay', ar: 'الشهر 3–4' },
+    hint: { fa: 'هم‌زمان با ثبت‌نام', en: 'Same time as registration', tr: 'Kayıtla aynı anda', ar: 'مع التسجيل' },
     desc: {
-      fa: 'استقبال، تحویل مسکن، بیمه سلامت و ثبت درخواست اقامت دانشجویی.',
+      fa: 'هم‌زمان با ثبت‌نام: استقبال، تحویل مسکن، بیمه سلامت و ثبت درخواست اقامت دانشجویی.',
       en: 'Arrival support, housing handover, health insurance and the residence permit filing.',
       tr: 'Karşılama, konut teslimi, sağlık sigortası ve ikamet başvurusu.',
       ar: 'الاستقبال وتسليم السكن والتأمين الصحي وتقديم طلب الإقامة.',

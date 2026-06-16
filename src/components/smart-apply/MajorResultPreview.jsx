@@ -145,6 +145,7 @@ export default function MajorResultPreview({ result, lang }) {
   const openLoginGate = useSmartApplyStore((s) => s.openLoginGate);
   const talkToCounselor = useSmartApplyStore((s) => s.talkToCounselor);
   const continueAsGuest = useSmartApplyStore((s) => s.continueAsGuest);
+  const isAuthenticated = useSmartApplyStore((s) => s.isAuthenticated);
 
   if (!result) return null;
 
@@ -156,10 +157,16 @@ export default function MajorResultPreview({ result, lang }) {
   const typeLike = (t) => L(UI.typeLikeFormat, lang).replace('{type}', t);
 
   const nextSteps = [
-    {
-      key: 'save', primary: true, icon: LogIn, label: L(UI.loginGateLogin, lang),
-      run: () => openLoginGate(),
-    },
+    isAuthenticated
+      ? {
+          key: 'panel', primary: true, icon: LogIn,
+          label: L({ fa: 'ورود به پنل کاربری', en: 'Open my panel', tr: 'Panelime gir', ar: 'افتح لوحتي' }, lang),
+          run: () => window.location.assign('/account'),
+        }
+      : {
+          key: 'save', primary: true, icon: LogIn, label: L(UI.loginGateLogin, lang),
+          run: () => openLoginGate(),
+        },
     {
       key: 'universities', icon: Building2, label: L({ fa: 'دیدن دانشگاه‌های منطبق', en: 'See matching universities', tr: 'Eşleşen üniversiteleri gör', ar: 'عرض الجامعات المطابقة' }, lang),
       run: () => chooseAction({ id: 'ns_uni', label: L({ fa: 'دیدن دانشگاه‌های منطبق', en: 'See matching universities', tr: 'Eşleşen üniversiteleri gör', ar: 'عرض الجامعات المطابقة' }, lang), value: 'universities', nextIntent: INTENTS.DISCOVERY_SEE_UNIVERSITIES }),

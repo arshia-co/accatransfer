@@ -515,6 +515,7 @@ export default function AccountPortal() {
   const smartSelection = data.selections.find((item) => item.product === 'smart_apply') || null;
   const transferSelection = data.selections.find((item) => item.product === 'ai_transfer') || null;
   const smartSubmission = data.submissions.find((item) => item.product === 'smart_apply') || null;
+  const transferSubmission = data.submissions.find((item) => item.product === 'ai_transfer') || null;
   const acceptanceDoc = data.documents.find((doc) => doc.document_kind === 'acceptance_letter') || null;
   const smartDocuments = data.documents.filter((item) => item.product === 'smart_apply');
   const transferDocuments = data.documents.filter((item) => item.product === 'ai_transfer');
@@ -610,6 +611,23 @@ export default function AccountPortal() {
     try {
       await requestApplicationSubmission({
         product: 'smart_apply',
+        intent,
+        consent: true,
+      });
+      await refresh();
+    } catch (err) {
+      setError(err?.message || 'ثبت درخواست انجام نشد.');
+    } finally {
+      setSubmissionBusy(false);
+    }
+  };
+
+  const submitTransferApplication = async (intent) => {
+    setSubmissionBusy(true);
+    setError('');
+    try {
+      await requestApplicationSubmission({
+        product: 'ai_transfer',
         intent,
         consent: true,
       });
@@ -900,6 +918,23 @@ export default function AccountPortal() {
             onReview={(document) => updateDocumentReview(document, 'review')}
             onRetry={(document) => updateDocumentReview(document, 'retry')}
           />
+          <ApplicationReadinessPanel
+            product="ai_transfer"
+            documents={transferDocuments}
+            selection={transferSelection}
+            hasGuidance={Boolean(transferAssessment?.ai_result)}
+            submission={transferSubmission}
+            busy={submissionBusy}
+            onSubmit={submitTransferApplication}
+          />
+          {(transferSubmission || acceptanceDoc) && (
+            <AcceptanceJourneyPanel
+              submission={transferSubmission}
+              acceptanceDoc={acceptanceDoc}
+              onRequestRegistrationHelp={requestRegistrationHelp}
+              helpBusy={helpBusy}
+            />
+          )}
         </section>
         )}
 

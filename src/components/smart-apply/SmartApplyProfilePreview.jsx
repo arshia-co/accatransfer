@@ -80,7 +80,7 @@ export default function SmartApplyProfilePreview({ lang }) {
                 {state.isAuthenticated && (
                   <a
                     href="/account"
-                    className="hidden items-center gap-1.5 rounded-full bg-emerald-700 px-3.5 py-2 text-[11px] font-black text-white shadow-sm sm:inline-flex"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700 px-3 py-2 text-[11px] font-black text-white shadow-sm"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                     {lang === 'fa' ? 'پنل کامل من' : 'My full panel'}
