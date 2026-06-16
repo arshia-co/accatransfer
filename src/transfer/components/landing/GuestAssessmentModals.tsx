@@ -9,6 +9,7 @@ import {
   FileText,
   GraduationCap,
   LogIn,
+  LoaderCircle,
   LockKeyhole,
   Plus,
   RotateCcw,
@@ -50,6 +51,7 @@ import {
   type CourseMatch,
   type CourseMatchStatus,
 } from "@/lib/course-matching";
+import { guestTranscriptOcr } from "../../../services/accountService";
 
 // Number of saved answer fields (mirrors emptyAnswers() in guest-assessment.ts).
 const ANSWER_FIELD_COUNT = 8;
@@ -139,6 +141,7 @@ export function GuestAssessmentModal() {
   const [stepIndex, setStepIndex] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const analyzeTimer = useRef<number | null>(null);
+  const [ocr, setOcr] = useState<{ status: "idle" | "loading" | "done" | "empty" | "error"; count?: number }>({ status: "idle" });
 
   const step = STEPS[stepIndex];
   const answers = draft.answers;
@@ -174,6 +177,41 @@ export function GuestAssessmentModal() {
 
   const setCourses = (next: CoreCourse[]) => setDraft((d) => ({ ...d, courses: next }));
 
+  // Reads the uploaded transcript with AI and pre-fills the courses + GPA for
+  // the student to confirm (no manual entry). Nothing is uploaded or persisted.
+  const runGuestOcr = async (file: File) => {
+    setOcr({ status: "loading" });
+    try {
+      const result = await guestTranscriptOcr(file);
+      const extracted: CoreCourse[] = (Array.isArray(result?.courses) ? result.courses : [])
+        .filter((c: { title?: string }) => Boolean(c?.title && c.title.trim()))
+        .map((c: { title: string; grade?: string | null }) => ({
+          ...newCoreCourse(),
+          name: c.title.trim(),
+          grade: (c.grade ?? "").trim(),
+        }));
+      if (!result?.is_transcript || !extracted.length) {
+        setOcr({ status: "empty" });
+        return;
+      }
+      const gpaText = result.gpa
+        ? `${result.gpa}${result.gpa_scale ? ` / ${result.gpa_scale}` : ""}`
+        : "";
+      setDraft((d) => {
+        const next: GuestAssessmentDraft = {
+          ...d,
+          courses: d.courses.length ? d.courses : extracted,
+          answers: { ...d.answers, gpa: d.answers.gpa || gpaText },
+        };
+        saveGuestAssessment(next);
+        return next;
+      });
+      setOcr({ status: "done", count: extracted.length });
+    } catch {
+      setOcr({ status: "error" });
+    }
+  };
+
   const onFile = (file: File | undefined) => {
     if (!file) return;
     setDraft((d) => ({
@@ -181,6 +219,7 @@ export function GuestAssessmentModal() {
       document: { name: file.name, size: file.size, type: file.type || "document" },
       documentDeferred: false,
     }));
+    runGuestOcr(file);
   };
 
   // ── Result computation ─────────────────────────────────────────────────────
@@ -355,9 +394,17 @@ export function GuestAssessmentModal() {
             )}
             <p className="px-1 text-[11px] leading-5 text-muted-foreground">
               {fa
-                ? "در ادامه، چون هنوز ریزنمرات خوانده نشده، درس‌های اصلی و تخصصی‌ات را خودت وارد می‌کنی تا همین حالا برآورد درس‌به‌درس بگیری."
-                : "Next, since the transcript isn't read yet, you'll enter your core / specialised courses so we can estimate course-by-course right now."}
+                ? "ریزنمراتت را آپلود کن تا هوش مصنوعی همین حالا درس‌ها و نمره‌هایت را بخواند؛ بعد فقط آن‌ها را تأیید می‌کنی. اگر فایل واضح نباشد، می‌توانی دستی هم وارد کنی."
+                : "Upload your transcript and the AI reads your courses and grades right away — you just confirm them. If the file isn’t clear, you can also enter them manually."}
             </p>
+            {(ocr.status === "loading" || ocr.status === "done" || ocr.status === "empty" || ocr.status === "error") && (
+              <div className="flex items-center gap-2 px-1 text-[11px] font-medium text-muted-foreground">
+                {ocr.status === "loading" && <><LoaderCircle className="h-3.5 w-3.5 animate-spin text-[color:var(--ta-gold-deep)]" />{fa ? "در حال خواندن ریزنمرات با هوش مصنوعی…" : "Reading your transcript with AI…"}</>}
+                {ocr.status === "done" && <><CheckCircle2 className="h-3.5 w-3.5 text-success" />{fa ? `${ocr.count} درس از ریزنمرات شما خوانده شد ✓` : `${ocr.count} courses read from your transcript ✓`}</>}
+                {ocr.status === "empty" && <><AlertTriangle className="h-3.5 w-3.5 text-[color:var(--ta-gold-deep)]" />{fa ? "نتونستم درسی را به‌طور واضح بخوانم؛ در ادامه می‌توانی دستی وارد کنی." : "Couldn’t read courses clearly; you can enter them manually next."}</>}
+                {ocr.status === "error" && <><AlertTriangle className="h-3.5 w-3.5 text-[color:var(--ta-gold-deep)]" />{fa ? "خواندن خودکار ممکن نشد؛ در ادامه می‌توانی دستی وارد کنی." : "Auto-read failed; you can enter courses manually next."}</>}
+              </div>
+            )}
           </div>
         )}
 
@@ -464,12 +511,26 @@ export function GuestAssessmentModal() {
         {/* ── STEP: core courses ───────────────────────────────────────────── */}
         {step === "courses" && (
           <div className="space-y-3">
-            <div className="flex items-start gap-2 rounded-2xl bg-[color:var(--ta-gold)]/[0.06] p-3 text-[11px] leading-5 text-muted-foreground">
-              <ScanLine className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color:var(--ta-gold-deep)]" />
-              {fa
-                ? "فقط درس‌های اصلی و تخصصی رشته‌ات را وارد کن (نه دروس عمومی مثل تاریخ یا تربیت بدنی). نمره هر درس را هم بنویس تا احتمال تطبیق دقیق‌تر شود."
-                : "Enter only your core / specialised major courses (not general ones like History or PE). Add each grade so the matching is more accurate."}
-            </div>
+            {ocr.status === "loading" ? (
+              <div className="flex items-center gap-2 rounded-2xl bg-[color:var(--ta-gold)]/[0.06] p-3 text-[11px] leading-5 text-muted-foreground">
+                <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin text-[color:var(--ta-gold-deep)]" />
+                {fa ? "در حال خواندن ریزنمرات شما با هوش مصنوعی…" : "Reading your transcript with AI…"}
+              </div>
+            ) : ocr.status === "done" ? (
+              <div className="flex items-start gap-2 rounded-2xl bg-success/[0.08] p-3 text-[11px] leading-5 text-muted-foreground">
+                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
+                {fa
+                  ? "این درس‌ها از روی ریزنمرات شما توسط هوش مصنوعی خوانده شد. فقط بررسی و تأیید کن؛ در صورت نیاز نمره را اصلاح یا درس را اضافه/حذف کن."
+                  : "These were read from your transcript by AI. Just review and confirm — fix a grade or add/remove a course if needed."}
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 rounded-2xl bg-[color:var(--ta-gold)]/[0.06] p-3 text-[11px] leading-5 text-muted-foreground">
+                <ScanLine className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color:var(--ta-gold-deep)]" />
+                {fa
+                  ? "فقط درس‌های اصلی و تخصصی رشته‌ات را وارد کن (نه دروس عمومی مثل تاریخ یا تربیت بدنی). نمره هر درس را هم بنویس تا احتمال تطبیق دقیق‌تر شود."
+                  : "Enter only your core / specialised major courses (not general ones like History or PE). Add each grade so the matching is more accurate."}
+              </div>
+            )}
 
             <div className="space-y-2">
               {courses.map((course, index) => (

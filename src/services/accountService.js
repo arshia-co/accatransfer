@@ -416,6 +416,31 @@ export async function createDocumentSignedUrl(objectPath) {
   return data.signedUrl;
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('File read failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Guest (no-login) transcript OCR. Sends the image directly to the public
+ * `guest-transcript-ocr` Edge Function and returns the extracted courses/GPA for
+ * the student to confirm. Nothing is uploaded to storage or persisted.
+ */
+export async function guestTranscriptOcr(file) {
+  const client = requireClient();
+  const imageBase64 = await fileToDataUrl(file);
+  const { data, error } = await client.functions.invoke('guest-transcript-ocr', {
+    body: { imageBase64, mimeType: file.type || 'image/jpeg', fileName: file.name },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data.result;
+}
+
 export async function requestApplicationSubmission({
   product = 'smart_apply',
   intent = 'apply',
