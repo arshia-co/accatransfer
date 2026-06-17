@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   BadgeCheck,
   BrainCircuit,
+  Building2,
   Compass,
   GraduationCap,
   Lightbulb,
@@ -12,6 +13,14 @@ import {
   Target,
 } from 'lucide-react';
 import { L } from '../../lib/lang';
+import { buildAccaProgramsUrl } from '../../services/programCatalogService';
+
+const SHOW_PROGRAMS_LABEL = {
+  fa: 'نمایش دانشگاه‌ها و شهریه‌ها',
+  en: 'Show universities & tuition',
+  tr: 'Üniversite ve ücretleri gör',
+  ar: 'عرض الجامعات والرسوم',
+};
 import {
   ACCA_CATEGORY_LABELS,
   ACADEMIC_STRENGTH_LABELS,
@@ -199,6 +208,15 @@ export default function DeepFitResultPreview({ result, lang }) {
                         <p className="mt-1 text-[11px] font-semibold leading-6 text-navy/60">{L(major.reason, lang)}</p>
                       </div>
                     </div>
+                    <a
+                      href={buildAccaProgramsUrl({ program: L(major.name, 'en') || L(major.name, lang) })}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-navy px-3 py-2.5 text-[11px] font-black text-cream transition hover:brightness-110"
+                    >
+                      <Building2 className="h-3.5 w-3.5 text-gold" />
+                      {L(SHOW_PROGRAMS_LABEL, lang)}
+                    </a>
                   </motion.article>
                 ))}
               </>

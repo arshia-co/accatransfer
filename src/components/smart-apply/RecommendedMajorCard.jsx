@@ -2,11 +2,19 @@
 // `detailed` adds the deep-profile lines: personality fit, academic fit and
 // the honest admission-reality note (used inside the discovery result).
 import { motion } from 'framer-motion';
-import { HeartHandshake, GraduationCap, ShieldCheck } from 'lucide-react';
+import { HeartHandshake, GraduationCap, ShieldCheck, Building2 } from 'lucide-react';
 import { L } from '../../lib/lang';
 import { UI } from '../../i18n/ui';
 import { renderIcon } from '../../lib/icons';
 import { getMajor } from '../../data/mockPrograms';
+import { buildAccaProgramsUrl } from '../../services/programCatalogService';
+
+const SHOW_PROGRAMS_LABEL = {
+  fa: 'نمایش دانشگاه‌ها و شهریه‌ها',
+  en: 'Show universities & tuition',
+  tr: 'Üniversite ve ücretleri gör',
+  ar: 'عرض الجامعات والرسوم',
+};
 
 function FitLine({ icon: Icon, label, text }) {
   if (!text) return null;
@@ -57,6 +65,16 @@ export default function RecommendedMajorCard({ majorId, match, lang, index = 0, 
           <FitLine icon={ShieldCheck} label={L(UI.admissionNoteLabel, lang)} text={L(major.admissionNote, lang)} />
         </div>
       )}
+
+      <a
+        href={buildAccaProgramsUrl({ program: L(major.name, 'en') || L(major.name, lang) })}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-navy px-3 py-2.5 text-[11px] font-black text-cream transition hover:brightness-110"
+      >
+        <Building2 className="h-3.5 w-3.5 text-gold" />
+        {L(SHOW_PROGRAMS_LABEL, lang)}
+      </a>
     </motion.div>
   );
 }
