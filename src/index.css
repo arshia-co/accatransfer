@@ -354,10 +354,14 @@ textarea {
 .account-product-transfer .account-product-icon { color: #102f48; background: linear-gradient(145deg, #ead49d, #c6a768); box-shadow: 0 14px 34px rgba(198,167,104,.27); }
 .account-product-actions { display: grid; flex: 0 0 auto; justify-items: end; gap: 8px; }
 .account-product-actions a { padding: 8px 12px; border: 1px solid rgba(16,47,72,.1); border-radius: 999px; color: #102f48; background: white; font-size: 10px; font-weight: 900; text-decoration: none; }
-.account-product-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; padding: 6px; border: 1px solid rgba(16,47,72,.06); border-radius: 18px; background: rgba(16,47,72,.045); }
-.account-product-tabs button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 14px; border: 0; border-radius: 13px; color: rgba(16,47,72,.58); background: transparent; font-size: 13px; font-weight: 900; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
-.account-product-tabs button.is-active { color: #102f48; background: white; box-shadow: 0 12px 28px rgba(16,47,72,.1); }
-.account-product-tabs .account-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: #14745f; }
+.account-product-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 24px 0 16px; padding: 6px; border: 1px solid rgba(16,47,72,.07); border-radius: 18px; background: rgba(16,47,72,.04); }
+.account-product-tabs button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 50px; padding: 0 14px; border: 0; border-radius: 14px; color: rgba(16,47,72,.55); background: transparent; font-size: 13.5px; font-weight: 900; cursor: pointer; transition: color .2s ease, background .2s ease, box-shadow .2s ease; }
+.account-product-tabs button:hover:not(.is-active) { color: rgba(16,47,72,.82); background: rgba(255,255,255,.55); }
+.account-product-tabs button.is-active { color: #102f48; background: #fff; box-shadow: 0 10px 26px rgba(16,47,72,.12); }
+.account-product-tabs button svg { color: rgba(16,47,72,.4); transition: color .2s ease; }
+.account-product-tabs button.is-active svg { color: #c6a768; }
+.account-product-tabs .account-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: #16806b; }
+.account-product-tabs button.is-active .account-tab-dot { display: none; }
 .acceptance-journey { display: grid; gap: 13px; margin-top: 16px; padding: 20px; border: 1px solid rgba(20,116,95,.18); border-radius: 22px; background: linear-gradient(135deg, rgba(20,116,95,.05), rgba(198,167,104,.06)); }
 .acceptance-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 13px; }
 .acceptance-head > span:first-child { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border-radius: 13px; color: white; background: linear-gradient(145deg,#102f48,#14745f); }
@@ -368,6 +372,7 @@ textarea {
 .acceptance-status svg { flex-shrink: 0; }
 .acceptance-status.is-pending { color: #8a6c33; background: rgba(198,167,104,.18); }
 .acceptance-status.is-accepted { color: #116d5b; background: rgba(20,128,106,.14); }
+.acceptance-status.is-conditional { color: #865f18; background: rgba(210,153,52,.16); }
 .acceptance-record { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; overflow: hidden; border-radius: 14px; background: rgba(16,47,72,.08); }
 .acceptance-record > div { display: grid; gap: 3px; padding: 11px 13px; background: white; }
 .acceptance-record small { color: rgba(16,47,72,.5); font-size: 9px; }
@@ -384,6 +389,14 @@ textarea {
 .acceptance-ocr { margin: 0; }
 .acceptance-ocr-text { display: flex; align-items: flex-start; gap: 6px; margin: 9px 0 0; color: rgba(16,47,72,.7); font-size: 11px; line-height: 1.8; }
 .acceptance-ocr-text svg { flex: 0 0 auto; margin-top: 3px; color: #14745f; }
+.acceptance-facts { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.acceptance-facts > div { display: grid; gap: 4px; min-width: 0; padding: 11px 13px; border: 1px solid rgba(16,47,72,.08); border-radius: 13px; background: rgba(255,255,255,.86); }
+.acceptance-facts small { color: rgba(16,47,72,.5); font-size: 9px; }
+.acceptance-facts b { overflow-wrap: anywhere; color: #102f48; font-size: 11px; }
+.acceptance-offer-warning { display: flex; align-items: flex-start; gap: 10px; padding: 12px 13px; border: 1px solid rgba(185,111,22,.24); border-radius: 14px; background: rgba(230,168,68,.1); }
+.acceptance-offer-warning > svg { flex: 0 0 auto; color: #a86818; }
+.acceptance-offer-warning b { display: block; color: #6f4817; font-size: 11px; }
+.acceptance-offer-warning small { display: block; margin-top: 3px; color: rgba(85,55,20,.72); font-size: 9px; line-height: 1.75; }
 .acceptance-steps { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
 .acceptance-steps li { display: grid; grid-template-columns: auto auto minmax(0,1fr); align-items: center; gap: 11px; padding: 11px 13px; border: 1px solid rgba(16,47,72,.07); border-radius: 14px; background: white; }
 .acceptance-step-num { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; color: white; background: #102f48; font-size: 11px; font-weight: 900; }
@@ -403,6 +416,7 @@ textarea {
   .acceptance-ctas { grid-template-columns: 1fr; }
   .acceptance-doc { flex-wrap: wrap; }
   .acceptance-record { grid-template-columns: 1fr; }
+  .acceptance-facts { grid-template-columns: 1fr; }
 }
 .account-journey { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 20px; padding: 8px; border: 1px solid rgba(16,47,72,.07); border-radius: 18px; background: rgba(16,47,72,.025); }
 .account-journey-step { position: relative; display: flex; min-width: 0; align-items: center; gap: 7px; padding: 9px 10px; border-radius: 12px; color: rgba(16,47,72,.38); }
