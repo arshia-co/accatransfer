@@ -7,7 +7,7 @@ import { L } from '../../lib/lang';
 import { UI } from '../../i18n/ui';
 import { renderIcon } from '../../lib/icons';
 import { getMajor } from '../../data/mockPrograms';
-import { buildAccaProgramsUrl } from '../../services/programCatalogService';
+import { useAccaMajorUrl } from '../../lib/useAccaMajorUrl';
 
 const SHOW_PROGRAMS_LABEL = {
   fa: 'نمایش دانشگاه‌ها و شهریه‌ها',
@@ -31,6 +31,7 @@ function FitLine({ icon: Icon, label, text }) {
 
 export default function RecommendedMajorCard({ majorId, match, lang, index = 0, detailed = false }) {
   const major = getMajor(majorId);
+  const programsUrl = useAccaMajorUrl(majorId, major ? L(major.name, 'en') : '');
   if (!major) return null;
   const pct = lang === 'fa' || lang === 'ar' ? '٪' : '%';
 
@@ -67,7 +68,7 @@ export default function RecommendedMajorCard({ majorId, match, lang, index = 0, 
       )}
 
       <a
-        href={buildAccaProgramsUrl({ program: L(major.name, 'en') || L(major.name, lang) })}
+        href={programsUrl}
         target="_blank"
         rel="noreferrer"
         className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-navy px-3 py-2.5 text-[11px] font-black text-cream transition hover:brightness-110"

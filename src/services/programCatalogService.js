@@ -110,9 +110,63 @@ export function searchCatalogPrograms(programs, {
 
 export function buildAccaProgramsUrl(program) {
   const params = new URLSearchParams({ page: 'programs' });
-  if (program?.university) params.set('university', program.university);
-  if (program?.program) params.set('search', program.program);
+  if (Array.isArray(program?.programs) && program.programs.length) {
+    // Pre-select the accaco "program" filter with one or more exact names.
+    // No country param → accaco keeps its Turkey + N. Cyprus default.
+    program.programs.forEach((name) => params.append('program', name));
+  } else {
+    if (program?.university) params.set('university', program.university);
+    if (program?.program) params.set('search', program.program);
+  }
   return `${ACCA_SITE_URL}/?${params.toString()}`;
+}
+
+// Focused program-filter per recommended major: `include` phrases (and optional
+// `exclude`) are matched against accaco's live catalog so a major resolves to its
+// related programs (e.g. cs_ai → Computer/Software/AI/Information Systems), not a
+// loose text search. Validated against accaco's Turkey + N. Cyprus catalog.
+export const MAJOR_PROGRAM_FILTERS = {
+  medicine: { include: ['medicine'], exclude: ['nursing', 'veterinary', 'technician', 'assistant', 'secretary', 'aesthetic'] },
+  dentistry: { include: ['dentistry'], exclude: ['technician', 'technology', 'prosthe'] },
+  physiotherapy: { include: ['physiotherapy'], exclude: [] },
+  psychology: { include: ['psychology'], exclude: [] },
+  nutrition: { include: ['nutrition'], exclude: ['animal'] },
+  nursing: { include: ['nursing'], exclude: [] },
+  biomedical: { include: ['biomedical'], exclude: [] },
+  cs_ai: { include: ['computer engineering', 'computer science', 'software engineering', 'artificial intelligence', 'information systems engineering', 'information technolog', 'mechatronic'], exclude: ['education', 'instructional', 'teaching'] },
+  data_science: { include: ['data science', 'big data', 'data analytic'], exclude: [] },
+  business: { include: ['business'], exclude: ['tourism', 'logistics', 'aviation', 'sport', 'art', 'health', 'real estate', 'banking and'] },
+  marketing: { include: ['marketing'], exclude: [] },
+  ir: { include: ['international relations', 'political science'], exclude: [] },
+  law: { include: ['law'], exclude: [] },
+  architecture: { include: ['architecture'], exclude: ['interior', 'landscape', 'restoration'] },
+  interior: { include: ['interior'], exclude: [] },
+  molecular: { include: ['molecular biolog', 'genetic'], exclude: [] },
+  health_mgmt: { include: ['health management', 'health institution', 'healthcare management'], exclude: [] },
+};
+
+const MAX_PROGRAM_FILTERS = 24;
+
+/**
+ * Resolve a recommended major to the exact accaco program names it should filter
+ * to. Uses the curated MAJOR_PROGRAM_FILTERS when the major id is known, otherwise
+ * falls back to the major's own name as a single include phrase.
+ */
+export function resolveMajorPrograms(programs, { majorId, majorName } = {}) {
+  const filter = MAJOR_PROGRAM_FILTERS[majorId];
+  const include = (filter?.include?.length ? filter.include : [String(majorName || '')])
+    .map(normalizeSearch).filter(Boolean);
+  const exclude = (filter?.exclude || []).map(normalizeSearch).filter(Boolean);
+  if (!include.length) return [];
+  const names = new Set();
+  for (const program of programs) {
+    const name = normalizeSearch(program.program);
+    if (include.some((key) => name.includes(key)) && !exclude.some((key) => name.includes(key))) {
+      names.add(program.program);
+      if (names.size >= MAX_PROGRAM_FILTERS) break;
+    }
+  }
+  return [...names];
 }
 
 export function buildAccaUniversityUrl(university) {

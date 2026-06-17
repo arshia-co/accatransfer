@@ -13,7 +13,7 @@ import {
   Target,
 } from 'lucide-react';
 import { L } from '../../lib/lang';
-import { buildAccaProgramsUrl } from '../../services/programCatalogService';
+import { useAccaMajorUrl } from '../../lib/useAccaMajorUrl';
 
 const SHOW_PROGRAMS_LABEL = {
   fa: 'نمایش دانشگاه‌ها و شهریه‌ها',
@@ -64,6 +64,42 @@ function Insight({ icon: Icon, title, children, tone = 'emerald' }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function DeepFitMajorCard({ major, index, lang }) {
+  const programsUrl = useAccaMajorUrl(major.id, L(major.name, 'en'));
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04 }}
+      className="rounded-[19px] border border-white bg-white/78 p-4 shadow-[0_8px_28px_rgba(7,26,61,0.05)]"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600/15 to-gold/20 text-emerald-800">
+          <GraduationCap className="h-4.5 w-4.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-[12px] font-black leading-6 text-navy">{L(major.name, lang)}</h4>
+            <span className="rounded-full bg-navy px-2.5 py-1 text-[9px] font-black text-gold">
+              {major.match}% · {L(FIT_LABELS[major.fitType], lang)}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] font-semibold leading-6 text-navy/60">{L(major.reason, lang)}</p>
+        </div>
+      </div>
+      <a
+        href={programsUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-navy px-3 py-2.5 text-[11px] font-black text-cream transition hover:brightness-110"
+      >
+        <Building2 className="h-3.5 w-3.5 text-gold" />
+        {L(SHOW_PROGRAMS_LABEL, lang)}
+      </a>
+    </motion.article>
   );
 }
 
@@ -187,37 +223,7 @@ export default function DeepFitResultPreview({ result, lang }) {
                     : 'This list intentionally moves beyond broad labels toward more precise paths. Actual program availability is checked separately.'}
                 </p>
                 {result.recommendedMajors?.map((major, index) => (
-                  <motion.article
-                    key={major.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.04 }}
-                    className="rounded-[19px] border border-white bg-white/78 p-4 shadow-[0_8px_28px_rgba(7,26,61,0.05)]"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600/15 to-gold/20 text-emerald-800">
-                        <GraduationCap className="h-4.5 w-4.5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="text-[12px] font-black leading-6 text-navy">{L(major.name, lang)}</h4>
-                          <span className="rounded-full bg-navy px-2.5 py-1 text-[9px] font-black text-gold">
-                            {major.match}% · {L(FIT_LABELS[major.fitType], lang)}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[11px] font-semibold leading-6 text-navy/60">{L(major.reason, lang)}</p>
-                      </div>
-                    </div>
-                    <a
-                      href={buildAccaProgramsUrl({ program: L(major.name, 'en') || L(major.name, lang) })}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-navy px-3 py-2.5 text-[11px] font-black text-cream transition hover:brightness-110"
-                    >
-                      <Building2 className="h-3.5 w-3.5 text-gold" />
-                      {L(SHOW_PROGRAMS_LABEL, lang)}
-                    </a>
-                  </motion.article>
+                  <DeepFitMajorCard key={major.id} major={major} index={index} lang={lang} />
                 ))}
               </>
             )}
