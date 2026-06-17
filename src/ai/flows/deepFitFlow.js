@@ -5,6 +5,7 @@ import {
   DEEP_FIT_ADAPTIVE_COUNT,
   DEEP_FIT_CORE_QUESTIONS,
   DEEP_FIT_CORE_TOTAL,
+  DISCOVERY_SECTION_COUNT,
   findDeepFitQuestion,
 } from '../../data/deepFitQuestions';
 import {
@@ -116,11 +117,15 @@ export const deepFitFlow = {
     }
 
     const savedAnswers = Array.isArray(state.deepFitAnswers) ? state.deepFitAnswers : [];
-    const seededAnswers = savedAnswers.length
-      ? savedAnswers
-      : Array.isArray(state.discoveryAnswers)
-        ? state.discoveryAnswers.slice(0, DEEP_FIT_CORE_TOTAL)
-        : [];
+    // The 25 guest-discovery answers are authoritative for the first section and
+    // must never be re-asked. Seed them first, then keep any Deep-Fit-only
+    // answers (question 26 onward) that the student already gave.
+    const discoveryAnswers = Array.isArray(state.discoveryAnswers)
+      ? state.discoveryAnswers.slice(0, DISCOVERY_SECTION_COUNT)
+      : [];
+    const seededAnswers = discoveryAnswers.length
+      ? [...discoveryAnswers, ...savedAnswers.slice(discoveryAnswers.length)]
+      : savedAnswers;
     const adaptiveIds = seededAnswers.length >= DEEP_FIT_CORE_TOTAL
       ? (state.deepFitAdaptiveIds?.length
           ? state.deepFitAdaptiveIds

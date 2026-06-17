@@ -221,6 +221,9 @@ export const DEEP_FIT_CORE_QUESTIONS = [
 ];
 
 export const DEEP_FIT_CORE_TOTAL = DEEP_FIT_CORE_QUESTIONS.length;
+// How many of the core questions are the guest discovery (1-25). These are
+// never re-asked in Deep Fit when the student already answered them.
+export const DISCOVERY_SECTION_COUNT = DISCOVERY_QUESTIONS.length;
 export const DEEP_FIT_ADAPTIVE_COUNT = 4;
 
 export function findDeepFitQuestion(questionId) {
