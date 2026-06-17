@@ -369,7 +369,17 @@ export function GuestAssessmentModal() {
                   <div className="truncate text-sm font-semibold text-foreground">{draft.document.name}</div>
                   <div className="mt-1 text-[11px] text-muted-foreground">{formatFileSize(draft.document.size)}</div>
                 </div>
-                <CheckCircle2 className="h-5 w-5 text-success" />
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
+                <label className="shrink-0 cursor-pointer rounded-full border border-[color:var(--ta-gold)]/40 bg-white px-3 py-1.5 text-[11px] font-semibold text-[color:var(--ta-gold-deep)] transition hover:bg-[color:var(--ta-gold)]/[0.08]">
+                  {fa ? "تغییر فایل" : "Change"}
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="sr-only"
+                    onClick={(event) => { (event.target as HTMLInputElement).value = ""; }}
+                    onChange={(event) => onFile(event.target.files?.[0])}
+                  />
+                </label>
               </div>
             ) : (
               <label className="group flex cursor-pointer flex-col items-center rounded-3xl border border-dashed border-[color:var(--ta-gold)]/45 bg-[color:var(--ta-gold)]/[0.06] px-6 py-9 text-center transition hover:bg-[color:var(--ta-gold)]/[0.1]">
