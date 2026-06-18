@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { Camera, Check, LoaderCircle } from 'lucide-react';
-import { updateProfileDetails, uploadAvatar } from '../../services/accountService';
+import { Camera, Check, KeyRound, LoaderCircle } from 'lucide-react';
+import { updateAccountPassword, updateProfileDetails, uploadAvatar } from '../../services/accountService';
 
 export default function ProfileEditor({ user, profile, onSaved }) {
   const [name, setName] = useState(profile?.full_name || '');
@@ -9,7 +9,26 @@ export default function ProfileEditor({ user, profile, onSaved }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [savedName, setSavedName] = useState(false);
+  const [password, setPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [savedPassword, setSavedPassword] = useState(false);
   const fileRef = useRef(null);
+
+  const savePassword = async () => {
+    setSavingPassword(true);
+    setError('');
+    setSavedPassword(false);
+    try {
+      await updateAccountPassword(password);
+      setPassword('');
+      setSavedPassword(true);
+      window.setTimeout(() => setSavedPassword(false), 2500);
+    } catch (err) {
+      setError(err?.message || 'تنظیم رمز انجام نشد.');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
   const pickAvatar = async (file) => {
     if (!file) return;
@@ -47,6 +66,7 @@ export default function ProfileEditor({ user, profile, onSaved }) {
 
   return (
     <section className="account-profile-editor">
+      <div className="account-profile-row">
       <div className="account-profile-avatar">
         <button
           type="button"
@@ -92,6 +112,30 @@ export default function ProfileEditor({ user, profile, onSaved }) {
         {savingName ? <LoaderCircle className="account-spin" size={16} /> : <Check size={16} />}
         {savedName ? 'ذخیره شد' : 'ذخیره'}
       </button>
+      </div>
+
+      <div className="account-profile-security">
+        <label className="account-profile-pass">
+          <KeyRound size={15} />
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="تنظیم رمز عبور برای ورود (حداقل ۸ کاراکتر)"
+            autoComplete="new-password"
+            minLength={8}
+          />
+        </label>
+        <button
+          type="button"
+          className="account-profile-pass-save"
+          onClick={savePassword}
+          disabled={savingPassword || password.length < 8}
+        >
+          {savingPassword ? <LoaderCircle className="account-spin" size={15} /> : <KeyRound size={15} />}
+          {savedPassword ? 'رمز تنظیم شد' : 'تنظیم رمز'}
+        </button>
+      </div>
     </section>
   );
 }

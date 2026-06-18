@@ -19,19 +19,30 @@ const COPY = {
 };
 
 export default function AuthModal() {
-  const { authRequest, closeAuth, sendCode, verifyCode, isConfigured } = useAuth();
+  const { authRequest, closeAuth, sendCode, verifyCode, signInWithPassword, isConfigured } = useAuth();
+  const [mode, setMode] = useState('code'); // 'code' (email OTP, default) | 'password'
   const [stage, setStage] = useState('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const reset = () => {
+    setMode('code');
     setStage('email');
     setEmail('');
     setCode('');
+    setPassword('');
     setBusy(false);
     setError('');
+  };
+
+  const goToAccount = () => {
+    reset();
+    const destination = authRequest?.returnTo || '/account';
+    window.history.pushState({}, '', destination);
+    window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
   const dismiss = () => {
@@ -54,15 +65,15 @@ export default function AuthModal() {
     setBusy(true);
     setError('');
     try {
-      if (stage === 'email') {
+      if (mode === 'password') {
+        await signInWithPassword({ email, password, product });
+        goToAccount();
+      } else if (stage === 'email') {
         await sendCode({ email, product });
         setStage('code');
       } else {
         await verifyCode({ email, token: code, product });
-        reset();
-        const destination = authRequest?.returnTo || '/account';
-        window.history.pushState({}, '', destination);
-        window.dispatchEvent(new PopStateEvent('popstate'));
+        goToAccount();
       }
     } catch (err) {
       setError(err?.message || 'ورود انجام نشد. دوباره تلاش کنید.');
@@ -107,7 +118,34 @@ export default function AuthModal() {
             </div>
 
             <form onSubmit={submit} className="acca-auth-form">
-              {stage === 'email' ? (
+              {mode === 'password' ? (
+                <>
+                  <label>
+                    <Mail size={17} />
+                    <input
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="ایمیل شما"
+                      dir="ltr"
+                    />
+                  </label>
+                  <label>
+                    <LockKeyhole size={17} />
+                    <input
+                      type="password"
+                      required
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="رمز عبور"
+                      dir="ltr"
+                    />
+                  </label>
+                </>
+              ) : stage === 'email' ? (
                 <label>
                   <Mail size={17} />
                   <input
@@ -142,15 +180,26 @@ export default function AuthModal() {
               {!isConfigured && <p className="acca-auth-error">اتصال احراز هویت هنوز پیکربندی نشده است.</p>}
               <button type="submit" disabled={busy || !isConfigured} className="acca-auth-submit">
                 <LockKeyhole size={17} />
-                {busy ? 'در حال بررسی...' : stage === 'email' ? 'ارسال کد امن' : 'ورود و ادامه'}
+                {busy ? 'در حال بررسی...' : mode === 'password' ? 'ورود با رمز عبور' : stage === 'email' ? 'ارسال کد امن' : 'ورود و ادامه'}
               </button>
-              {stage === 'code' && (
-                <button type="button" className="acca-auth-back" onClick={() => setStage('email')}>
+              {mode === 'code' && stage === 'code' && (
+                <button type="button" className="acca-auth-back" onClick={() => { setStage('email'); setError(''); }}>
                   <ArrowLeft size={14} /> تغییر ایمیل
                 </button>
               )}
+              <button
+                type="button"
+                className="acca-auth-back"
+                onClick={() => { setMode(mode === 'password' ? 'code' : 'password'); setStage('email'); setCode(''); setPassword(''); setError(''); }}
+              >
+                {mode === 'password' ? 'ورود با کد ایمیل' : 'ورود با رمز عبور'}
+              </button>
             </form>
-            <small>بدون رمز عبور. کد یک‌بارمصرف از طریق ایمیل ارسال می‌شود.</small>
+            <small>
+              {mode === 'password'
+                ? 'با رمز عبوری که در پنل کاربری تنظیم کرده‌اید وارد شوید.'
+                : 'بدون رمز عبور. کد یک‌بارمصرف از طریق ایمیل ارسال می‌شود.'}
+            </small>
           </motion.section>
         </motion.div>
       )}

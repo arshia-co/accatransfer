@@ -56,6 +56,14 @@ export async function updateProfileDetails(user, { fullName }) {
   return data;
 }
 
+/** Set or change the account password (lets the student log in with email + password). */
+export async function updateAccountPassword(password) {
+  const client = requireClient();
+  if (!password || password.length < 8) throw new Error('رمز عبور باید حداقل ۸ کاراکتر باشد.');
+  const { error } = await client.auth.updateUser({ password });
+  if (error) throw error;
+}
+
 /** Upload a profile photo to the public avatars bucket and store its URL. */
 export async function uploadAvatar(user, file) {
   const client = requireClient();

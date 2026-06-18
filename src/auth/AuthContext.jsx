@@ -65,6 +65,17 @@ export function AuthProvider({ children }) {
     return { user: data.user, migratedDraft };
   }, []);
 
+  const signInWithPassword = useCallback(async ({ email, password, product = 'smart_apply' }) => {
+    if (!supabase) throw new Error('Authentication is not configured.');
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) throw error;
+    if (!data.user) throw new Error('Login could not be completed.');
+    await upsertProfile(data.user, product, {});
+    const migratedDraft = await migrateGuestTransferDraft(data.user);
+    setAuthRequest(null);
+    return { user: data.user, migratedDraft };
+  }, []);
+
   const signOut = useCallback(async () => {
     if (supabase) await supabase.auth.signOut();
     setSession(null);
@@ -80,8 +91,9 @@ export function AuthProvider({ children }) {
     closeAuth,
     sendCode,
     verifyCode,
+    signInWithPassword,
     signOut,
-  }), [session, loading, authRequest, openAuth, closeAuth, sendCode, verifyCode, signOut]);
+  }), [session, loading, authRequest, openAuth, closeAuth, sendCode, verifyCode, signInWithPassword, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
