@@ -411,6 +411,21 @@ textarea {
 .account-empty h3 { margin: 12px 0 3px; color: #102f48; }
 .account-empty p { margin: 0; font-size: 12px; }
 .account-error-banner { margin-top: 14px; padding: 13px 16px; border: 1px solid rgba(180,35,24,.18); border-radius: 14px; color: #9b1c14; background: rgba(254,242,242,.9); font-size: 12px; }
+.account-notifications { display: grid; gap: 12px; margin: 16px 0 6px; padding: 16px; border: 1px solid rgba(16,47,72,.08); border-radius: 24px; background: linear-gradient(135deg, rgba(255,255,255,.88), rgba(247,243,236,.76)); box-shadow: 0 18px 52px rgba(16,47,72,.06); backdrop-filter: blur(18px); }
+.account-notifications-head { display: flex; align-items: center; gap: 11px; }
+.account-notifications-head > span { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 14px; color: #102f48; background: rgba(198,167,104,.2); }
+.account-notifications-head div { display: grid; gap: 2px; }
+.account-notifications-head b { color: #102f48; font-size: 13px; }
+.account-notifications-head small { color: rgba(16,47,72,.5); font-size: 10px; line-height: 1.7; }
+.account-notification-list { display: grid; gap: 8px; }
+.account-notification-list article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 13px; border: 1px solid rgba(16,47,72,.07); border-radius: 16px; background: rgba(255,255,255,.68); }
+.account-notification-list article.is-unread { border-color: rgba(20,116,95,.18); background: rgba(20,128,106,.06); }
+.account-notification-list b { color: #102f48; font-size: 11px; }
+.account-notification-list small { display: block; margin-top: 2px; color: rgba(16,47,72,.42); font-size: 9px; }
+.account-notification-list p { display: -webkit-box; overflow: hidden; margin: 6px 0 0; color: rgba(16,47,72,.58); font-size: 10px; line-height: 1.8; white-space: pre-line; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.account-notification-list button { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid rgba(16,47,72,.1); border-radius: 999px; color: #102f48; background: #fff; font-size: 9px; font-weight: 900; cursor: pointer; transition: transform .2s ease, box-shadow .2s ease; }
+.account-notification-list button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(16,47,72,.1); }
+.account-notification-list button:disabled { opacity: .55; cursor: wait; }
 .account-footer-note { display: flex; justify-content: center; gap: 7px; padding-top: 22px; color: rgba(16,47,72,.48); font-size: 10px; text-align: center; }
 .account-central .account-ambient {
   background:
@@ -830,6 +845,8 @@ textarea {
   .account-transfer-result-head { flex-direction: column; }
   .account-transfer-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .account-result-columns { grid-template-columns: 1fr; }
+  .account-notification-list article { grid-template-columns: 1fr; align-items: stretch; }
+  .account-notification-list button { width: max-content; }
   .application-requirement-groups { grid-template-columns: 1fr; }
   .catalog-picker-filters { grid-template-columns: 1fr; }
   .catalog-picker-filters select { min-height: 42px; }

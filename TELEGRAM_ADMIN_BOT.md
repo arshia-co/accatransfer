@@ -15,7 +15,11 @@ Leads bot. It runs as a Supabase Edge Function:
 - Telegram inline menu in Persian.
 - User list/detail.
 - Application list/detail.
-- Application admin status change with confirmation.
+- Application admin status change with confirmation, optional admin note,
+  student panel notification, and email log/send workflow.
+- Telegram PDF/JPG/PNG/DOC/DOCX attachment upload for every application status.
+- Acceptance-letter attachments are saved to the student's central panel and
+  shown in the Smart Apply / AI Transfer acceptance journey.
 - Document list/detail.
 - Short-lived signed document URLs.
 - Document approve/reject actions.
@@ -34,10 +38,22 @@ Set these in Supabase Edge Function secrets:
 TELEGRAM_BOT_TOKEN=
 AUTHORIZED_TELEGRAM_ADMIN_IDS=
 TELEGRAM_ADMIN_ALLOW_UNVERIFIED=false
+RESEND_API_KEY=
+EMAIL_FROM_ADDRESS="ACCA Admissions <no-reply@accatransfer.com>"
+APP_BASE_URL=https://accatransfer.com
 ```
 
 `AUTHORIZED_TELEGRAM_ADMIN_IDS` is a comma-separated bootstrap list. Any user ID
 there is upserted as `super_admin` on first `/start`.
+
+`TELEGRAM_BOT_TOKEN` is also required for Telegram file download. Without it,
+the bot can still answer webhooks through Telegram's webhook response format,
+but it cannot fetch uploaded files by `file_id`.
+
+`RESEND_API_KEY` enables real outbound email. If it is missing, the status
+change still succeeds, the panel notification is created, and an `email_logs`
+row is saved with `status = queued` so the CRM/email provider can be connected
+later without losing the event.
 
 After bootstrap, manage admins in `telegram_admins`:
 
@@ -83,9 +99,15 @@ The function validates Telegram's `X-Telegram-Bot-Api-Secret-Token` header.
 - Every admin action writes to `telegram_admin_audit_logs`.
 - Ordinary browser users cannot read or write admin tables.
 
-## Current Limitations
+## Status + Attachment Flow
 
-- Full letter upload, custom email composer, and Telegram file upload workflows
-  are scaffolded for Phase 2 but intentionally not enabled in Phase 1.
-- The website notification center table is ready; UI surfacing can be polished
-  in the next frontend pass.
+1. Open an application in the bot.
+2. Choose `تغییر وضعیت`.
+3. Pick the new status.
+4. Choose one of:
+   - `ثبت و اطلاع‌رسانی بدون فایل`
+   - `افزودن متن اختصاصی`
+   - `ثبت همراه فایل پیوست`
+5. The function updates `application_submissions.admin_status`, writes
+   `application_status_history`, creates `user_notifications`, logs/sends
+   email through `email_logs`, and stores any attachment in `student_documents`.

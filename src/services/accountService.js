@@ -235,7 +235,7 @@ export async function listAccountData(userId, product) {
 
 export async function listCentralAccountData(userId) {
   const client = requireClient();
-  const [profile, documents, smartApply, deepFit, transfer, selections, submissions] = await Promise.all([
+  const [profile, documents, smartApply, deepFit, transfer, selections, submissions, notifications, letters] = await Promise.all([
     client.from('profiles').select('*').eq('id', userId).maybeSingle(),
     client.from('student_documents').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
     client.from('smart_apply_sessions').select('*').eq('user_id', userId).order('updated_at', { ascending: false }),
@@ -243,9 +243,11 @@ export async function listCentralAccountData(userId) {
     client.from('transfer_assessments').select('*').eq('user_id', userId).order('updated_at', { ascending: false }),
     client.from('student_program_selections').select('*').eq('user_id', userId).order('updated_at', { ascending: false }),
     client.from('application_submissions').select('*').eq('user_id', userId).order('submitted_at', { ascending: false }),
+    client.from('user_notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(8),
+    client.from('user_letters').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
   ]);
 
-  const failure = [profile, documents, smartApply, deepFit, transfer, selections, submissions]
+  const failure = [profile, documents, smartApply, deepFit, transfer, selections, submissions, notifications, letters]
     .find((result) => result.error);
   if (failure?.error) throw failure.error;
 
@@ -257,6 +259,8 @@ export async function listCentralAccountData(userId) {
     transfer: transfer.data || [],
     selections: selections.data || [],
     submissions: submissions.data || [],
+    notifications: notifications.data || [],
+    letters: letters.data || [],
   };
 }
 

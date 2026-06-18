@@ -40,6 +40,26 @@ export const APPLICATION_DOCUMENT_REQUIREMENTS = {
         label: 'گواهی دوره و سرتیفیکیت',
         description: 'اختیاری و فقط در صورت ارتباط با رشته',
       },
+      {
+        kind: 'acceptance_letter',
+        label: 'نامه پذیرش',
+        description: 'فایل رسمی پذیرش دانشگاه که توسط تیم ACCA بارگذاری شده است',
+      },
+      {
+        kind: 'document_request',
+        label: 'درخواست تکمیل مدارک',
+        description: 'فایل یا نامه مربوط به نقص مدارک پرونده',
+      },
+      {
+        kind: 'status_update_attachment',
+        label: 'پیوست وضعیت پرونده',
+        description: 'فایل تکمیلی ارسال‌شده توسط تیم ACCA',
+      },
+      {
+        kind: 'rejection_notice',
+        label: 'نامه نتیجه منفی',
+        description: 'نامه یا فایل مربوط به نتیجه منفی بررسی پرونده',
+      },
     ],
   },
   ai_transfer: {
@@ -75,6 +95,26 @@ export const APPLICATION_DOCUMENT_REQUIREMENTS = {
         kind: 'other_certificate',
         label: 'مدارک تکمیلی',
         description: 'گواهی‌ها و مستندات مرتبط با پرونده',
+      },
+      {
+        kind: 'acceptance_letter',
+        label: 'نامه پذیرش',
+        description: 'فایل رسمی پذیرش دانشگاه که توسط تیم ACCA بارگذاری شده است',
+      },
+      {
+        kind: 'document_request',
+        label: 'درخواست تکمیل مدارک',
+        description: 'فایل یا نامه مربوط به نقص مدارک پرونده',
+      },
+      {
+        kind: 'status_update_attachment',
+        label: 'پیوست وضعیت پرونده',
+        description: 'فایل تکمیلی ارسال‌شده توسط تیم ACCA',
+      },
+      {
+        kind: 'rejection_notice',
+        label: 'نامه نتیجه منفی',
+        description: 'نامه یا فایل مربوط به نتیجه منفی بررسی پرونده',
       },
     ],
   },

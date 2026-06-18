@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  AlertTriangle, ArrowLeft, BadgeCheck, BookOpen, BrainCircuit, CheckCircle2, ChevronDown, ChevronUp, Clock3, CloudUpload, Compass,
-  FileText, FolderLock, GraduationCap, LayoutGrid, ListChecks, LoaderCircle, LogOut,
+  AlertTriangle, ArrowLeft, BadgeCheck, Bell, BookOpen, BrainCircuit, CheckCircle2, ChevronDown, ChevronUp, Clock3, CloudUpload, Compass,
+  FileText, FolderLock, GraduationCap, LayoutGrid, ListChecks, LoaderCircle, LogOut, Paperclip,
   RefreshCw, ScanText, ShieldCheck, Sparkles, Target,
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
@@ -10,6 +10,7 @@ import { rememberAccountPreview } from '../../auth/accountPreview';
 import {
   confirmDocumentExtraction,
   createTransferAssessment,
+  createDocumentSignedUrl,
   listCentralAccountData,
   requestDocumentOcr,
   requestHumanDocumentReview,
@@ -39,6 +40,8 @@ const EMPTY_DATA = {
   transfer: [],
   selections: [],
   submissions: [],
+  notifications: [],
+  letters: [],
 };
 
 function formatDate(value) {
@@ -324,6 +327,56 @@ function DocumentList({ documents, busyId, onConfirm, onReview, onRetry }) {
         />
       ))}
     </div>
+  );
+}
+
+function AccountNotifications({ notifications = [], documents = [] }) {
+  const [openingId, setOpeningId] = useState(null);
+  const visible = notifications.slice(0, 5);
+  if (!visible.length) return null;
+
+  const openLinkedDocument = async (notification) => {
+    const document = documents.find((item) => item.id === notification.document_id);
+    if (!document?.object_path) return;
+    setOpeningId(notification.id);
+    try {
+      const url = await createDocumentSignedUrl(document.object_path);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } finally {
+      setOpeningId(null);
+    }
+  };
+
+  return (
+    <motion.section className="account-notifications" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="account-notifications-head">
+        <span><Bell size={18} /></span>
+        <div>
+          <b>آخرین پیام‌های پرونده</b>
+          <small>وضعیت‌هایی که تیم ACCA ثبت می‌کند اینجا و در ایمیل شما قابل پیگیری است.</small>
+        </div>
+      </div>
+      <div className="account-notification-list">
+        {visible.map((notification) => {
+          const hasDocument = Boolean(notification.document_id && documents.some((item) => item.id === notification.document_id));
+          return (
+            <article key={notification.id} className={notification.read_at ? '' : 'is-unread'}>
+              <div>
+                <b>{notification.title}</b>
+                <small>{formatDate(notification.created_at)}</small>
+                <p>{notification.message}</p>
+              </div>
+              {hasDocument && (
+                <button type="button" onClick={() => openLinkedDocument(notification)} disabled={openingId === notification.id}>
+                  {openingId === notification.id ? <LoaderCircle className="account-spin" size={14} /> : <Paperclip size={14} />}
+                  مشاهده فایل
+                </button>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </motion.section>
   );
 }
 
@@ -782,6 +835,8 @@ export default function AccountPortal() {
             <span>{linkedSelectionNotice}</span>
           </div>
         )}
+
+        <AccountNotifications notifications={data.notifications} documents={data.documents} />
 
         <nav className="account-product-tabs" role="tablist" aria-label="انتخاب سرویس">
           <button

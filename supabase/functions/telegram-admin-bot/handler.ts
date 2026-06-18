@@ -5,6 +5,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
   ?? namedKey("SUPABASE_SECRET_KEYS");
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+const EMAIL_FROM_ADDRESS = Deno.env.get("EMAIL_FROM_ADDRESS") ?? "ACCA Admissions <no-reply@accatransfer.com>";
+const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") ?? "https://accatransfer.com").replace(/\/$/, "");
 const AUTHORIZED_TELEGRAM_ADMIN_IDS = new Set(
   (Deno.env.get("AUTHORIZED_TELEGRAM_ADMIN_IDS") ?? "")
     .split(",")
@@ -16,6 +19,16 @@ const ALLOW_UNVERIFIED_WEBHOOK = Deno.env.get("TELEGRAM_ADMIN_ALLOW_UNVERIFIED")
 const PAGE_SIZE = 5;
 const REF_TTL_MINUTES = 15;
 const SESSION_TTL_MINUTES = 30;
+const DOCUMENT_BUCKET = "student-documents";
+const MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024;
+const EMAIL_ATTACHMENT_LIMIT = 8 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_MIME = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
 
 type Json = Record<string, any>;
 type TelegramUser = {
@@ -27,6 +40,21 @@ type TelegramUser = {
 type TelegramMessage = {
   message_id: number;
   text?: string;
+  caption?: string;
+  document?: {
+    file_id: string;
+    file_unique_id?: string;
+    file_name?: string;
+    mime_type?: string;
+    file_size?: number;
+  };
+  photo?: Array<{
+    file_id: string;
+    file_unique_id?: string;
+    file_size?: number;
+    width?: number;
+    height?: number;
+  }>;
   chat: { id: number; type?: string };
   from?: TelegramUser;
 };
@@ -110,6 +138,40 @@ function fmtDate(value?: string | null) {
   } catch {
     return value;
   }
+}
+
+function safeFilename(name?: string | null) {
+  const fallback = `acca-file-${Date.now()}`;
+  const raw = String(name || fallback);
+  const extension = raw.includes(".") ? `.${raw.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "")}` : "";
+  const base = raw
+    .replace(/\.[^.]+$/, "")
+    .normalize("NFKD")
+    .replace(/[^\w-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 70) || fallback;
+  return `${base}${extension}`;
+}
+
+function inferMimeType(fileName?: string | null, provided?: string | null) {
+  if (provided && provided !== "application/octet-stream") return provided;
+  const ext = String(fileName || "").split(".").pop()?.toLowerCase();
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "doc") return "application/msword";
+  if (ext === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  return provided || "application/octet-stream";
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
 }
 
 function displayName(user?: TelegramUser) {
@@ -531,6 +593,351 @@ const ADMIN_STATUSES = [
   ["cancelled", "لغو شده"],
 ];
 
+const STATUS_PRIORITY: Record<string, string> = {
+  documents_missing: "high",
+  conditional_acceptance: "high",
+  final_acceptance: "urgent",
+  rejected: "high",
+  visa_process: "high",
+  enrolled: "high",
+};
+
+function statusLabel(status: string) {
+  return ADMIN_STATUSES.find(([value]) => value === status)?.[1] ?? status;
+}
+
+function productLabel(product?: string | null) {
+  return product === "ai_transfer" ? "AI Transfer" : "Smart Apply";
+}
+
+function appContext(app: Json) {
+  const snap = (app.payload_snapshot ?? {}) as Json;
+  const profile = snap?.user?.profile ?? {};
+  const selection = snap?.selected_program ?? {};
+  const readiness = snap?.readiness ?? {};
+  const missing = Array.isArray(readiness?.missing) ? readiness.missing : [];
+  return {
+    email: snap?.user?.email ?? null,
+    studentName: profile.full_name || snap?.user?.email || "دانشجو",
+    university: selection.university_name || selection.university || "دانشگاه انتخاب‌شده",
+    program: selection.program_name || selection.program || "رشته انتخاب‌شده",
+    country: selection.country || "",
+    submittedAt: app.submitted_at ?? app.created_at ?? null,
+    missingDocuments: missing,
+  };
+}
+
+function statusDocumentKind(status: string) {
+  if (status === "conditional_acceptance" || status === "final_acceptance") return "acceptance_letter";
+  if (status === "documents_missing") return "document_request";
+  if (status === "rejected") return "rejection_notice";
+  return "status_update_attachment";
+}
+
+function letterTypeForStatus(status: string) {
+  if (status === "conditional_acceptance") return "conditional_acceptance";
+  if (status === "final_acceptance") return "final_acceptance";
+  if (status === "documents_missing") return "document_request";
+  if (status === "rejected") return "rejection_notice";
+  return "application_status_update";
+}
+
+function buildStudentStatusCopy(app: Json, status: string, note?: string | null, attachment?: Json | null) {
+  const context = appContext(app);
+  const label = statusLabel(status);
+  const missing = context.missingDocuments.length
+    ? `\nمدارک نیازمند تکمیل: ${context.missingDocuments.join("، ")}`
+    : "";
+  const attachmentLine = attachment?.original_name
+    ? `\nفایل پیوست: ${attachment.original_name}`
+    : "";
+  const noteLine = note?.trim() ? `\n\nیادداشت تیم پذیرش:\n${note.trim().slice(0, 1400)}` : "";
+
+  const statusSpecific: Record<string, string> = {
+    under_review: "پرونده شما وارد بررسی انسانی تیم ACCA شد. نتیجه هر مرحله از همین پنل و ایمیل اطلاع‌رسانی می‌شود.",
+    documents_missing: `برای ادامه بررسی، بخشی از مدارک پرونده نیاز به تکمیل یا اصلاح دارد.${missing}`,
+    documents_complete: "مدارک اصلی پرونده شما کامل ثبت شده و برای مرحله بعدی آماده است.",
+    submitted_to_university: "پرونده شما برای بررسی رسمی به دانشگاه مقصد ارسال شد. تصمیم نهایی با دانشگاه است.",
+    conditional_acceptance: "پذیرش مشروط شما دریافت شد. لطفاً فایل پذیرش و شرایط ذکرشده را با دقت بررسی کنید.",
+    final_acceptance: "پذیرش نهایی شما آماده است. فایل رسمی در پنل قرار گرفت و مراحل بعدی ثبت‌نام قابل پیگیری است.",
+    rejected: "نتیجه بررسی دانشگاه برای این پرونده منفی ثبت شد. تیم ACCA می‌تواند مسیرهای جایگزین را با شما بررسی کند.",
+    visa_process: "پرونده وارد مرحله هماهنگی سفر/ورود و مدارک بعد از پذیرش شده است.",
+    enrolled: "وضعیت پرونده به ثبت‌نام‌شده تغییر کرد. اطلاعات تکمیلی در پنل شما باقی می‌ماند.",
+    cancelled: "این پرونده لغو شد. اگر این تغییر را انتظار نداشتید، با تیم ACCA تماس بگیرید.",
+  };
+
+  return {
+    title: status === "final_acceptance"
+      ? "پذیرش نهایی شما آماده شد"
+      : status === "conditional_acceptance"
+        ? "پذیرش مشروط شما دریافت شد"
+        : status === "documents_missing"
+          ? "مدارک پرونده شما نیاز به تکمیل دارد"
+          : "وضعیت پرونده شما به‌روزرسانی شد",
+    message: [
+      `وضعیت پرونده ${productLabel(app.product)} شما به «${label}» تغییر کرد.`,
+      `دانشگاه: ${context.university}`,
+      `رشته: ${context.program}`,
+      context.submittedAt ? `تاریخ ثبت درخواست: ${fmtDate(context.submittedAt)}` : "",
+      "",
+      statusSpecific[status] ?? "تیم ACCA آخرین وضعیت پرونده شما را ثبت کرد.",
+      attachmentLine,
+      noteLine,
+    ].filter(Boolean).join("\n").slice(0, 1800),
+  };
+}
+
+function buildStatusEmail(app: Json, status: string, note?: string | null, attachment?: Json | null) {
+  const context = appContext(app);
+  const copy = buildStudentStatusCopy(app, status, note, attachment);
+  const accountUrl = `${APP_BASE_URL}/account`;
+  const text = [
+    `سلام ${context.studentName} عزیز،`,
+    "",
+    copy.message,
+    "",
+    "برای مشاهده جزئیات، فایل‌ها و ادامه مسیر وارد پنل مرکزی ACCA شوید:",
+    accountUrl,
+    "",
+    "این پیام اطلاع‌رسانی وضعیت پرونده است و به معنی تضمین پذیرش یا تصمیم نهایی دانشگاه نیست.",
+    "ACCA Admissions",
+  ].join("\n");
+  const html = `
+    <div dir="rtl" style="font-family:Arial,Tahoma,sans-serif;line-height:1.9;color:#102f48">
+      <h2 style="margin:0 0 12px">${escapeHtml(copy.title)}</h2>
+      <p>سلام ${escapeHtml(context.studentName)} عزیز،</p>
+      <p style="white-space:pre-line">${escapeHtml(copy.message)}</p>
+      <p><a href="${escapeHtml(accountUrl)}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#14745f;color:white;text-decoration:none;font-weight:700">ورود به پنل مرکزی ACCA</a></p>
+      <p style="font-size:12px;color:#64748b">این پیام اطلاع‌رسانی وضعیت پرونده است و به معنی تضمین پذیرش یا تصمیم نهایی دانشگاه نیست.</p>
+    </div>
+  `;
+  return {
+    subject: copy.title,
+    text,
+    html,
+  };
+}
+
+async function sendStudentEmail({
+  to,
+  subject,
+  text,
+  html,
+  attachment,
+}: {
+  to?: string | null;
+  subject: string;
+  text: string;
+  html: string;
+  attachment?: { filename: string; content: string; content_type: string } | null;
+}) {
+  if (!to) return { status: "skipped", provider: "resend", failure_reason: "Student email is missing." };
+  if (!RESEND_API_KEY) {
+    return { status: "queued", provider: "resend", failure_reason: "RESEND_API_KEY is not configured." };
+  }
+  const payload: Json = {
+    from: EMAIL_FROM_ADDRESS,
+    to: [to],
+    subject,
+    text,
+    html,
+  };
+  if (attachment) payload.attachments = [attachment];
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      status: "failed",
+      provider: "resend",
+      failure_reason: body?.message || `Resend responded with ${res.status}`,
+      provider_message_id: null,
+    };
+  }
+  return {
+    status: "sent",
+    provider: "resend",
+    failure_reason: null,
+    provider_message_id: body?.id ?? null,
+  };
+}
+
+function getMessageAttachment(message?: TelegramMessage) {
+  if (!message) return null;
+  if (message.document?.file_id) {
+    const fileName = message.document.file_name || `telegram-document-${message.message_id}`;
+    return {
+      file_id: message.document.file_id,
+      file_name: fileName,
+      mime_type: inferMimeType(fileName, message.document.mime_type),
+      file_size: message.document.file_size ?? null,
+      source: "document",
+    };
+  }
+  if (message.photo?.length) {
+    const photo = [...message.photo].sort((a, b) => (b.file_size ?? 0) - (a.file_size ?? 0))[0];
+    return {
+      file_id: photo.file_id,
+      file_name: `telegram-photo-${message.message_id}.jpg`,
+      mime_type: "image/jpeg",
+      file_size: photo.file_size ?? null,
+      source: "photo",
+    };
+  }
+  return null;
+}
+
+function validateTelegramAttachment(attachment: Json) {
+  if (attachment.file_size && attachment.file_size > MAX_ATTACHMENT_SIZE) {
+    return "حجم فایل باید کمتر از ۱۵ مگابایت باشد.";
+  }
+  if (!ALLOWED_ATTACHMENT_MIME.has(attachment.mime_type)) {
+    return "فرمت مجاز نیست. لطفاً PDF، JPG، PNG، DOC یا DOCX ارسال کنید.";
+  }
+  return null;
+}
+
+async function getTelegramFilePath(fileId: string) {
+  if (!TELEGRAM_BOT_TOKEN) {
+    throw new Error("TELEGRAM_BOT_TOKEN is required to download Telegram files.");
+  }
+  const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`);
+  const body = await res.json();
+  if (!res.ok || !body?.ok || !body?.result?.file_path) {
+    throw new Error(body?.description || "Telegram file could not be resolved.");
+  }
+  return body.result.file_path as string;
+}
+
+async function downloadTelegramFile(filePath: string) {
+  const res = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`);
+  if (!res.ok) throw new Error(`Telegram file download failed with ${res.status}.`);
+  return await res.arrayBuffer();
+}
+
+async function maybeRunDocumentOcr(documentId: string, mimeType: string) {
+  if (!["application/pdf", "image/jpeg", "image/png"].includes(mimeType)) return;
+  try {
+    const task = supabase.functions.invoke("document-ocr", {
+      body: { documentId, force: true },
+    }).then(({ error }) => {
+      if (error) console.error("document OCR invoke failed", error);
+    });
+    EdgeRuntime.waitUntil(task);
+  } catch (error) {
+    console.error("document OCR scheduling failed", error);
+  }
+}
+
+async function saveStatusAttachment({
+  admin,
+  app,
+  status,
+  note,
+  attachment,
+  fileBuffer,
+}: {
+  admin: Admin;
+  app: Json;
+  status: string;
+  note?: string | null;
+  attachment: Json;
+  fileBuffer: ArrayBuffer;
+}) {
+  const mimeType = inferMimeType(attachment.file_name, attachment.mime_type);
+  const originalName = safeFilename(attachment.file_name);
+  const objectPath = `${app.user_id}/${app.product}/admin/${app.id}/${crypto.randomUUID()}-${originalName}`;
+  const blob = new Blob([fileBuffer], { type: mimeType });
+  const { error: uploadError } = await supabase.storage
+    .from(DOCUMENT_BUCKET)
+    .upload(objectPath, blob, {
+      contentType: mimeType,
+      cacheControl: "3600",
+      upsert: false,
+    });
+  if (uploadError) throw uploadError;
+
+  const documentKind = statusDocumentKind(status);
+  const { data: document, error: documentError } = await supabase
+    .from("student_documents")
+    .insert({
+      user_id: app.user_id,
+      product: app.product,
+      document_kind: documentKind,
+      bucket_id: DOCUMENT_BUCKET,
+      object_path: objectPath,
+      original_name: originalName,
+      mime_type: mimeType,
+      size_bytes: fileBuffer.byteLength,
+      status: "verified",
+      review_status: documentKind === "acceptance_letter" ? "admin_review" : "reviewed",
+      reviewer_admin_id: admin.id,
+      reviewed_at: new Date().toISOString(),
+      review_notes: `Uploaded by Telegram admin for ${statusLabel(status)}.`,
+      quality_report: {
+        source: "telegram_admin_bot",
+        telegram_source: attachment.source,
+        admin_status: status,
+      },
+    })
+    .select()
+    .single();
+  if (documentError) {
+    await supabase.storage.from(DOCUMENT_BUCKET).remove([objectPath]);
+    throw documentError;
+  }
+
+  const letterTitle = status === "final_acceptance"
+    ? "پذیرش نهایی دانشگاه"
+    : status === "conditional_acceptance"
+      ? "پذیرش مشروط دانشگاه"
+      : `فایل وضعیت ${statusLabel(status)}`;
+  const { data: letter, error: letterError } = await supabase
+    .from("user_letters")
+    .insert({
+      user_id: app.user_id,
+      application_id: app.id,
+      document_id: document.id,
+      title: letterTitle,
+      letter_type: letterTypeForStatus(status),
+      admin_message: note?.trim() || null,
+      bucket_id: DOCUMENT_BUCKET,
+      object_path: objectPath,
+      original_name: originalName,
+      mime_type: mimeType,
+      size_bytes: fileBuffer.byteLength,
+      created_by_admin_id: admin.id,
+    })
+    .select()
+    .single();
+  if (letterError) throw letterError;
+
+  await maybeRunDocumentOcr(document.id, mimeType);
+
+  return {
+    document_id: document.id,
+    letter_id: letter.id,
+    original_name: originalName,
+    mime_type: mimeType,
+    size_bytes: fileBuffer.byteLength,
+    object_path: objectPath,
+    emailAttachment: fileBuffer.byteLength <= EMAIL_ATTACHMENT_LIMIT
+      ? {
+        filename: originalName,
+        content: arrayBufferToBase64(fileBuffer),
+        content_type: mimeType,
+      }
+      : null,
+  };
+}
+
 async function renderStatusMenu(update: TelegramUpdate, admin: Admin, applicationId: string) {
   if (!hasPermission(admin, "manage_applications")) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
   const rows: Json[][] = [];
@@ -542,40 +949,119 @@ async function renderStatusMenu(update: TelegramUpdate, admin: Admin, applicatio
   return render(update, "وضعیت جدید درخواست را انتخاب کنید. مرحله بعدی تأیید نهایی است.", keyboard(rows));
 }
 
-async function confirmApplicationStatus(update: TelegramUpdate, admin: Admin, applicationId: string, status: string) {
+async function confirmApplicationStatus(update: TelegramUpdate, admin: Admin, applicationId: string, status: string, note?: string | null) {
   if (!hasPermission(admin, "manage_applications")) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
   const { data: app, error } = await supabase
     .from("application_submissions")
-    .select("id,user_id,admin_status")
+    .select("id,user_id,product,admin_status,submitted_at,payload_snapshot")
     .eq("id", applicationId)
     .maybeSingle();
   if (error) throw error;
   if (!app) return render(update, "درخواست پیدا نشد.", keyboard([[button("منوی اصلی", "menu")]]));
-  const statusLabel = ADMIN_STATUSES.find(([value]) => value === status)?.[1] ?? status;
-  const confirmRef = await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "app_status_apply", { application_id: applicationId, status });
+  const chatId = update.callback_query?.message?.chat.id ?? update.message!.chat.id;
+  const confirmRef = await createRef(admin, chatId, "app_status_apply", { application_id: applicationId, status, note: note ?? null });
+  const noteRef = await createRef(admin, chatId, "app_status_note_prepare", { application_id: applicationId, status, note: note ?? null });
+  const attachRef = await createRef(admin, chatId, "app_status_attachment_prepare", { application_id: applicationId, status, note: note ?? null });
+  const context = appContext(app);
   return render(update, [
     "<b>تأیید تغییر وضعیت</b>",
     "",
     `درخواست: <code>${escapeHtml(applicationId)}</code>`,
     `وضعیت قبلی: <code>${escapeHtml(app.admin_status || "new")}</code>`,
-    `وضعیت جدید: <b>${escapeHtml(statusLabel)}</b>`,
+    `وضعیت جدید: <b>${escapeHtml(statusLabel(status))}</b>`,
+    `دانشگاه: ${escapeHtml(context.university)}`,
+    `رشته: ${escapeHtml(context.program)}`,
+    note?.trim() ? `یادداشت اختصاصی: ${escapeHtml(note.trim().slice(0, 280))}` : "",
     "",
-    "پس از تأیید، در تاریخچه وضعیت و audit log ثبت می‌شود و یک اعلان پنل برای دانشجو ساخته می‌شود.",
+    "پس از ثبت، وضعیت در پنل دانشجو نمایش داده می‌شود، ایمیل اطلاع‌رسانی ساخته می‌شود و در audit log باقی می‌ماند.",
   ].join("\n"), keyboard([
-    [button("تأیید تغییر وضعیت", confirmRef)],
+    [button("ثبت و اطلاع‌رسانی بدون فایل", confirmRef)],
+    [button(note?.trim() ? "ویرایش متن اختصاصی" : "افزودن متن اختصاصی", noteRef)],
+    [button("ثبت همراه فایل پیوست", attachRef)],
     [button("لغو", await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "app_detail", { application_id: applicationId }))],
   ]));
 }
 
-async function applyApplicationStatus(update: TelegramUpdate, admin: Admin, applicationId: string, status: string) {
+async function renderStatusNotePrompt(update: TelegramUpdate, admin: Admin, applicationId: string, status: string, note?: string | null) {
+  const chatId = update.callback_query?.message?.chat.id ?? update.message!.chat.id;
+  const user = update.callback_query?.from ?? update.message!.from!;
+  await upsertSession(user, chatId, "awaiting_status_note", { application_id: applicationId, status, note: note ?? null });
+  return render(update, [
+    "<b>متن اختصاصی برای دانشجو</b>",
+    "",
+    `وضعیت: <b>${escapeHtml(statusLabel(status))}</b>`,
+    "متنی که می‌خواهید داخل ایمیل و اعلان پنل بیاید را بفرستید.",
+    "",
+    "برای لغو /cancel را بفرستید.",
+  ].join("\n"), keyboard([[button("لغو", "cancel")], [button("منوی اصلی", "menu")]]));
+}
+
+async function renderStatusAttachmentPrompt(update: TelegramUpdate, admin: Admin, applicationId: string, status: string, note?: string | null) {
+  const chatId = update.callback_query?.message?.chat.id ?? update.message!.chat.id;
+  const user = update.callback_query?.from ?? update.message!.from!;
+  await upsertSession(user, chatId, "awaiting_status_attachment", { application_id: applicationId, status, note: note ?? null });
+  return render(update, [
+    "<b>ارسال فایل پیوست پرونده</b>",
+    "",
+    `وضعیت: <b>${escapeHtml(statusLabel(status))}</b>`,
+    "فایل PDF، JPG، PNG، DOC یا DOCX را همینجا ارسال کنید.",
+    "برای پذیرش مشروط یا نهایی، فایل در بخش پذیرش پنل دانشجو هم نمایش داده می‌شود.",
+    "",
+    TELEGRAM_BOT_TOKEN
+      ? "پس از دریافت فایل، وضعیت پرونده ثبت و ایمیل/اعلان ساخته می‌شود."
+      : "برای دانلود فایل از تلگرام باید secret به نام TELEGRAM_BOT_TOKEN روی Edge Function تنظیم شود.",
+  ].join("\n"), keyboard([[button("لغو", "cancel")], [button("منوی اصلی", "menu")]]));
+}
+
+async function applyApplicationStatus(update: TelegramUpdate, admin: Admin, applicationId: string, status: string, options: Json = {}) {
+  if (!hasPermission(admin, "manage_applications")) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
   const { data: app, error } = await supabase
     .from("application_submissions")
-    .select("id,user_id,admin_status")
+    .select("id,user_id,product,intent,status,admin_status,submitted_at,payload_snapshot")
     .eq("id", applicationId)
     .maybeSingle();
   if (error) throw error;
   if (!app) return render(update, "درخواست پیدا نشد.", keyboard([[button("منوی اصلی", "menu")]]));
   const previous = app.admin_status || "new";
+  const note = typeof options.note === "string" ? options.note.trim().slice(0, 1500) : null;
+  const attachment = options.attachment ?? null;
+  const copy = buildStudentStatusCopy(app, status, note, attachment);
+  const email = buildStatusEmail(app, status, note, attachment);
+  const { data: authUser } = await supabase.auth.admin.getUserById(app.user_id);
+  const recipient = appContext(app).email || authUser?.user?.email || null;
+  const emailDelivery = await sendStudentEmail({
+    to: recipient,
+    subject: email.subject,
+    text: email.text,
+    html: email.html,
+    attachment: attachment?.emailAttachment ?? null,
+  });
+  const { data: emailLog, error: emailLogError } = await supabase
+    .from("email_logs")
+    .insert({
+      user_id: app.user_id,
+      application_id: applicationId,
+      letter_id: attachment?.letter_id ?? null,
+      recipient_email: recipient,
+      subject: email.subject,
+      body_text: email.text,
+      body_html: email.html,
+      status: emailDelivery.status,
+      provider: emailDelivery.provider,
+      provider_message_id: emailDelivery.provider_message_id ?? null,
+      failure_reason: emailDelivery.failure_reason ?? null,
+      metadata: {
+        admin_status: status,
+        previous_status: previous,
+        attachment_name: attachment?.original_name ?? null,
+        email_attachment_included: Boolean(attachment?.emailAttachment),
+      },
+      created_by_admin_id: admin.id,
+    })
+    .select()
+    .single();
+  if (emailLogError) console.error("email log insert failed", emailLogError);
+
   const { error: updateError } = await supabase
     .from("application_submissions")
     .update({
@@ -586,32 +1072,59 @@ async function applyApplicationStatus(update: TelegramUpdate, admin: Admin, appl
     })
     .eq("id", applicationId);
   if (updateError) throw updateError;
+  const { data: notification, error: notificationError } = await supabase.from("user_notifications").insert({
+    user_id: app.user_id,
+    application_id: applicationId,
+    document_id: attachment?.document_id ?? null,
+    letter_id: attachment?.letter_id ?? null,
+    email_log_id: emailLog?.id ?? null,
+    title: copy.title,
+    message: copy.message,
+    notification_type: "application_update",
+    priority: STATUS_PRIORITY[status] ?? "normal",
+    action_url: "/account",
+    created_by_admin_id: admin.id,
+    delivery_status: emailDelivery.status === "sent" ? "email_sent" : "created",
+  }).select().single();
+  if (notificationError) throw notificationError;
   await supabase.from("application_status_history").insert({
     application_id: applicationId,
     user_id: app.user_id,
     previous_status: previous,
     new_status: status,
     changed_by_admin_id: admin.id,
+    note,
+    admin_message: note,
     notify_user: true,
+    notification_id: notification?.id ?? null,
+    email_log_id: emailLog?.id ?? null,
+    letter_id: attachment?.letter_id ?? null,
+    document_id: attachment?.document_id ?? null,
   });
-  await supabase.from("user_notifications").insert({
-    user_id: app.user_id,
-    application_id: applicationId,
-    title: "وضعیت پرونده شما به‌روزرسانی شد",
-    message: `وضعیت پرونده شما به ${ADMIN_STATUSES.find(([value]) => value === status)?.[1] ?? status} تغییر کرد.`,
-    notification_type: "application_update",
-    priority: "normal",
-    created_by_admin_id: admin.id,
-  });
+  if (attachment?.letter_id && emailLog?.id) {
+    await supabase.from("user_letters").update({ email_status: emailDelivery.status }).eq("id", attachment.letter_id);
+  }
   await audit(admin, "application_status_changed", {
     target_entity_type: "application",
     target_entity_id: applicationId,
     application_id: applicationId,
     affected_user_id: app.user_id,
     previous_value: { admin_status: previous },
-    new_value: { admin_status: status },
+    new_value: {
+      admin_status: status,
+      note: note ?? null,
+      document_id: attachment?.document_id ?? null,
+      letter_id: attachment?.letter_id ?? null,
+      email_status: emailDelivery.status,
+    },
   });
-  return render(update, "وضعیت درخواست با موفقیت به‌روزرسانی شد.", keyboard([
+  return render(update, [
+    "وضعیت درخواست با موفقیت به‌روزرسانی شد.",
+    "",
+    `اعلان پنل: ثبت شد`,
+    `ایمیل: ${emailDelivery.status === "sent" ? "ارسال شد" : emailDelivery.status === "queued" ? "در صف/نیازمند تنظیم provider" : emailDelivery.status}`,
+    attachment?.original_name ? `فایل: ${attachment.original_name}` : "",
+  ].filter(Boolean).join("\n"), keyboard([
     [button("مشاهده درخواست", await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "app_detail", { application_id: applicationId }))],
     [button("منوی اصلی", "menu")],
   ]));
@@ -861,7 +1374,11 @@ async function handleRef(update: TelegramUpdate, admin: Admin, token: string) {
     case "app_status_confirm":
       return confirmApplicationStatus(update, admin, payload.application_id, payload.status);
     case "app_status_apply":
-      return applyApplicationStatus(update, admin, payload.application_id, payload.status);
+      return applyApplicationStatus(update, admin, payload.application_id, payload.status, { note: payload.note ?? null });
+    case "app_status_note_prepare":
+      return renderStatusNotePrompt(update, admin, payload.application_id, payload.status, payload.note ?? null);
+    case "app_status_attachment_prepare":
+      return renderStatusAttachmentPrompt(update, admin, payload.application_id, payload.status, payload.note ?? null);
     case "doc_detail":
       return renderDocumentDetail(update, admin, payload.document_id);
     case "doc_review_confirm":
@@ -893,6 +1410,70 @@ async function handleNotificationText(update: TelegramUpdate, admin: Admin, sess
     target_entity_id: userId,
   });
   return render(update, "اعلان در پنل کاربر ثبت شد.", keyboard([[button("منوی اصلی", "menu")]]));
+}
+
+async function handleStatusNoteText(update: TelegramUpdate, admin: Admin, session: Json, text: string) {
+  const applicationId = session.context?.application_id;
+  const status = session.context?.status;
+  if (!applicationId || !status) return render(update, "نشست عملیات منقضی شده است.", keyboard([[button("منوی اصلی", "menu")]]));
+  const note = text.trim().slice(0, 1500);
+  await upsertSession(update.message!.from!, update.message!.chat.id, "idle", {});
+  return confirmApplicationStatus(update, admin, applicationId, status, note);
+}
+
+async function handleStatusAttachmentMessage(update: TelegramUpdate, admin: Admin, session: Json) {
+  const applicationId = session.context?.application_id;
+  const status = session.context?.status;
+  const note = typeof session.context?.note === "string" ? session.context.note : null;
+  if (!applicationId || !status) return render(update, "نشست عملیات منقضی شده است.", keyboard([[button("منوی اصلی", "menu")]]));
+  const attachment = getMessageAttachment(update.message);
+  if (!attachment) {
+    return render(update, "لطفاً فایل PDF، JPG، PNG، DOC یا DOCX را همینجا ارسال کنید، یا /cancel را بفرستید.", keyboard([[button("لغو", "cancel")], [button("منوی اصلی", "menu")]]));
+  }
+  if (!TELEGRAM_BOT_TOKEN) {
+    return render(update, "برای دریافت فایل از تلگرام، secret به نام TELEGRAM_BOT_TOKEN باید روی Edge Function تنظیم شود. بعد از تنظیم، همین فایل را دوباره ارسال کنید.", keyboard([[button("منوی اصلی", "menu")]]));
+  }
+  const validationError = validateTelegramAttachment(attachment);
+  if (validationError) return render(update, validationError, keyboard([[button("لغو", "cancel")], [button("منوی اصلی", "menu")]]));
+
+  const { data: app, error } = await supabase
+    .from("application_submissions")
+    .select("id,user_id,product,intent,status,admin_status,submitted_at,payload_snapshot")
+    .eq("id", applicationId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!app) return render(update, "درخواست پیدا نشد.", keyboard([[button("منوی اصلی", "menu")]]));
+
+  await render(update, "فایل دریافت شد. در حال ذخیره امن، ثبت وضعیت و ساخت ایمیل/اعلان...", keyboard([[button("منوی اصلی", "menu")]]));
+  const filePath = await getTelegramFilePath(attachment.file_id);
+  const fileBuffer = await downloadTelegramFile(filePath);
+  if (fileBuffer.byteLength > MAX_ATTACHMENT_SIZE) {
+    return render(update, "حجم فایل باید کمتر از ۱۵ مگابایت باشد.", keyboard([[button("منوی اصلی", "menu")]]));
+  }
+  const saved = await saveStatusAttachment({
+    admin,
+    app,
+    status,
+    note,
+    attachment,
+    fileBuffer,
+  });
+  await upsertSession(update.message!.from!, update.message!.chat.id, "idle", {});
+  await audit(admin, "application_status_attachment_uploaded", {
+    target_entity_type: "application",
+    target_entity_id: applicationId,
+    application_id: applicationId,
+    affected_user_id: app.user_id,
+    metadata: {
+      status,
+      document_id: saved.document_id,
+      letter_id: saved.letter_id,
+      original_name: saved.original_name,
+      mime_type: saved.mime_type,
+      size_bytes: saved.size_bytes,
+    },
+  });
+  return applyApplicationStatus(update, admin, applicationId, status, { note, attachment: saved });
 }
 
 async function handleCallback(update: TelegramUpdate, admin: Admin) {
@@ -971,6 +1552,12 @@ export async function handleTelegramAdminBot(req: Request) {
     }
     if (session?.state === "awaiting_notification" && text) {
       return handleNotificationText(update, admin, session, text);
+    }
+    if (session?.state === "awaiting_status_note" && text) {
+      return handleStatusNoteText(update, admin, session, text);
+    }
+    if (session?.state === "awaiting_status_attachment") {
+      return handleStatusAttachmentMessage(update, admin, session);
     }
 
     return renderMenu(update, admin);
