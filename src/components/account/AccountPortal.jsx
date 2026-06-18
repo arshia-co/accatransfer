@@ -28,6 +28,7 @@ import {
 import { documentKindLabel } from '../../data/applicationDocuments';
 import ApplicationReadinessPanel from './ApplicationReadinessPanel';
 import AcceptanceJourneyPanel from './AcceptanceJourneyPanel';
+import ProfileEditor from './ProfileEditor';
 
 const EMPTY_DATA = {
   profile: null,
@@ -716,6 +717,8 @@ export default function AccountPortal() {
             <ShieldCheck size={20} />
           </div>
         </section>
+
+        <ProfileEditor user={user} profile={data.profile} onSaved={refresh} />
 
         <section className="account-grid">
           <article className="account-card account-progress-card">

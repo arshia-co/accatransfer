@@ -40,6 +40,46 @@ export async function upsertProfile(user, product, fields = {}) {
   if (error) throw error;
 }
 
+const AVATAR_BUCKET = 'avatars';
+
+/** Update the student's own profile details (name). */
+export async function updateProfileDetails(user, { fullName }) {
+  const client = requireClient();
+  if (!user?.id) throw new Error('برای ویرایش پروفایل وارد حساب شوید.');
+  const { data, error } = await client
+    .from('profiles')
+    .update({ full_name: (fullName || '').trim() || null, updated_at: new Date().toISOString() })
+    .eq('id', user.id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/** Upload a profile photo to the public avatars bucket and store its URL. */
+export async function uploadAvatar(user, file) {
+  const client = requireClient();
+  if (!user?.id) throw new Error('برای آپلود عکس وارد حساب شوید.');
+  if (!file?.type?.startsWith('image/')) throw new Error('فقط فایل تصویری مجاز است.');
+  if (file.size > 4 * 1024 * 1024) throw new Error('حجم عکس باید کمتر از ۴ مگابایت باشد.');
+
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const objectPath = `${user.id}/avatar-${Date.now()}.${ext}`;
+  const { error: uploadError } = await client.storage
+    .from(AVATAR_BUCKET)
+    .upload(objectPath, file, { upsert: true, contentType: file.type, cacheControl: '3600' });
+  if (uploadError) throw uploadError;
+
+  const { data: pub } = client.storage.from(AVATAR_BUCKET).getPublicUrl(objectPath);
+  const avatarUrl = pub.publicUrl;
+  const { error: updateError } = await client
+    .from('profiles')
+    .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
+    .eq('id', user.id);
+  if (updateError) throw updateError;
+  return avatarUrl;
+}
+
 export async function migrateGuestTransferDraft(user) {
   if (typeof window === 'undefined') return null;
   const raw = window.localStorage.getItem(GUEST_TRANSFER_KEY);
