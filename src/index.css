@@ -452,7 +452,14 @@ textarea {
 .account-product-tabs button.is-active svg { color: #c6a768; }
 .account-product-tabs .account-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: #16806b; }
 .account-product-tabs button.is-active .account-tab-dot { display: none; }
-.acceptance-journey { display: grid; gap: 13px; margin-top: 16px; padding: 20px; border: 1px solid rgba(20,116,95,.18); border-radius: 22px; background: linear-gradient(135deg, rgba(20,116,95,.05), rgba(198,167,104,.06)); }
+.acceptance-journey { display: grid; gap: 13px; margin-top: 16px; padding: 20px; border: 1px solid rgba(20,116,95,.18); border-radius: 22px; background: linear-gradient(135deg, rgba(20,116,95,.05), rgba(198,167,104,.06)); overflow: hidden; }
+/* Root-cause guard (all widths): the header is a flex-wrap container that, as a
+   grid item with the default min-width:auto, forces a ~515px column and pushes
+   the whole panel past its box on narrow screens. Resetting min-width on the
+   panel and every descendant lets the grid columns shrink to the real width at
+   every size, while the desktop column counts stay exactly as designed. */
+.acceptance-journey, .acceptance-journey * { min-width: 0; }
+.acceptance-journey b, .acceptance-journey small, .acceptance-journey p, .acceptance-journey h3 { overflow-wrap: anywhere; }
 .acceptance-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 13px; }
 .acceptance-head > span:first-child { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border-radius: 13px; color: white; background: linear-gradient(145deg,#102f48,#14745f); }
 .acceptance-head > div { flex: 1; min-width: 0; }
@@ -508,7 +515,6 @@ textarea {
   .acceptance-record { grid-template-columns: 1fr; }
   .acceptance-facts { grid-template-columns: 1fr; }
   .acceptance-journey { padding: 14px; gap: 11px; }
-  .acceptance-journey * { min-width: 0; }
   .acceptance-head h3 { font-size: 16px; }
   .acceptance-doc > div { flex-basis: 100%; }
   .acceptance-download, .acceptance-soon { width: 100%; justify-content: center; }
