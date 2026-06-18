@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Send, ExternalLink, X, Sparkles, LayoutGrid, LayoutDashboard } from 'lucide-react';
 import { L, dirFor } from '../../lib/lang';
 import { UI } from '../../i18n/ui';
-import { PRODUCT_NAME, MAIN_SITE_URL, LOGO_SRC } from '../../lib/constants';
+import { BRAND_NAME, PRODUCT_NAME, MAIN_SITE_URL, LOGO_SRC } from '../../lib/constants';
 import { sessionProgress, useSmartApplyStore } from '../../store/smartApplyStore';
 import AIAssistantOrb from './AIAssistantOrb';
 import ConversationPanel from './ConversationPanel';
@@ -152,8 +152,8 @@ export default function SmartApplyShell() {
       <div className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col px-3 pb-3 pt-3 sm:px-6 sm:pb-4 sm:pt-5">
         {/* ---- header ---- */}
         <header className="flex items-center justify-between gap-3 rounded-[22px] border border-white/70 bg-white/55 px-3 py-2.5 shadow-[0_16px_50px_rgba(7,26,61,0.06)] backdrop-blur-2xl sm:px-4">
-          <a href={MAIN_SITE_URL} className="flex items-center gap-3" aria-label="ACCA EDU">
-            <img src={LOGO_SRC} alt="ACCA EDU" width="92" height="40" className="h-10 w-[92px] object-contain" />
+          <a href="/" className="flex items-center gap-3" aria-label={BRAND_NAME}>
+            <img src={LOGO_SRC} alt={BRAND_NAME} width="92" height="40" className="h-10 w-[92px] object-contain" />
             <span className="hidden h-7 w-px bg-navy/10 sm:block" />
             <span className="hidden sm:block">
               <span className="block text-sm font-black leading-4 text-navy">{PRODUCT_NAME}</span>

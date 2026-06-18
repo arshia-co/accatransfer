@@ -6,7 +6,6 @@ import {
   LogIn,
   Menu,
   Sparkles,
-  UserPlus,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -152,15 +151,9 @@ export function Navbar() {
                 }
                 openAuth('ai_transfer', { returnTo: '/account' });
               }}
-              className="hidden md:inline-flex items-center gap-1.5 text-[12.5px] text-foreground/85 hover:text-foreground px-3 py-2 rounded-full"
-            >
-              <LogIn className="w-3.5 h-3.5" /> {user ? (lang === 'fa' ? 'پنل من' : 'My Panel') : (lang === 'fa' ? 'ورود' : 'Login')}
-            </button>
-            <button
-              onClick={() => openAuth('ai_transfer', { returnTo: '/account' })}
               className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-[color:var(--ta-gold)]/40 bg-white/60 backdrop-blur text-[#0B2F42] text-[12.5px] font-medium px-3.5 py-2 hover:bg-white/80 transition"
             >
-              <UserPlus className="w-3.5 h-3.5" /> {lang === 'fa' ? 'ثبت‌نام' : 'Sign Up'}
+              <LogIn className="w-3.5 h-3.5" /> {user ? (lang === 'fa' ? 'پنل من' : 'My Panel') : (lang === 'fa' ? 'ورود / ثبت‌نام' : 'Login / Sign Up')}
             </button>
             <button
               onClick={() => openModal('memory')}
