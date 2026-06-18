@@ -43,6 +43,16 @@ export async function upsertProfile(user, product, fields = {}) {
   if (typeof fields.avatarUrl === 'string' && fields.avatarUrl.trim()) {
     payload.avatar_url = fields.avatarUrl.trim();
   }
+  if (typeof fields.phoneCountryCode === 'string') {
+    payload.phone_country_code = fields.phoneCountryCode.trim() || null;
+  }
+  if (typeof fields.phoneNumber === 'string') {
+    const phoneNumber = fields.phoneNumber.trim();
+    payload.phone_number = phoneNumber || null;
+    payload.phone_e164 = phoneNumber && payload.phone_country_code
+      ? `${payload.phone_country_code}${phoneNumber.replace(/\D/g, '')}`
+      : null;
+  }
 
   const { error } = await client.from('profiles').upsert(payload);
   if (error) throw error;
@@ -50,15 +60,27 @@ export async function upsertProfile(user, product, fields = {}) {
 
 const AVATAR_BUCKET = 'avatars';
 
-/** Update the student's own profile details (name). */
-export async function updateProfileDetails(user, { fullName }) {
+/** Update the student's own profile details. */
+export async function updateProfileDetails(user, { fullName, phoneCountryCode, phoneNumber }) {
   const client = requireClient();
   if (!user?.id) throw new Error('برای ویرایش پروفایل وارد حساب شوید.');
+  const normalizedPhone = (phoneNumber || '').trim();
+  const normalizedCountryCode = (phoneCountryCode || '').trim();
+  const payload = {
+    id: user.id,
+    full_name: (fullName || '').trim() || null,
+    phone_country_code: normalizedPhone ? normalizedCountryCode || null : null,
+    phone_number: normalizedPhone || null,
+    phone_e164: normalizedPhone && normalizedCountryCode
+      ? `${normalizedCountryCode}${normalizedPhone.replace(/\D/g, '')}`
+      : null,
+    updated_at: new Date().toISOString(),
+  };
   // Upsert (not update) so the save persists even if the profile row doesn't
   // exist yet — an .update() on a missing row silently writes nothing.
   const { data, error } = await client
     .from('profiles')
-    .upsert({ id: user.id, full_name: (fullName || '').trim() || null, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+    .upsert(payload, { onConflict: 'id' })
     .select()
     .single();
   if (error) throw error;
@@ -66,10 +88,29 @@ export async function updateProfileDetails(user, { fullName }) {
 }
 
 /** Set or change the account password (lets the student log in with email + password). */
-export async function updateAccountPassword(password) {
+export async function updateAccountPassword({ email, currentPassword, nextPassword }) {
   const client = requireClient();
-  if (!password || password.length < 8) throw new Error('رمز عبور باید حداقل ۸ کاراکتر باشد.');
-  const { error } = await client.auth.updateUser({ password });
+  if (!email) throw new Error('ایمیل حساب مشخص نیست.');
+  if (!currentPassword) throw new Error('رمز فعلی را وارد کنید.');
+  if (!nextPassword || nextPassword.length < 8) throw new Error('رمز جدید باید حداقل ۸ کاراکتر باشد.');
+
+  const { error: signInError } = await client.auth.signInWithPassword({
+    email,
+    password: currentPassword,
+  });
+  if (signInError) throw new Error('رمز فعلی درست نیست یا حساب با رمز عبور فعال نشده است.');
+
+  const { error } = await client.auth.updateUser({ password: nextPassword });
+  if (error) throw error;
+}
+
+export async function requestAccountPasswordReset(email) {
+  const client = requireClient();
+  if (!email) throw new Error('ایمیل حساب مشخص نیست.');
+  const redirectTo = typeof window === 'undefined'
+    ? undefined
+    : `${window.location.origin}/account`;
+  const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
 
