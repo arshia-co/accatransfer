@@ -54,10 +54,11 @@ const AVATAR_BUCKET = 'avatars';
 export async function updateProfileDetails(user, { fullName }) {
   const client = requireClient();
   if (!user?.id) throw new Error('برای ویرایش پروفایل وارد حساب شوید.');
+  // Upsert (not update) so the save persists even if the profile row doesn't
+  // exist yet — an .update() on a missing row silently writes nothing.
   const { data, error } = await client
     .from('profiles')
-    .update({ full_name: (fullName || '').trim() || null, updated_at: new Date().toISOString() })
-    .eq('id', user.id)
+    .upsert({ id: user.id, full_name: (fullName || '').trim() || null, updated_at: new Date().toISOString() }, { onConflict: 'id' })
     .select()
     .single();
   if (error) throw error;
@@ -90,8 +91,7 @@ export async function uploadAvatar(user, file) {
   const avatarUrl = pub.publicUrl;
   const { error: updateError } = await client
     .from('profiles')
-    .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
-    .eq('id', user.id);
+    .upsert({ id: user.id, avatar_url: avatarUrl, updated_at: new Date().toISOString() }, { onConflict: 'id' });
   if (updateError) throw updateError;
   return avatarUrl;
 }
