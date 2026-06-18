@@ -335,6 +335,9 @@ textarea {
 .account-profile-password-grid { display: grid; grid-template-columns: 1fr; gap: 9px; }
 .account-profile-pass { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid rgba(16,47,72,.12); border-radius: 13px; background: white; color: rgba(16,47,72,.55); }
 .account-profile-pass input { flex: 1; min-width: 0; min-height: 46px; padding: 0; border: 0; outline: 0; background: transparent; color: #102f48; font: inherit; font-size: 14px; }
+.account-profile-pass-toggle { display: inline-flex; flex: 0 0 auto; width: 34px; height: 34px; align-items: center; justify-content: center; border: 0; border-radius: 999px; color: rgba(16,47,72,.58); background: rgba(16,47,72,.045); cursor: pointer; transition: background .2s ease, color .2s ease, transform .2s ease; }
+.account-profile-pass-toggle:hover { color: #102f48; background: rgba(20,116,95,.1); transform: translateY(-1px); }
+.account-profile-pass-toggle:focus-visible { outline: 2px solid rgba(20,116,95,.3); outline-offset: 2px; }
 .account-profile-security-actions { display: flex; flex-wrap: wrap; gap: 9px; }
 .account-profile-pass-save { color: #102f48; background: #e8c986; }
 .account-profile-reset-link { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 7px; padding: 0 16px; border: 1px solid rgba(16,47,72,.12); border-radius: 14px; color: #102f48; background: white; font-size: 12px; font-weight: 900; cursor: pointer; transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease; }
@@ -859,6 +862,7 @@ textarea {
   .account-profile-photo-block { justify-items: stretch; }
   .account-profile-avatar.is-editable { justify-self: center; }
   .account-profile-input, .account-profile-pass input { min-height: 48px; font-size: 16px; }
+  .account-profile-pass-toggle { width: 42px; height: 42px; }
   .account-profile-save, .account-profile-pass-save, .account-profile-reset-link { width: 100%; min-height: 48px; }
   .account-upload, .account-analysis, .account-result, .account-documents { padding: 20px; }
   .account-document-list article { align-items: flex-start; flex-wrap: wrap; }

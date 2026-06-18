@@ -4,6 +4,8 @@ import {
   Camera,
   Check,
   Edit3,
+  Eye,
+  EyeOff,
   KeyRound,
   LoaderCircle,
   Mail,
@@ -49,6 +51,7 @@ export default function ProfileEditor({ user, profile, onSaved }) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPasswords, setShowPasswords] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const fileRef = useRef(null);
@@ -312,18 +315,26 @@ export default function ProfileEditor({ user, profile, onSaved }) {
                   <label className="account-profile-pass">
                     <KeyRound size={15} />
                     <input
-                      type="password"
+                      type={showPasswords ? 'text' : 'password'}
                       value={currentPassword}
                       onChange={(event) => setCurrentPassword(event.target.value)}
                       placeholder="رمز فعلی"
                       autoComplete="current-password"
                       dir="ltr"
                     />
+                    <button
+                      type="button"
+                      className="account-profile-pass-toggle"
+                      onClick={() => setShowPasswords((value) => !value)}
+                      aria-label={showPasswords ? 'Hide password' : 'Show password'}
+                    >
+                      {showPasswords ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
                   </label>
                   <label className="account-profile-pass">
                     <KeyRound size={15} />
                     <input
-                      type="password"
+                      type={showPasswords ? 'text' : 'password'}
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       placeholder="رمز جدید، حداقل ۸ کاراکتر"
@@ -331,11 +342,19 @@ export default function ProfileEditor({ user, profile, onSaved }) {
                       minLength={8}
                       dir="ltr"
                     />
+                    <button
+                      type="button"
+                      className="account-profile-pass-toggle"
+                      onClick={() => setShowPasswords((value) => !value)}
+                      aria-label={showPasswords ? 'Hide password' : 'Show password'}
+                    >
+                      {showPasswords ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
                   </label>
                   <label className="account-profile-pass">
                     <KeyRound size={15} />
                     <input
-                      type="password"
+                      type={showPasswords ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(event) => setConfirmPassword(event.target.value)}
                       placeholder="تکرار رمز جدید"
@@ -343,6 +362,14 @@ export default function ProfileEditor({ user, profile, onSaved }) {
                       minLength={8}
                       dir="ltr"
                     />
+                    <button
+                      type="button"
+                      className="account-profile-pass-toggle"
+                      onClick={() => setShowPasswords((value) => !value)}
+                      aria-label={showPasswords ? 'Hide password' : 'Show password'}
+                    >
+                      {showPasswords ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
                   </label>
                 </div>
                 <div className="account-profile-security-actions">
