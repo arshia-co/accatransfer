@@ -477,7 +477,7 @@ function SignedOut() {
             ساخت حساب جدید
           </button>
         </div>
-        {!isConfigured && <small>اتصال Supabase در محیط اجرا پیکربندی نشده است.</small>}
+        {!isConfigured && <small>ورود امن در این محیط هنوز فعال نشده است.</small>}
         <a href="/"><ArrowLeft size={15} /> بازگشت به خدمات ACCA</a>
       </section>
     </main>

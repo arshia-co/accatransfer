@@ -7,7 +7,6 @@ import {
   KeyRound,
   LoaderCircle,
   Mail,
-  Phone,
   RotateCcw,
   ShieldCheck,
   UserRound,

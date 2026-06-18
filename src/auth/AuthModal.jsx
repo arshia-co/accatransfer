@@ -160,7 +160,7 @@ function AuthModalPanel({ authRequest }) {
           product,
         });
         if (result.needsEmailConfirmation) {
-          setNotice('حساب ساخته شد. اگر تأیید ایمیل در Supabase فعال باشد، لینک تأیید به ایمیل شما ارسال شده است.');
+          setNotice('حساب ساخته شد. اگر تأیید ایمیل برای این حساب لازم باشد، لینک تأیید به ایمیل شما ارسال شده است.');
           setFlow('signin');
           setMethod('password');
           setPassword('');
