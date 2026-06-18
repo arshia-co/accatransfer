@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
 import { migrateGuestTransferDraft, upsertProfile } from '../services/accountService';
+import { rememberAccountPreview } from './accountPreview';
 
 const AuthContext = createContext(null);
 
@@ -59,7 +60,12 @@ export function AuthProvider({ children }) {
     if (error) throw error;
     if (!data.user) throw new Error('Login could not be completed.');
 
-    await upsertProfile(data.user, product, { language });
+    await upsertProfile(data.user, product, {
+      language,
+      fullName: data.user.user_metadata?.full_name || data.user.user_metadata?.name,
+      avatarUrl: data.user.user_metadata?.avatar_url,
+    });
+    rememberAccountPreview(data.user);
     const migratedDraft = await migrateGuestTransferDraft(data.user);
     setAuthRequest(null);
     return { user: data.user, migratedDraft };
@@ -70,10 +76,61 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     if (error) throw error;
     if (!data.user) throw new Error('Login could not be completed.');
-    await upsertProfile(data.user, product, {});
+    await upsertProfile(data.user, product, {
+      fullName: data.user.user_metadata?.full_name || data.user.user_metadata?.name,
+      avatarUrl: data.user.user_metadata?.avatar_url,
+    });
+    rememberAccountPreview(data.user);
     const migratedDraft = await migrateGuestTransferDraft(data.user);
     setAuthRequest(null);
     return { user: data.user, migratedDraft };
+  }, []);
+
+  const signUpWithPassword = useCallback(async ({
+    email,
+    password,
+    fullName,
+    product = 'smart_apply',
+    language = 'fa',
+  }) => {
+    if (!supabase) throw new Error('Authentication is not configured.');
+    const cleanName = fullName.trim();
+    const redirectTo = typeof window === 'undefined'
+      ? undefined
+      : `${window.location.origin}/account`;
+
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: redirectTo,
+        data: {
+          full_name: cleanName,
+          current_product: product,
+          language,
+        },
+      },
+    });
+    if (error) throw error;
+
+    if (data.session && data.user) {
+      await upsertProfile(data.user, product, { fullName: cleanName, language });
+      rememberAccountPreview(data.user, { full_name: cleanName });
+      const migratedDraft = await migrateGuestTransferDraft(data.user);
+      setAuthRequest(null);
+      return { user: data.user, session: data.session, migratedDraft, needsEmailConfirmation: false };
+    }
+
+    return { user: data.user, session: data.session, needsEmailConfirmation: true };
+  }, []);
+
+  const resetPassword = useCallback(async ({ email }) => {
+    if (!supabase) throw new Error('Authentication is not configured.');
+    const redirectTo = typeof window === 'undefined'
+      ? undefined
+      : `${window.location.origin}/account`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+    if (error) throw error;
   }, []);
 
   const signOut = useCallback(async () => {
@@ -92,8 +149,22 @@ export function AuthProvider({ children }) {
     sendCode,
     verifyCode,
     signInWithPassword,
+    signUpWithPassword,
+    resetPassword,
     signOut,
-  }), [session, loading, authRequest, openAuth, closeAuth, sendCode, verifyCode, signInWithPassword, signOut]);
+  }), [
+    session,
+    loading,
+    authRequest,
+    openAuth,
+    closeAuth,
+    sendCode,
+    verifyCode,
+    signInWithPassword,
+    signUpWithPassword,
+    resetPassword,
+    signOut,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

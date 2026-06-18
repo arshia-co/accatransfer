@@ -3,9 +3,10 @@ import { motion } from 'framer-motion';
 import {
   AlertTriangle, ArrowLeft, BadgeCheck, BookOpen, BrainCircuit, CheckCircle2, ChevronDown, ChevronUp, Clock3, CloudUpload, Compass,
   FileText, FolderLock, GraduationCap, LayoutGrid, ListChecks, LoaderCircle, LogOut,
-  RefreshCw, ScanText, ShieldCheck, Sparkles, Target, UserRound,
+  RefreshCw, ScanText, ShieldCheck, Sparkles, Target,
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
+import { rememberAccountPreview } from '../../auth/accountPreview';
 import {
   confirmDocumentExtraction,
   createTransferAssessment,
@@ -452,15 +453,30 @@ function SignedOut() {
             ? 'انتخاب رشته و دانشگاه شما آماده است. با ورود، آن را در پرونده مرکزی ذخیره و مسیر را ادامه دهید.'
             : 'سوابق Smart Apply، ارزیابی AI Transfer، نتایج و مدارک شما در یک پنل مرکزی و امن نمایش داده می‌شوند.'}
         </p>
-        <button
-          type="button"
-          onClick={() => openAuth(deepLink?.product || 'smart_apply', {
-            returnTo,
-            reason: deepLink ? 'program_selection' : null,
-          })}
-        >
-          <Sparkles size={18} /> ورود با کد ایمیل
-        </button>
+        <div className="account-signed-out-actions">
+          <button
+            type="button"
+            onClick={() => openAuth(deepLink?.product || 'smart_apply', {
+              returnTo,
+              reason: deepLink ? 'program_selection' : null,
+              startMode: 'signin',
+              method: 'password',
+            })}
+          >
+            <Sparkles size={18} /> ورود به حساب
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => openAuth(deepLink?.product || 'smart_apply', {
+              returnTo,
+              reason: deepLink ? 'program_selection' : null,
+              startMode: 'signup',
+            })}
+          >
+            ساخت حساب جدید
+          </button>
+        </div>
         {!isConfigured && <small>اتصال Supabase در محیط اجرا پیکربندی نشده است.</small>}
         <a href="/"><ArrowLeft size={15} /> بازگشت به خدمات ACCA</a>
       </section>
@@ -510,6 +526,11 @@ export default function AccountPortal() {
     const timer = window.setTimeout(refresh, 0);
     return () => window.clearTimeout(timer);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!user || loading) return;
+    rememberAccountPreview(user, data.profile || {});
+  }, [user, loading, data.profile]);
 
   const smartSession = data.smartApply[0] || null;
   const transferAssessment = data.transfer[0] || null;
@@ -693,6 +714,10 @@ export default function AccountPortal() {
   if (authLoading) return <main className="account-page account-loading"><LoaderCircle className="account-spin" /></main>;
   if (!user) return <SignedOut />;
 
+  const accountName = data.profile?.full_name || user.user_metadata?.full_name || 'دانشجوی ACCA';
+  const accountAvatar = data.profile?.avatar_url || user.user_metadata?.avatar_url || '';
+  const accountInitial = (accountName || user.email || '?').trim().charAt(0).toUpperCase();
+
   return (
     <main className="account-page account-central" dir="rtl">
       <div className="account-ambient" />
@@ -712,13 +737,20 @@ export default function AccountPortal() {
             <p>تمام فعالیت‌های پذیرش و انتقال دانشگاهی شما، بدون ساخت حساب یا داشبورد جداگانه.</p>
           </div>
           <div className="account-identity">
-            <span><UserRound size={19} /></span>
-            <div><small>حساب فعال</small><b dir="ltr">{user.email}</b></div>
+            <span className="account-identity-avatar">
+              {accountAvatar ? <img src={accountAvatar} alt="" /> : <b>{accountInitial}</b>}
+            </span>
+            <div><small>حساب فعال · {accountName}</small><b dir="ltr">{user.email}</b></div>
             <ShieldCheck size={20} />
           </div>
         </section>
 
-        <ProfileEditor user={user} profile={data.profile} onSaved={refresh} />
+        <ProfileEditor
+          key={data.profile?.updated_at || data.profile?.avatar_url || data.profile?.full_name || user.id}
+          user={user}
+          profile={data.profile}
+          onSaved={refresh}
+        />
 
         <section className="account-grid">
           <article className="account-card account-progress-card">

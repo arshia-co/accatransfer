@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Clock3,
   Download,
+  AlertTriangle,
   FileCheck2,
   Hotel,
   LoaderCircle,
@@ -32,6 +33,20 @@ function formatDate(value) {
   } catch {
     return value;
   }
+}
+
+function formatMoney(amount, currency) {
+  if (!amount) return '';
+  const normalizedAmount = String(amount).trim();
+  const normalizedCurrency = String(currency || '').trim();
+  if (!normalizedCurrency) return normalizedAmount;
+  const upperAmount = normalizedAmount.toUpperCase();
+  const upperCurrency = normalizedCurrency.toUpperCase();
+  const alreadyIncludesCurrency = upperAmount.includes(upperCurrency)
+    || (upperCurrency === 'USD' && normalizedAmount.includes('$'))
+    || (upperCurrency === 'EUR' && normalizedAmount.includes('€'))
+    || (upperCurrency === 'TRY' && /₺|\bTL\b/i.test(normalizedAmount));
+  return alreadyIncludesCurrency ? normalizedAmount : `${normalizedAmount} ${normalizedCurrency}`;
 }
 
 // The post-acceptance roadmap. The exact numbers (tuition, deposit, dates) come
@@ -74,6 +89,52 @@ export default function AcceptanceJourneyPanel({
   const [downloading, setDownloading] = useState(false);
   const accepted = Boolean(acceptanceDoc);
   const ocrSummary = acceptanceDoc?.ai_extraction?.summary;
+  const offerDetails = acceptanceDoc?.ai_extraction?.offer_details;
+  const offerStatus = offerDetails?.status;
+  const isConditional = offerStatus === 'conditional_offer' || offerStatus === 'provisional_acceptance';
+  const isFinal = offerStatus === 'final_acceptance';
+  const needsReview = accepted && acceptanceDoc?.review_status === 'admin_review';
+  const acceptanceTitle = !accepted
+    ? 'درخواست شما ثبت شد — مراحل بعدی'
+    : isFinal
+      ? 'پذیرش نهایی شما صادر شد 🎉'
+      : isConditional
+        ? 'پذیرش مشروط شما صادر شد'
+        : needsReview
+          ? 'نامه دانشگاه دریافت شد و نیازمند بررسی است'
+          : 'نامه پذیرش شما دریافت شد';
+  const acceptanceDescription = !accepted
+    ? 'پرونده شما برای صدور پذیرش در صف بررسی دانشگاه قرار گرفت.'
+    : isFinal
+      ? 'پذیرش نهایی آماده است؛ فایل را دانلود کنید و مراحل ثبت‌نام را ادامه دهید.'
+      : isConditional
+        ? 'این نامه شامل شرط‌هایی است که باید پیش از صدور پذیرش نهایی تکمیل شوند.'
+        : needsReview
+          ? 'فایل در حساب شما ذخیره شده است؛ نتیجه OCR یا نوع نامه باید توسط تیم پذیرش بررسی شود.'
+          : 'فایل دانشگاه آماده است؛ آن را دانلود کنید و توضیح هوشمند را با متن اصلی تطبیق دهید.';
+  const statusLabel = !accepted
+    ? 'در انتظار پذیرش'
+    : isFinal
+      ? 'پذیرش نهایی'
+      : isConditional
+        ? 'پذیرش مشروط'
+        : needsReview
+          ? 'نیازمند بررسی'
+          : 'نامه دریافت شد';
+  const documentLabel = isFinal
+    ? 'پذیرش نهایی دانشگاه'
+    : isConditional
+      ? 'نامه پذیرش مشروط دانشگاه'
+      : 'نامه رسمی دانشگاه';
+  const offerFacts = [
+    ['سال تحصیلی', offerDetails?.academic_year],
+    ['شهریه', formatMoney(offerDetails?.tuition_amount, offerDetails?.tuition_currency)],
+    ['دیپوزیت', formatMoney(offerDetails?.deposit_amount, offerDetails?.deposit_currency)],
+    ['مهلت پرداخت', offerDetails?.payment_deadline],
+    ['مهلت ثبت‌نام', offerDetails?.registration_deadline],
+    ['شرط زبان', offerDetails?.language_requirement],
+    ['بورسیه یا تخفیف', offerDetails?.scholarship_or_discount],
+  ].filter(([, value]) => value);
 
   const openAcceptance = async () => {
     if (!acceptanceDoc?.object_path || downloading) return;
@@ -98,16 +159,14 @@ export default function AcceptanceJourneyPanel({
         <span><Sparkles size={20} /></span>
         <div>
           <p className="account-kicker">After Application</p>
-          <h3>{accepted ? 'پذیرش شما صادر شد 🎉' : 'درخواست شما ثبت شد — مراحل بعدی'}</h3>
-          <p>
-            {accepted
-              ? 'پذیرش‌نامه‌تان آماده است؛ آن را دانلود کنید و مراحل زیر را دنبال کنید.'
-              : 'پرونده شما برای صدور پذیرش در صف بررسی دانشگاه قرار گرفت.'}
-          </p>
+          <h3>{acceptanceTitle}</h3>
+          <p>{acceptanceDescription}</p>
         </div>
-        <span className={`acceptance-status ${accepted ? 'is-accepted' : 'is-pending'}`}>
+        <span className={`acceptance-status ${
+          !accepted ? 'is-pending' : isConditional || needsReview ? 'is-conditional' : 'is-accepted'
+        }`}>
           {accepted ? <CheckCircle2 size={12} /> : <Clock3 size={12} />}
-          {accepted ? 'پذیرش صادر شد' : 'در انتظار پذیرش'}
+          {statusLabel}
         </span>
       </header>
 
@@ -122,7 +181,7 @@ export default function AcceptanceJourneyPanel({
         </div>
         <div>
           <small>وضعیت</small>
-          <b>{accepted ? 'پذیرش آماده' : 'در حال بررسی'}</b>
+          <b>{statusLabel}</b>
         </div>
       </div>
 
@@ -131,7 +190,7 @@ export default function AcceptanceJourneyPanel({
           <FileCheck2 size={18} />
           <div>
             <b>{acceptanceDoc.original_name || 'نامه پذیرش'}</b>
-            <small>پذیرش رسمی دانشگاه</small>
+            <small>{documentLabel}</small>
           </div>
           {acceptanceDoc.object_path ? (
             <button type="button" className="acceptance-download" onClick={openAcceptance} disabled={downloading}>
@@ -146,6 +205,27 @@ export default function AcceptanceJourneyPanel({
         <p className="acceptance-pending-note">
           به‌محض صدور پذیرش از سوی دانشگاه، فایل آن همین‌جا برای دانلود قرار می‌گیرد و از طریق ایمیل یا تلگرام هم برایتان ارسال می‌شود.
         </p>
+      )}
+
+      {accepted && offerFacts.length > 0 && (
+        <div className="acceptance-facts">
+          {offerFacts.map(([label, value]) => (
+            <div key={label}>
+              <small>{label}</small>
+              <b dir="auto">{value}</b>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {accepted && offerDetails?.visa_usable === false && (
+        <div className="acceptance-offer-warning">
+          <AlertTriangle size={18} />
+          <div>
+            <b>این فایل برای فرایند ویزا قابل استفاده نیست</b>
+            <small>این محدودیت در خود نامه دانشگاه ذکر شده است. برای مدرک مناسب ویزا با تیم پذیرش هماهنگ کنید.</small>
+          </div>
+        </div>
       )}
 
       {ocrSummary && (

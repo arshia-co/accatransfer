@@ -72,6 +72,7 @@ function bytesToBase64(bytes: Uint8Array) {
 
 function extractionSchema() {
   const nullableString = { type: ["string", "null"] };
+  const nullableBoolean = { type: ["boolean", "null"] };
   return {
     type: "object",
     additionalProperties: false,
@@ -85,6 +86,7 @@ function extractionSchema() {
           "language_certificate",
           "student_certificate",
           "syllabus",
+          "acceptance_letter",
           "photo",
           "other",
           "unreadable",
@@ -138,6 +140,62 @@ function extractionSchema() {
           "language_score",
         ],
       },
+      offer_details: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          status: {
+            type: "string",
+            enum: [
+              "not_applicable",
+              "conditional_offer",
+              "provisional_acceptance",
+              "final_acceptance",
+              "rejection",
+              "unreadable",
+            ],
+          },
+          academic_year: nullableString,
+          tuition_amount: nullableString,
+          tuition_currency: nullableString,
+          tuition_period: nullableString,
+          deposit_amount: nullableString,
+          deposit_currency: nullableString,
+          payment_deadline: nullableString,
+          registration_deadline: nullableString,
+          arrival_date: nullableString,
+          language_requirement: nullableString,
+          scholarship_or_discount: nullableString,
+          visa_usable: nullableBoolean,
+          conditions: {
+            type: "array",
+            items: { type: "string" },
+            maxItems: 20,
+          },
+          next_steps: {
+            type: "array",
+            items: { type: "string" },
+            maxItems: 12,
+          },
+        },
+        required: [
+          "status",
+          "academic_year",
+          "tuition_amount",
+          "tuition_currency",
+          "tuition_period",
+          "deposit_amount",
+          "deposit_currency",
+          "payment_deadline",
+          "registration_deadline",
+          "arrival_date",
+          "language_requirement",
+          "scholarship_or_discount",
+          "visa_usable",
+          "conditions",
+          "next_steps",
+        ],
+      },
       courses: {
         type: "array",
         maxItems: 80,
@@ -172,6 +230,7 @@ function extractionSchema() {
       "detected_languages",
       "quality",
       "fields",
+      "offer_details",
       "courses",
       "text_excerpt",
       "missing_or_unreadable_fields",
@@ -241,6 +300,15 @@ Rules:
 - Preserve names, dates, document numbers, GPA, grades, credits, and course titles exactly.
 - For a transcript, extract every clearly readable course row, up to 80.
 - Check whether the actual document matches the expected kind.
+- When the expected kind is acceptance_letter, treat an official university offer,
+  conditional offer, provisional acceptance, or final acceptance as a matching
+  acceptance_letter. Distinguish its exact status in offer_details.status.
+- For offer and acceptance letters, extract tuition, deposit, payment and
+  registration deadlines, academic year, language requirements, discounts,
+  conditions, next steps, and whether the document explicitly permits visa use.
+  Keep amounts, currencies, and dates exactly as written.
+- For documents unrelated to an offer or acceptance, set
+  offer_details.status to not_applicable and leave its optional values null.
 - Treat all identity, academic, and score fields as requiring student confirmation.
 - Set human review when confidence is 50 or lower, the type is wrong, pages are incomplete, or important text is too unclear for safe educational use.
 - Confidence above 50 may continue to student confirmation when the document type matches and quality is not poor. You may still recommend human review for uncertain fields without blocking the next step.

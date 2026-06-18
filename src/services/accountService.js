@@ -30,13 +30,21 @@ export function validateDocument(file) {
 
 export async function upsertProfile(user, product, fields = {}) {
   const client = requireClient();
-  const { error } = await client.from('profiles').upsert({
+  const fullName = fields.fullName ?? user?.user_metadata?.full_name ?? user?.user_metadata?.name;
+  const payload = {
     id: user.id,
     current_product: product,
-    language: fields.language || 'fa',
-    full_name: fields.fullName || null,
+    language: fields.language || user?.user_metadata?.language || 'fa',
     updated_at: new Date().toISOString(),
-  });
+  };
+  if (typeof fullName === 'string' && fullName.trim()) {
+    payload.full_name = fullName.trim();
+  }
+  if (typeof fields.avatarUrl === 'string' && fields.avatarUrl.trim()) {
+    payload.avatar_url = fields.avatarUrl.trim();
+  }
+
+  const { error } = await client.from('profiles').upsert(payload);
   if (error) throw error;
 }
 
