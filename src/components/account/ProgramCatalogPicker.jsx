@@ -60,10 +60,10 @@ const UI = {
   fa: {
     searchPlaceholder: 'نام رشته، دانشگاه، شهر یا زبان...',
     all: 'همه', turkey: 'ترکیه', cyprus: 'قبرس شمالی',
-    allUniversities: 'همه دانشگاه‌ها', allLanguages: 'همه زبان‌ها',
-    universityAria: 'دانشگاه مقصد', languageAria: 'زبان تحصیل', close: 'بستن',
+    allUniversities: 'همه دانشگاه‌ها', allDegrees: 'همه مقاطع', allLanguages: 'همه زبان‌ها',
+    universityAria: 'دانشگاه مقصد', degreeAria: 'مقطع تحصیلی', languageAria: 'زبان تحصیل', close: 'بستن',
     source: 'منبع: کاتالوگ زنده آکادو',
-    countShown: (n) => `${n} گزینه قابل نمایش`,
+    countShown: (shown, total) => `${shown} گزینه از ${total} برنامه فعال`,
     loading: 'در حال دریافت کاتالوگ...',
     empty: 'با این فیلتر گزینه‌ای پیدا نشد.',
     inList: (n) => `${n} گزینه در فهرست`, current: 'انتخاب فعلی', notSelected: 'هنوز انتخاب نشده',
@@ -73,10 +73,10 @@ const UI = {
   en: {
     searchPlaceholder: 'Program, university, city or language…',
     all: 'All', turkey: 'Türkiye', cyprus: 'North Cyprus',
-    allUniversities: 'All universities', allLanguages: 'All languages',
-    universityAria: 'Target university', languageAria: 'Language of study', close: 'Close',
+    allUniversities: 'All universities', allDegrees: 'All degrees', allLanguages: 'All languages',
+    universityAria: 'Target university', degreeAria: 'Degree level', languageAria: 'Language of study', close: 'Close',
     source: 'Source: live ACCA catalog',
-    countShown: (n) => `${n} options available`,
+    countShown: (shown, total) => `${shown} of ${total} active programs`,
     loading: 'Loading catalog…',
     empty: 'No options match this filter.',
     inList: (n) => `${n} in shortlist`, current: 'Current selection', notSelected: 'Nothing selected yet',
@@ -111,7 +111,7 @@ function ProgramLogo({ program }) {
   return (
     <span className="catalog-program-logo">
       {program.universityLogo && !failed ? (
-        <img src={program.universityLogo} alt="" onError={() => setFailed(true)} />
+        <img src={program.universityLogo} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
       ) : (
         <Building2 size={20} />
       )}
@@ -198,6 +198,7 @@ export default function ProgramCatalogPicker({
   const [query, setQuery] = useState('');
   const [country, setCountry] = useState('all');
   const [university, setUniversity] = useState(initialUniversity);
+  const [degree, setDegree] = useState('');
   const [language, setLanguage] = useState('');
   const [selectedList, setSelectedList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -218,6 +219,7 @@ export default function ProgramCatalogPicker({
           if (!active) return;
           setPrograms(rows);
           setUniversity(initialUniversity || '');
+          setDegree('');
           // Reconcile any saved shortlist against the live catalog (fall back to the snapshot).
           const seeded = (initialSelection || [])
             .map((item) => findCatalogProgram(rows, item.id) || item)
@@ -269,24 +271,35 @@ export default function ProgramCatalogPicker({
     const names = programs
       .filter((program) => country === 'all' || program.country === country)
       .map((program) => program.university);
-    return [...new Set(names)].sort((a, b) => a.localeCompare(b)).slice(0, 180);
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b));
   }, [country, programs]);
+
+  const degreeOptions = useMemo(() => {
+    const degrees = programs
+      .filter((program) => country === 'all' || program.country === country)
+      .filter((program) => !university || program.university === university)
+      .map((program) => program.degree)
+      .filter(Boolean);
+    return [...new Set(degrees)].sort((a, b) => a.localeCompare(b));
+  }, [country, programs, university]);
 
   const languageOptions = useMemo(() => {
     const langs = programs
       .filter((program) => country === 'all' || program.country === country)
       .filter((program) => !university || program.university === university)
+      .filter((program) => !degree || program.degree === degree)
       .map((program) => program.language)
       .filter(Boolean);
     return [...new Set(langs)].sort((a, b) => a.localeCompare(b));
-  }, [country, programs, university]);
+  }, [country, degree, programs, university]);
 
   const visiblePrograms = useMemo(() => searchCatalogPrograms(programs, {
     query,
     country,
     university,
+    degree,
     language,
-  }), [country, programs, query, university, language]);
+  }), [country, degree, programs, query, university, language]);
 
   return (
     <AnimatePresence>
@@ -343,6 +356,7 @@ export default function ProgramCatalogPicker({
                     onClick={() => {
                       setCountry(value);
                       setUniversity('');
+                      setDegree('');
                       setLanguage('');
                     }}
                   >
@@ -352,11 +366,15 @@ export default function ProgramCatalogPicker({
               </div>
               <select
                 value={university}
-                onChange={(event) => { setUniversity(event.target.value); setLanguage(''); }}
+                onChange={(event) => { setUniversity(event.target.value); setDegree(''); setLanguage(''); }}
                 aria-label={t.universityAria}
               >
                 <option value="">{t.allUniversities}</option>
                 {universityOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+              <select value={degree} onChange={(event) => { setDegree(event.target.value); setLanguage(''); }} aria-label={t.degreeAria}>
+                <option value="">{t.allDegrees}</option>
+                {degreeOptions.map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
               <select value={language} onChange={(event) => setLanguage(event.target.value)} aria-label={t.languageAria}>
                 <option value="">{t.allLanguages}</option>
@@ -366,7 +384,7 @@ export default function ProgramCatalogPicker({
 
             <div className="catalog-picker-meta">
               <span>{t.source}</span>
-              <b>{t.countShown(visiblePrograms.length)}</b>
+              <b>{t.countShown(visiblePrograms.length, programs.length)}</b>
             </div>
 
             <div className="catalog-program-list">

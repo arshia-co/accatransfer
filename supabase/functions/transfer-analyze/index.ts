@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-5.4-mini";
+const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const allowedOrigins = new Set([
@@ -30,6 +30,21 @@ function extractText(data: Record<string, unknown>) {
     .flatMap((item: any) => Array.isArray(item?.content) ? item.content : [])
     .filter((item: any) => item?.type === "output_text")
     .map((item: any) => item.text).join("");
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function readSignedFileData(signedUrl: string, mimeType: string | null) {
+  const response = await fetch(signedUrl);
+  if (!response.ok) throw new Error("Could not read the private document for transfer analysis.");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return `data:${mimeType || "application/octet-stream"};base64,${bytesToBase64(bytes)}`;
 }
 
 Deno.serve(async (req) => {
@@ -68,9 +83,14 @@ Deno.serve(async (req) => {
   if (!document.ai_extraction) {
     const { data: signed, error: signedError } = await supabase.storage.from(document.bucket_id).createSignedUrl(document.object_path, 300);
     if (signedError || !signed?.signedUrl) return json(req, { error: "Could not prepare the document." }, 500);
+    const fileData = await readSignedFileData(signed.signedUrl, document.mime_type);
     fileContent = document.mime_type === "application/pdf"
-      ? { type: "input_file", file_url: signed.signedUrl }
-      : { type: "input_image", image_url: signed.signedUrl, detail: "high" };
+      ? {
+        type: "input_file",
+        filename: document.original_name || "student-transcript.pdf",
+        file_data: fileData,
+      }
+      : { type: "input_image", image_url: fileData, detail: "high" };
   }
 
   const extractionContext = document.ai_extraction

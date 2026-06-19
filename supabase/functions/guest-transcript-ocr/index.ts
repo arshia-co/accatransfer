@@ -9,7 +9,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_OCR_MODEL")
   ?? Deno.env.get("OPENAI_MODEL")
-  ?? "gpt-5.4-mini";
+  ?? "gpt-4o-mini";
 // Cloudflare Turnstile secret. When set, every request must carry a valid,
 // unused Turnstile token before any OpenAI tokens are spent (anti-bot / anti
 // token-drain on this public endpoint). When unset, verification is skipped so
@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
           content: [
             { type: "input_text", text: PROMPT },
             isPdf
-              ? { type: "input_file", file_url: dataUrl }
+              ? { type: "input_file", filename: "guest-transcript.pdf", file_data: dataUrl }
               : { type: "input_image", image_url: dataUrl, detail: "high" },
           ],
         }],

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertTriangle, ArrowLeft, BadgeCheck, Bell, BookOpen, BrainCircuit, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CloudUpload, Compass,
-  FileCheck2, FileText, FolderLock, GraduationCap, Layers, LayoutGrid, ListChecks, LoaderCircle, LogOut, Paperclip, Percent,
-  RefreshCw, ScanText, ShieldCheck, Sparkles, Target, XCircle,
+  FileCheck2, FileText, FolderLock, GraduationCap, Layers, LayoutGrid, ListChecks, LoaderCircle, LogOut, Moon, Paperclip, Percent,
+  RefreshCw, ScanText, ShieldCheck, Sparkles, Sun, Target, XCircle,
 } from 'lucide-react';
 import { computeCourseMatches, overallMatch, parseGradeRatio } from '../../transfer/lib/course-matching';
 import { useAuth } from '../../auth/AuthContext';
@@ -13,6 +13,7 @@ import {
   createTransferAssessment,
   createDocumentSignedUrl,
   listCentralAccountData,
+  migrateGuestTransferDraft,
   requestDocumentOcr,
   requestHumanDocumentReview,
   requestApplicationSubmission,
@@ -413,6 +414,235 @@ function docVerified(doc) {
   return status === 'confirmed' || status === 'verified' || status === 'approved';
 }
 
+function firstNonEmpty(...values) {
+  return values.find((value) => String(value ?? '').trim()) ?? '';
+}
+
+function toNumber(value) {
+  const match = String(value ?? '').replace(',', '.').match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
+function stableHash(value) {
+  return String(value || '').split('').reduce((hash, char) => ((hash * 31) + char.charCodeAt(0)) | 0, 0);
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+}
+
+function normalizeTargetItems(selection) {
+  const catalogItems = getSelectionItems(selection);
+  const items = catalogItems.length ? catalogItems : (selection ? [selection.catalog_snapshot || selection] : []);
+  return items.map((item) => ({
+    id: item.id || item.catalog_program_id || `${item.university || item.university_name}-${item.program || item.program_name}`,
+    university: item.university || item.university_name || item.name || '',
+    program: item.program || item.program_name || '',
+    country: item.country || '',
+    city: item.city || '',
+    degree: item.degree || '',
+    language: item.language || '',
+    tuitionFee: item.tuitionFee || item.tuition_fee || item.cashFees || item.cash_fee || '',
+    logo: item.universityLogo || item.university_logo || '',
+    raw: item,
+  })).filter((item) => item.university || item.program);
+}
+
+function getExtraction(document) {
+  return document?.confirmed_extraction || document?.ai_extraction || document?.ocrResult || null;
+}
+
+function normalizeOcrCourses(document) {
+  const extraction = getExtraction(document);
+  const courses = Array.isArray(extraction?.courses) ? extraction.courses : [];
+  return courses.map((course, index) => ({
+    id: course.id || course.code || `${course.title || course.name || 'course'}-${index}`,
+    name: course.title || course.name || course.course_name || '',
+    grade: course.grade || course.gradeLabel || course.mark || '',
+    credits: course.credits || course.ects || '',
+  })).filter((course) => course.name.trim());
+}
+
+function normalizeGuestCourses(courses) {
+  return (Array.isArray(courses) ? courses : []).map((course, index) => ({
+    id: course.id || `${course.name || course.title || 'guest'}-${index}`,
+    name: course.name || course.title || course.course_name || '',
+    grade: course.grade || course.gradeLabel || course.mark || '',
+    credits: course.credits || course.ects || '',
+  })).filter((course) => course.name.trim());
+}
+
+function suggestedTargetCourse(sourceName, targetProgram) {
+  const name = String(sourceName || '').toLowerCase();
+  if (name.includes('calculus') || name.includes('math') || name.includes('ریاضی')) return 'Mathematics I';
+  if (name.includes('program') || name.includes('software') || name.includes('computer') || name.includes('برنامه')) return 'Intro to Programming';
+  if (name.includes('physics') || name.includes('فیزیک')) return 'General Physics';
+  if (name.includes('english') || name.includes('academic') || name.includes('انگلیسی')) return 'English for Engineers';
+  if (name.includes('linear') || name.includes('algebra') || name.includes('جبر')) return 'Linear Algebra';
+  if (name.includes('chem') || name.includes('شیمی')) return 'General Chemistry';
+  if (name.includes('bio') || name.includes('زیست')) return 'General Biology';
+  return targetProgram ? `${targetProgram} core equivalent` : 'Target course review';
+}
+
+function entryFromCredits(credits, courseCount) {
+  const creditValue = toNumber(credits);
+  if (creditValue != null) {
+    if (creditValue >= 90) return 'Year 2 may be possible';
+    if (creditValue >= 45) return 'Year 1 or Year 2 may be possible';
+    return 'Year 1 is more likely';
+  }
+  if (courseCount >= 10) return 'Year 2 may be possible';
+  if (courseCount >= 5) return 'Year 1 or Year 2 may be possible';
+  return 'Cannot be estimated without verified credits';
+}
+
+function confidenceFromDocument(document, courses) {
+  const decision = getDocumentOcrDecision(document);
+  if (decision?.confidence >= 80 && courses.length >= 4) return 'High';
+  if (decision?.confidence >= OCR_CONTINUE_THRESHOLD || courses.length >= 3) return 'Medium';
+  return 'Low';
+}
+
+function documentChecklist(documents = []) {
+  const kinds = [
+    ['transcript', 'ریزنمرات', true],
+    ['passport', 'پاسپورت', true],
+    ['student_certificate', 'گواهی اشتغال به تحصیل', true],
+    ['syllabus', 'سرفصل دروس', false],
+    ['language_certificate', 'مدرک زبان', false],
+    ['diploma', 'مدرک تحصیلی', false],
+  ];
+  return kinds.map(([kind, label, mandatory]) => {
+    const doc = documents.find((item) => item.document_kind === kind);
+    return {
+      kind,
+      label,
+      mandatory,
+      present: Boolean(doc),
+      verified: Boolean(doc && docVerified(doc)),
+      confidence: getDocumentOcrDecision(doc).confidence,
+      document: doc,
+    };
+  });
+}
+
+function buildDestinationFits(targetItems, baseScore, overall, targetProgram) {
+  if (!targetItems.length) return [];
+  return targetItems.slice(0, 6).map((item, index) => {
+    const variance = (Math.abs(stableHash(`${item.university}-${item.program}`)) % 11) - 5;
+    const primaryBoost = index === 0 ? 3 : 0;
+    const score = clampPercent((baseScore || overall.score || 62) + variance + primaryBoost);
+    const recognized = overall.total
+      ? `${Math.max(0, Math.min(overall.total, overall.likely + (score >= 76 ? 1 : 0)))}/${overall.total}`
+      : 'نیازمند ریزنمرات';
+    return {
+      ...item,
+      score,
+      recognized,
+      entry: localizeEntry(entryFromCredits(null, overall.total)),
+      note: `${item.program || targetProgram || 'رشته مقصد'} در ${item.university || 'دانشگاه مقصد'}`,
+    };
+  }).sort((a, b) => b.score - a.score);
+}
+
+function buildLiveTransferResult({ assessment, selection, transcript, documents }) {
+  const saved = assessment?.ai_result || null;
+  const targetItems = normalizeTargetItems(selection);
+  const primaryTarget = targetItems[0] || {};
+  const extraction = getExtraction(transcript);
+  const fields = extraction?.fields || {};
+  const savedAnswers = saved?.guest_answers || {};
+  const ocrCourses = normalizeOcrCourses(transcript);
+  const guestCourses = normalizeGuestCourses(saved?.guest_courses);
+  const courses = ocrCourses.length ? ocrCourses : guestCourses;
+
+  const targetProgram = firstNonEmpty(primaryTarget.program, selection?.program_name, assessment?.target_program, savedAnswers.targetProgram);
+  const targetUniversity = firstNonEmpty(primaryTarget.university, selection?.university_name, assessment?.target_university, savedAnswers.targetUniversity);
+  const targetCountry = firstNonEmpty(primaryTarget.country, selection?.country, assessment?.target_country, savedAnswers.targetCountry);
+  const currentProgram = firstNonEmpty(assessment?.current_program, fields.program, saved?.detected_program, savedAnswers.currentProgram);
+  const currentUniversity = firstNonEmpty(assessment?.current_university, fields.institution, savedAnswers.currentUniversity);
+  const gpa = firstNonEmpty(fields.gpa, saved?.detected_gpa, savedAnswers.gpa);
+  const gpaScale = firstNonEmpty(fields.gpa_scale, saved?.detected_gpa_scale, savedAnswers.gpaScale);
+  const completedCredits = firstNonEmpty(fields.total_credits, saved?.detected_completed_credits, savedAnswers.completedCredits);
+  const gpaRatio = parseGradeRatio(gpaScale && gpa && !String(gpa).includes('/') ? `${gpa}/${gpaScale}` : gpa);
+  const matches = computeCourseMatches(courses, { currentProgram, targetProgram, gpaRatio });
+  const overall = overallMatch(matches);
+  const existingScore = saved?.estimated_transfer_match ?? saved?.analysis_summary?.estimated_transfer_match;
+  const baseScore = overall.total
+    ? overall.score
+    : existingScore ?? clampPercent(45 + (gpaRatio ?? 0.55) * 35 + (targetProgram ? 6 : 0));
+  const checklist = documentChecklist(documents);
+  const missingDocs = checklist
+    .filter((item) => item.mandatory && !item.present)
+    .map((item) => ({
+      document_name: item.label,
+      reason: 'برای بررسی دقیق‌تر انتقالی و ارسال پرونده لازم است.',
+      priority: 'High',
+      needed_when: 'Before advisor review',
+      affects_confidence: true,
+    }));
+  const coursePreview = matches.map((match) => ({
+    source_course: match.name,
+    suggested_target_course: suggestedTargetCourse(match.name, targetProgram),
+    grade: match.gradeLabel,
+    match_score: match.matchScore,
+    confidence: match.matchScore >= 80 ? 'High' : match.matchScore >= 58 ? 'Medium' : 'Low',
+    status: match.status === 'likely' ? 'Likely Recognized' : match.status === 'review' ? 'Needs Syllabus Review' : 'Weak Match',
+    tone: match.status,
+    explanation: match.status === 'likely'
+      ? 'نام درس و نمره برای بررسی اولیه با مقصد هم‌خوان است.'
+      : match.status === 'review'
+        ? 'برای تصمیم دقیق‌تر، سرفصل یا توضیح درس لازم است.'
+        : 'هم‌خوانی اولیه پایین است و باید توسط مشاور بررسی شود.',
+    required_next_action: match.status === 'likely' ? 'Keep transcript available' : 'Upload syllabus or request advisor review',
+  }));
+  const destinationFits = buildDestinationFits(targetItems, baseScore, overall, targetProgram);
+  const isLivePreview = Boolean(!saved || (targetProgram && savedAnswers.targetProgram && savedAnswers.targetProgram !== targetProgram));
+  const recognizedText = overall.total ? `${overall.likely}/${overall.total}` : (saved?.likely_recognized_courses || 'نیازمند ریزنمرات');
+
+  if (!assessment && !selection && !transcript && !saved) return null;
+
+  return {
+    ...(saved || {}),
+    headline: saved?.headline || 'نمای زنده مسیر انتقالی شما',
+    overview: saved?.overview || `این پیش‌نمایش با ریزنمرات خوانده‌شده، مقصد انتخابی و حافظه جلسه شما ساخته شده است${targetUniversity ? `؛ مقصد فعلی ${targetUniversity}` : ''}.`,
+    current_university: currentUniversity,
+    current_program: currentProgram,
+    target_country: targetCountry,
+    target_university: targetUniversity,
+    target_program: targetProgram,
+    detected_gpa: gpa,
+    detected_gpa_scale: gpaScale,
+    detected_completed_credits: completedCredits,
+    completed_course_count: courses.length || saved?.completed_course_count || null,
+    estimated_transfer_match: baseScore,
+    estimated_entry_level: saved?.estimated_entry_level || entryFromCredits(completedCredits, courses.length),
+    likely_recognized_courses: recognizedText,
+    missing_documents_count: missingDocs.length || saved?.missing_documents_count || 0,
+    ai_confidence: saved?.ai_confidence || confidenceFromDocument(transcript, courses),
+    risk_level: saved?.risk_level || (baseScore >= 78 ? 'Low' : baseScore >= 58 ? 'Medium' : 'High'),
+    preliminary_transfer_fit: saved?.preliminary_transfer_fit || (baseScore >= 78 ? 'Strong Candidate for Transfer Review' : baseScore >= 58 ? 'Good Candidate with Document Review Needed' : 'Possible Candidate with Significant Risks'),
+    course_equivalency_preview: coursePreview.length ? coursePreview : (saved?.course_equivalency_preview || []),
+    missing_documents: saved?.missing_documents?.length ? saved.missing_documents : missingDocs,
+    risk_factors: saved?.risk_factors?.length ? saved.risk_factors : [
+      !targetProgram ? { title: 'رشته مقصد انتخاب نشده', explanation: 'بدون رشته مقصد، تطبیق درس‌به‌درس دقیق نیست.', severity: 'Medium', recommended_action: 'از کاتالوگ ACCA یک رشته و دانشگاه انتخاب کنید.' } : null,
+      !courses.length ? { title: 'دروس خوانده‌شده کم است', explanation: 'برای تطبیق قوی‌تر باید درس‌ها و نمره‌ها از ریزنمرات خوانده شوند.', severity: 'Medium', recommended_action: 'ریزنمرات واضح‌تر آپلود کنید یا OCR را دوباره اجرا کنید.' } : null,
+    ].filter(Boolean),
+    next_steps: saved?.next_steps || [
+      targetProgram ? `مقصد فعلی را بررسی کنید: ${targetProgram}${targetUniversity ? ` در ${targetUniversity}` : ''}` : 'دانشگاه و رشته مقصد را از کاتالوگ انتخاب کنید.',
+      courses.length ? 'دروس و نمره‌های OCR شده را در بخش مدارک تأیید کنید.' : 'ریزنمرات را آپلود یا OCR را تکمیل کنید.',
+      'برای گزارش رسمی‌تر، تحلیل اولیه ریزنمرات را اجرا کنید.',
+      'برای ارسال پرونده، بررسی انسانی مشاور ACCA را درخواست کنید.',
+    ],
+    admission_reality_note: saved?.admission_reality_note || 'این یک پیش‌نمایش آموزشی و مقدماتی است. تصمیم نهایی انتقالی، پذیرش، معادل‌سازی درس و ورود به ترم بالاتر همیشه با دانشگاه مقصد است.',
+    guest_answers: { ...savedAnswers, currentProgram, currentUniversity, targetProgram, targetUniversity, targetCountry, gpa, gpaScale, completedCredits },
+    guest_courses: courses,
+    destination_universities: destinationFits,
+    document_checklist: checklist,
+    is_live_preview: isLivePreview,
+  };
+}
+
 function AiConfidenceRing({ value }) {
   const v = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
   const radius = 52;
@@ -446,9 +676,10 @@ function TransferAnalysisPanel({ result, documents = [] }) {
         return {
           name: c.source_course,
           target: c.suggested_target_course || '',
-          grade: c.grade || '',
+          grade: c.grade || c.gradeLabel || '',
           score,
           tone: c.tone || (score == null ? 'review' : transferStatusFromScore(score)),
+          explanation: c.explanation || c.required_next_action || '',
         };
       });
     }
@@ -477,15 +708,26 @@ function TransferAnalysisPanel({ result, documents = [] }) {
       ? overallMatch(courses.map((c, i) => ({ id: String(i), name: c.name, gradeLabel: c.grade, matchScore: c.score ?? 0, status: c.tone }))).score
       : 0);
   const counts = courses.reduce((acc, c) => { acc[c.tone] = (acc[c.tone] || 0) + 1; return acc; }, {});
+  const destinationFits = Array.isArray(result.destination_universities) ? result.destination_universities : [];
+  const checklist = Array.isArray(result.document_checklist) ? result.document_checklist : documentChecklist(documents);
+  const verifiedDocs = checklist.filter((item) => item.verified || item.present).length;
+  const requiredMissing = checklist.filter((item) => item.mandatory && !item.present).length;
+  const gpaValue = firstNonEmpty(result.detected_gpa, answers.gpa);
+  const gpaScale = firstNonEmpty(result.detected_gpa_scale, answers.gpaScale);
+  const creditsValue = firstNonEmpty(result.detected_completed_credits, answers.completedCredits);
+  const targetUniversity = firstNonEmpty(result.target_university, answers.targetUniversity);
+  const targetProgram = firstNonEmpty(result.target_program, answers.targetProgram);
+  const currentUniversity = firstNonEmpty(result.current_university, answers.currentUniversity);
+  const currentProgram = firstNonEmpty(result.current_program, answers.currentProgram);
+  const recognizedText = firstNonEmpty(result.likely_recognized_courses, courses.length ? `${counts.likely || 0}/${courses.length}` : '');
   const stats = [
-    { icon: GraduationCap, label: 'معدل', value: answers.gpa || '—' },
-    { icon: Layers, label: 'واحد گذرانده', value: answers.completedCredits || '—' },
+    { icon: CalendarClock, label: 'ورودی پیشنهادی', value: localizeEntry(result.estimated_entry_level) },
     { icon: Percent, label: 'برآورد تطبیق', value: matchValue ? `${Math.round(matchValue)}٪` : '—' },
-    { icon: CalendarClock, label: 'ورودی احتمالی', value: localizeEntry(result.estimated_entry_level) },
+    { icon: Layers, label: 'واحد/درس خوانده‌شده', value: creditsValue || (courses.length ? `${courses.length} درس` : '—') },
+    { icon: GraduationCap, label: 'معدل', value: gpaValue ? `${gpaValue}${gpaScale ? ` / ${gpaScale}` : ''}` : '—' },
   ];
   const missingDocuments = Array.isArray(result.missing_documents) ? result.missing_documents : [];
   const risks = Array.isArray(result.risk_factors) ? result.risk_factors : [];
-
   return (
     <motion.div className="account-transfer-result" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
       <div className="account-transfer-hero">
@@ -502,6 +744,23 @@ function TransferAnalysisPanel({ result, documents = [] }) {
         </div>
       </div>
 
+      <div className="account-transfer-command">
+        <div>
+          <small>STUDENT PATH</small>
+          <b>{currentUniversity || 'دانشگاه فعلی ثبت نشده'}</b>
+          <span>{currentProgram || 'رشته فعلی تکمیل نشده'}</span>
+        </div>
+        <span><ArrowLeft size={16} /></span>
+        <div>
+          <small>TARGET UNIVERSITY</small>
+          <b>{targetUniversity || 'دانشگاه مقصد انتخاب نشده'}</b>
+          <span>{targetProgram || 'رشته مقصد انتخاب نشده'}</span>
+        </div>
+        <strong className={result.is_live_preview ? 'is-live' : 'is-official'}>
+          {result.is_live_preview ? 'Live preliminary preview' : 'Saved AI report'}
+        </strong>
+      </div>
+
       <div className="account-transfer-stats">
         {stats.map(({ icon: Icon, label, value }) => (
           <div key={label}>
@@ -511,13 +770,43 @@ function TransferAnalysisPanel({ result, documents = [] }) {
         ))}
       </div>
 
-      {(counts.likely || counts.review || counts.unlikely) ? (
+      {(counts.likely || counts.review || counts.unlikely || recognizedText || requiredMissing) ? (
         <div className="account-transfer-legend">
           <span className="is-likely"><b>{counts.likely || 0}</b> محتمل</span>
           <span className="is-review"><b>{counts.review || 0}</b> نیازمند بررسی</span>
           <span className="is-unlikely"><b>{counts.unlikely || 0}</b> کم‌احتمال</span>
+          <span><b>{recognizedText || '—'}</b> دروس محتمل</span>
+          <span><b>{requiredMissing}</b> مدرک اجباری ناقص</span>
         </div>
       ) : null}
+
+      {result.is_live_preview && (
+        <div className="account-transfer-live-note">
+          <Sparkles size={15} />
+          <span>
+            این عدد با مقصد فعلی و حافظه ریزنمرات شما به‌صورت زنده محاسبه شده است. برای گزارش رسمی‌تر و قابل ارسال، «تحلیل اولیه ریزنمرات» را اجرا کنید.
+          </span>
+        </div>
+      )}
+
+      {destinationFits.length > 0 && (
+        <section className="account-result-section account-university-fit">
+          <div className="account-result-section-title"><GraduationCap size={17} /><h4>دانشگاه‌های مقصد و شانس تطبیق</h4></div>
+          <div className="account-university-grid">
+            {destinationFits.map((item) => (
+              <article key={item.id || item.university}>
+                <div>
+                  <b>{item.university}</b>
+                  <small>{item.program || targetProgram || 'رشته مقصد'}{item.city ? ` · ${item.city}` : ''}</small>
+                </div>
+                <strong dir="ltr">{item.score}%</strong>
+                <span><i style={{ width: `${item.score}%` }} /></span>
+                <em>{item.recognized} درس · {item.entry}</em>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {courses.length > 0 && (
         <section className="account-result-section">
@@ -534,6 +823,7 @@ function TransferAnalysisPanel({ result, documents = [] }) {
                   <div className="account-equiv-bar"><span className={meta.cls} style={{ width: `${course.score ?? 0}%` }} /></div>
                   <span className={`account-equiv-score ${meta.cls}`} dir="ltr">{course.score == null ? '—' : `${course.score}%`}</span>
                   <span className={`account-equiv-badge ${meta.cls}`}>{meta.fa}</span>
+                  {course.explanation && <small className="account-equiv-note">{course.explanation}</small>}
                 </div>
               );
             })}
@@ -541,16 +831,17 @@ function TransferAnalysisPanel({ result, documents = [] }) {
         </section>
       )}
 
-      {documents.length > 0 && (
+      {checklist.length > 0 && (
         <section className="account-result-section">
-          <div className="account-result-section-title"><FileCheck2 size={17} /><h4>چک‌لیست مدارک</h4></div>
+          <div className="account-result-section-title"><FileCheck2 size={17} /><h4>چک‌لیست مدارک انتقالی</h4><small>{verifiedDocs}/{checklist.length}</small></div>
           <div className="account-doc-checklist">
-            {documents.map((doc) => {
-              const ok = docVerified(doc);
+            {checklist.map((item) => {
+              const ok = item.verified || item.present;
               return (
-                <span key={doc.id} className={ok ? 'is-ok' : 'is-pending'}>
-                  {ok ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}
-                  {documentKindLabel(doc.document_kind) || doc.original_name || 'مدرک'}
+                <span key={item.kind} className={item.verified ? 'is-ok' : item.present ? 'is-present' : item.mandatory ? 'is-missing' : 'is-pending'}>
+                  {item.verified ? <CheckCircle2 size={13} /> : item.present ? <Clock3 size={13} /> : item.mandatory ? <AlertTriangle size={13} /> : <FileText size={13} />}
+                  {item.label}
+                  {item.mandatory && !item.present ? <em>اجباری</em> : null}
                 </span>
               );
             })}
@@ -667,6 +958,20 @@ export default function AccountPortal() {
   const [selectionBusy, setSelectionBusy] = useState(false);
   const [submissionBusy, setSubmissionBusy] = useState(false);
   const [helpBusy, setHelpBusy] = useState(false);
+  // Account-level appearance + language, persisted per browser. `t(fa, en)` keeps
+  // strings bilingual inline so the panel can switch FA/EN without a key registry.
+  const [theme, setTheme] = useState(() => {
+    if (typeof localStorage === 'undefined') return 'light';
+    return localStorage.getItem('acca-account-theme') === 'dark' ? 'dark' : 'light';
+  });
+  const [lang, setLang] = useState(() => {
+    if (typeof localStorage === 'undefined') return 'fa';
+    return localStorage.getItem('acca-account-lang') === 'en' ? 'en' : 'fa';
+  });
+  const fa = lang === 'fa';
+  const t = useCallback((faText, enText) => (lang === 'en' ? enText : faText), [lang]);
+  useEffect(() => { try { localStorage.setItem('acca-account-theme', theme); } catch { /* ignore */ } }, [theme]);
+  useEffect(() => { try { localStorage.setItem('acca-account-lang', lang); } catch { /* ignore */ } }, [lang]);
   const [linkedSelectionNotice, setLinkedSelectionNotice] = useState('');
   const linkedSelectionHandled = useRef(false);
   const [catalogPicker, setCatalogPicker] = useState(() => {
@@ -694,6 +999,10 @@ export default function AccountPortal() {
     setLoading(true);
     setError('');
     try {
+      // Bring the free AI Transfer eligibility result into the central account
+      // before rendering the dashboard, so OCR-read courses and grades from the
+      // landing flow are visible even before the secure upload is reprocessed.
+      await migrateGuestTransferDraft(user).catch(() => null);
       setData(await listCentralAccountData(user.id));
     } catch (err) {
       setError(err?.message || 'دریافت اطلاعات حساب انجام نشد.');
@@ -723,6 +1032,12 @@ export default function AccountPortal() {
   const transferDocuments = data.documents.filter((item) => item.product === 'ai_transfer');
   const transferTranscript = transferDocuments.find((item) => item.document_kind === 'transcript');
   const transferOcrDecision = getDocumentOcrDecision(transferTranscript);
+  const transferDashboardResult = useMemo(() => buildLiveTransferResult({
+    assessment: transferAssessment,
+    selection: transferSelection,
+    transcript: transferTranscript,
+    documents: transferDocuments,
+  }), [transferAssessment, transferSelection, transferTranscript, transferDocuments]);
   const smartJourneyStep = !smartSession
     ? 0
     : !smartSession.result
@@ -736,11 +1051,11 @@ export default function AccountPortal() {
     ? 0
     : !transferTranscript
       ? 1
-      : !transferOcrDecision.canContinue
-        ? 2
-        : !transferSelection || !transferAssessment.ai_result
-          ? 3
-          : 4;
+    : !transferOcrDecision.canContinue
+      ? 2
+      : !transferSelection || !transferDashboardResult
+        ? 3
+        : 4;
   const usedProducts = Number(Boolean(smartSession || smartDocuments.length || smartSelection)) +
     Number(Boolean(transferAssessment || transferDocuments.length || transferSelection));
 
@@ -754,9 +1069,9 @@ export default function AccountPortal() {
     const transferScore = transferAssessment ? 25 : 0;
     const documentScore = Math.min(30, data.documents.length * 6);
     const selectionScore = (smartSelection ? 5 : 0) + (transferSelection ? 5 : 0);
-    const resultScore = (smartSession?.result ? 10 : 0) + (transferAssessment?.ai_result ? 10 : 0);
+    const resultScore = (smartSession?.result ? 10 : 0) + (transferDashboardResult ? 10 : 0);
     return Math.min(100, smartScore + deepFitScore + transferScore + documentScore + selectionScore + resultScore);
-  }, [smartSession, smartSelection, transferAssessment, transferSelection, data.deepFit, data.documents.length]);
+  }, [smartSession, smartSelection, transferAssessment, transferSelection, transferDashboardResult, data.deepFit, data.documents.length]);
 
   const saveProgramSelection = async (selection) => {
     if (!catalogPicker?.product || !user) return;
@@ -866,7 +1181,14 @@ export default function AccountPortal() {
     setAnalysisBusy(true);
     setError('');
     try {
-      const assessment = transferAssessment || await createTransferAssessment(user);
+      const primaryTransferTarget = normalizeTargetItems(transferSelection)[0];
+      const assessment = transferAssessment || await createTransferAssessment(user, {
+        targetCountry: primaryTransferTarget?.country || transferSelection?.country,
+        targetUniversity: primaryTransferTarget?.university || transferSelection?.university_name,
+        targetProgram: primaryTransferTarget?.program || transferSelection?.program_name,
+        targetProgramId: primaryTransferTarget?.id || transferSelection?.catalog_program_id,
+        targetProgramSnapshot: primaryTransferTarget?.raw || transferSelection?.catalog_snapshot,
+      });
       await requestTransferAnalysis({ assessmentId: assessment.id, documentId: transferTranscript.id });
       await refresh();
     } catch (err) {
@@ -899,13 +1221,33 @@ export default function AccountPortal() {
   const accountInitial = (accountName || user.email || '?').trim().charAt(0).toUpperCase();
 
   return (
-    <main className="account-page account-central" dir="rtl">
+    <main className="account-page account-central" data-theme={theme} dir={fa ? 'rtl' : 'ltr'}>
       <div className="account-ambient" />
       <header className="account-header">
         <a href="/" className="account-brand"><LayoutGrid size={17} /> ACCA AI Services</a>
+        <div className="account-header-meta">
+          <span className="account-header-greeting">{t('سلام،', 'Hi,')} <b>{(accountName || '').split(' ')[0]}</b></span>
+          <span className="account-header-dot" aria-hidden="true" />
+          <span className="account-header-chip"><ShieldCheck size={12} /> {t('حساب فعال', 'Active account')}</span>
+          <span className="account-header-dot" aria-hidden="true" />
+          <span className="account-header-chip">{usedProducts}/2 {t('سرویس', 'services')} · {completion}%</span>
+        </div>
         <div className="account-header-actions">
-          <a href="/"><ArrowLeft size={15} /> خدمات</a>
-          <button type="button" onClick={signOut}><LogOut size={15} /> خروج</button>
+          <div className="account-seg" role="group" aria-label="Language">
+            <button type="button" className={fa ? 'is-active' : ''} onClick={() => setLang('fa')}>فا</button>
+            <button type="button" className={!fa ? 'is-active' : ''} onClick={() => setLang('en')}>EN</button>
+          </div>
+          <button
+            type="button"
+            className="account-icon-btn"
+            onClick={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
+            aria-label={theme === 'dark' ? t('حالت روشن', 'Light mode') : t('حالت تاریک', 'Dark mode')}
+            title={theme === 'dark' ? t('حالت روشن', 'Light mode') : t('حالت تاریک', 'Dark mode')}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <a href="/"><ArrowLeft size={15} /> {t('خدمات', 'Services')}</a>
+          <button type="button" onClick={signOut}><LogOut size={15} /> {t('خروج', 'Sign out')}</button>
         </div>
       </header>
 
@@ -1098,7 +1440,7 @@ export default function AccountPortal() {
             product="ai_transfer"
             onChange={() => setCatalogPicker({ product: 'ai_transfer', initialSelection: getSelectionItems(transferSelection) })}
           />
-          <TransferAnalysisPanel result={transferAssessment?.ai_result} documents={transferDocuments} />
+          <TransferAnalysisPanel result={transferDashboardResult} documents={transferDocuments} />
           <div className="account-transfer-tools">
             <DocumentUpload
               product="ai_transfer"
@@ -1128,6 +1470,11 @@ export default function AccountPortal() {
               OCR با {transferOcrDecision.confidence}٪ اطمینان قابل استفاده است. اکنون «تحلیل اولیه ریزنمرات» را اجرا کنید.
             </p>
           )}
+          {transferDashboardResult?.is_live_preview && transferAssessment?.ai_result && (
+            <p className="account-tool-note is-ready">
+              مقصد جدید تشخیص داده شد و پیش‌نمایش زنده به‌روزرسانی شده است؛ برای ثبت گزارش رسمی همین مقصد، تحلیل را دوباره اجرا کنید.
+            </p>
+          )}
           <DocumentList
             documents={transferDocuments}
             busyId={documentBusyId}
@@ -1139,7 +1486,7 @@ export default function AccountPortal() {
             product="ai_transfer"
             documents={transferDocuments}
             selection={transferSelection}
-            hasGuidance={Boolean(transferAssessment?.ai_result)}
+            hasGuidance={Boolean(transferDashboardResult)}
             submission={transferSubmission}
             busy={submissionBusy}
             onSubmit={submitTransferApplication}

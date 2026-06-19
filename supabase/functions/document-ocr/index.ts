@@ -4,7 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_OCR_MODEL")
   ?? Deno.env.get("OPENAI_MODEL")
-  ?? "gpt-5.4-mini";
+  ?? "gpt-4o-mini";
 const GOOGLE_VISION_API_KEY = Deno.env.get("GOOGLE_CLOUD_VISION_API_KEY");
 const OCR_PROVIDER = Deno.env.get("OCR_PROVIDER") ?? "auto";
 const CRM_SYNC_WEBHOOK_URL = Deno.env.get("CRM_SYNC_WEBHOOK_URL");
@@ -68,6 +68,13 @@ function bytesToBase64(bytes: Uint8Array) {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
   }
   return btoa(binary);
+}
+
+async function readSignedFileData(signedUrl: string, mimeType: string | null) {
+  const response = await fetch(signedUrl);
+  if (!response.ok) throw new Error("Could not read the private document for OCR.");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return `data:${mimeType || "application/octet-stream"};base64,${bytesToBase64(bytes)}`;
 }
 
 function extractionSchema() {
@@ -322,10 +329,15 @@ Rules:
   }];
 
   if (!googleText) {
+    const fileData = await readSignedFileData(signedUrl, document.mime_type);
     content.push(
       document.mime_type === "application/pdf"
-        ? { type: "input_file", file_url: signedUrl }
-        : { type: "input_image", image_url: signedUrl, detail: "high" },
+        ? {
+          type: "input_file",
+          filename: document.original_name || "student-document.pdf",
+          file_data: fileData,
+        }
+        : { type: "input_image", image_url: fileData, detail: "high" },
     );
   }
 

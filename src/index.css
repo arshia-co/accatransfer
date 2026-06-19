@@ -606,7 +606,7 @@ textarea {
 .catalog-picker-head h2 { margin: 3px 0; color: #102f48; font-size: 20px; }
 .catalog-picker-head p { margin: 0; color: rgba(16,47,72,.54); font-size: 10px; line-height: 1.7; }
 .catalog-picker-head > button { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid rgba(16,47,72,.09); border-radius: 50%; color: #102f48; background: white; cursor: pointer; }
-.catalog-picker-filters { display: grid; grid-template-columns: minmax(190px, 1.2fr) auto minmax(140px, .55fr) minmax(120px, .45fr); gap: 9px; padding: 13px 18px 9px; }
+.catalog-picker-filters { display: grid; grid-template-columns: minmax(200px, 1.15fr) auto minmax(130px, .5fr) minmax(116px, .42fr) minmax(116px, .42fr); gap: 9px; padding: 13px 18px 9px; }
 .catalog-picker-filters > label { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid rgba(16,47,72,.1); border-radius: 13px; background: white; }
 .catalog-picker-filters input { width: 100%; min-width: 0; padding: 12px 0; border: 0; outline: 0; color: #102f48; background: transparent; font: inherit; font-size: 11px; }
 .catalog-picker-filters select { min-width: 0; padding: 0 10px; border: 1px solid rgba(16,47,72,.1); border-radius: 13px; color: #102f48; background: white; font-size: 10px; font-weight: 800; }
@@ -751,7 +751,8 @@ textarea {
 .account-course-table { width: 100%; min-width: 620px; border-collapse: collapse; text-align: start; }
 .account-course-table th { padding: 9px 10px; color: rgba(16,47,72,.45); background: rgba(16,47,72,.035); font-size: 9px; text-align: start; white-space: nowrap; }
 .account-course-table td { padding: 9px 10px; border-top: 1px solid rgba(16,47,72,.055); color: rgba(16,47,72,.72); font-size: 10px; line-height: 1.6; vertical-align: top; }
-.account-transfer-result { margin-top: 12px; padding: 21px; border: 1px solid rgba(198,167,104,.18); border-radius: 22px; background: linear-gradient(135deg, rgba(250,247,239,.96), rgba(238,247,244,.82)); }
+.account-transfer-result { position: relative; margin-top: 12px; padding: 21px; overflow: hidden; border: 1px solid rgba(198,167,104,.18); border-radius: 26px; background: linear-gradient(135deg, rgba(250,247,239,.96), rgba(238,247,244,.82)); box-shadow: 0 22px 70px rgba(16,47,72,.08); }
+.account-transfer-result::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(16,47,72,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(16,47,72,.025) 1px, transparent 1px); background-size: 34px 34px; mask-image: linear-gradient(to bottom, #000, transparent 78%); }
 .account-transfer-result-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; }
 .account-transfer-result-head h3 { margin: 6px 0; color: #102f48; font-size: 17px; }
 .account-transfer-result-head p { max-width: 760px; margin: 0; color: rgba(16,47,72,.6); font-size: 11px; line-height: 1.9; }
@@ -791,6 +792,15 @@ textarea {
 .account-ai-ring-center { position: absolute; inset: 0; display: grid; place-items: center; }
 .account-ai-ring-center b { color: #fff; font-size: 26px; font-weight: 900; line-height: 1; }
 .account-ai-ring-center b span { font-size: 13px; color: rgba(234,242,255,.6); }
+.account-transfer-command { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 12px; padding: 13px; border: 1px solid rgba(198,167,104,.17); border-radius: 18px; background: rgba(255,255,255,.76); }
+.account-transfer-command > div { display: grid; gap: 3px; min-width: 0; padding: 8px 10px; border-radius: 13px; background: rgba(255,255,255,.66); }
+.account-transfer-command small { color: rgba(16,47,72,.42); font-size: 8px; font-weight: 900; letter-spacing: .04em; }
+.account-transfer-command b { overflow: hidden; color: #102f48; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.account-transfer-command span { color: rgba(16,47,72,.56); font-size: 10px; }
+.account-transfer-command > span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 999px; color: #102f48; background: rgba(198,167,104,.22); }
+.account-transfer-command strong { align-self: stretch; display: grid; min-width: 116px; place-items: center; padding: 0 10px; border-radius: 13px; font-size: 9px; line-height: 1.5; text-align: center; text-transform: uppercase; letter-spacing: .03em; }
+.account-transfer-command strong.is-live { color: #795a20; background: rgba(230,198,129,.24); }
+.account-transfer-command strong.is-official { color: #116d5b; background: rgba(20,128,106,.12); }
 .account-transfer-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 9px; margin-top: 12px; }
 .account-transfer-stats > div { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 12px; border: 1px solid rgba(16,47,72,.07); border-radius: 15px; background: rgba(255,255,255,.74); }
 .account-transfer-stats > div > span { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border-radius: 10px; color: #14745f; background: rgba(20,116,95,.1); }
@@ -803,6 +813,17 @@ textarea {
 .account-transfer-legend .is-likely { color: #116d5b; background: rgba(20,128,106,.12); }
 .account-transfer-legend .is-review { color: #8a6c1f; background: rgba(210,168,72,.16); }
 .account-transfer-legend .is-unlikely { color: #a23b2a; background: rgba(196,76,52,.12); }
+.account-transfer-live-note { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; padding: 11px 13px; border: 1px solid rgba(198,167,104,.2); border-radius: 14px; color: #795a20; background: rgba(230,198,129,.12); font-size: 10px; font-weight: 750; line-height: 1.8; }
+.account-transfer-live-note svg { flex: 0 0 auto; margin-top: 2px; }
+.account-university-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.account-university-grid article { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px 12px; padding: 13px 15px; border: 1px solid rgba(198,167,104,.18); border-radius: 16px; background: linear-gradient(145deg, rgba(255,255,255,.88), rgba(255,252,246,.7)); }
+.account-university-grid article div { display: grid; gap: 3px; min-width: 0; }
+.account-university-grid b { overflow: hidden; color: #17445b; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.account-university-grid small { overflow: hidden; color: rgba(16,47,72,.48); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.account-university-grid strong { color: #17445b; font-size: 13px; font-weight: 900; }
+.account-university-grid article > span { grid-column: 1 / -1; height: 5px; overflow: hidden; border-radius: 999px; background: rgba(16,47,72,.1); }
+.account-university-grid article > span i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#17445b,#d9bd7e); }
+.account-university-grid em { grid-column: 1 / -1; color: rgba(16,47,72,.55); font-size: 9px; font-style: normal; font-weight: 800; }
 .account-equiv-list { display: grid; gap: 8px; }
 .account-equiv-row { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(70px,1fr) auto auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid rgba(16,47,72,.06); border-radius: 13px; background: rgba(255,255,255,.8); }
 .account-equiv-pair { display: grid; gap: 2px; min-width: 0; }
@@ -822,12 +843,19 @@ textarea {
 .account-equiv-badge.is-likely { color: #116d5b; background: rgba(20,128,106,.12); }
 .account-equiv-badge.is-review { color: #8a6c1f; background: rgba(210,168,72,.16); }
 .account-equiv-badge.is-unlikely { color: #a23b2a; background: rgba(196,76,52,.12); }
+.account-equiv-note { grid-column: 1 / -1; color: rgba(16,47,72,.48); font-size: 9px; line-height: 1.6; }
 .account-doc-checklist { display: flex; flex-wrap: wrap; gap: 7px; }
 .account-doc-checklist span { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 999px; font-size: 9px; font-weight: 800; }
 .account-doc-checklist .is-ok { color: #116d5b; background: rgba(20,128,106,.1); }
+.account-doc-checklist .is-present { color: #17445b; background: rgba(23,68,91,.09); }
+.account-doc-checklist .is-missing { color: #a23b2a; background: rgba(196,76,52,.12); }
 .account-doc-checklist .is-pending { color: #8a6c1f; background: rgba(210,168,72,.14); }
+.account-doc-checklist em { padding: 2px 5px; border-radius: 999px; color: inherit; background: rgba(255,255,255,.7); font-style: normal; font-size: 8px; }
 @media (max-width: 640px) {
+  .account-transfer-command { grid-template-columns: 1fr; }
+  .account-transfer-command > span { transform: rotate(-90deg); justify-self: center; }
   .account-transfer-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .account-university-grid { grid-template-columns: 1fr; }
   .account-equiv-row { grid-template-columns: minmax(0,1fr) auto auto; }
   .account-equiv-bar { grid-column: 1 / -1; order: 5; }
 }

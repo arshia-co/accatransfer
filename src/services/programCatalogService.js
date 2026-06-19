@@ -83,16 +83,19 @@ export function searchCatalogPrograms(programs, {
   query = '',
   country = 'all',
   university = '',
+  degree = '',
   language = '',
-  limit = 60,
+  limit = 0,
 } = {}) {
   const normalizedQuery = normalizeSearch(query);
   const normalizedUniversity = normalizeSearch(university);
+  const normalizedDegree = normalizeSearch(degree);
   const normalizedLanguage = normalizeSearch(language);
 
-  return programs
+  const results = programs
     .filter((program) => country === 'all' || program.country === country)
     .filter((program) => !normalizedUniversity || normalizeSearch(program.university).includes(normalizedUniversity))
+    .filter((program) => !normalizedDegree || normalizeSearch(program.degree) === normalizedDegree)
     .filter((program) => !normalizedLanguage || normalizeSearch(program.language) === normalizedLanguage)
     .filter((program) => {
       if (!normalizedQuery) return true;
@@ -104,8 +107,9 @@ export function searchCatalogPrograms(programs, {
         program.language,
         program.faculty,
       ].join(' ')).includes(normalizedQuery);
-    })
-    .slice(0, limit);
+    });
+
+  return limit > 0 ? results.slice(0, limit) : results;
 }
 
 export function buildAccaProgramsUrl(program) {
