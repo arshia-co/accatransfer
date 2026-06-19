@@ -382,8 +382,11 @@ export function GuestAssessmentModal() {
   const inputClass = "mt-2 h-12 rounded-xl bg-white text-base sm:text-sm";
   const selectClass = "h-12 rounded-xl border border-[color:var(--ta-navy)]/15 bg-white px-2 text-base text-foreground sm:text-sm";
 
+  // While the catalog picker is open the dialog goes non-modal so Radix's
+  // scroll/interaction lock (RemoveScroll) doesn't freeze the picker, which is
+  // portaled to <body> outside the dialog content.
   return (
-    <Dialog open={open} onOpenChange={(value) => !value && closeModal()}>
+    <Dialog open={open} onOpenChange={(value) => !value && closeModal()} modal={!pickerOpen}>
       <DialogContent
         className="sm:max-w-xl ta-glass-strong max-h-[90vh] overflow-y-auto"
         onPointerDownOutside={(e) => { if (pickerOpen) e.preventDefault(); }}
@@ -586,6 +589,7 @@ export function GuestAssessmentModal() {
             <SelectedProgramCard
               selection={{ items: draft.targetSelection }}
               product="ai_transfer"
+              lang={fa ? 'fa' : 'en'}
               onChange={() => setPickerOpen(true)}
             />
           </div>
@@ -802,6 +806,7 @@ export function GuestAssessmentModal() {
           <ProgramCatalogPicker
             open={pickerOpen}
             product="ai_transfer"
+            lang={fa ? 'fa' : 'en'}
             initialSelection={draft.targetSelection}
             onClose={() => setPickerOpen(false)}
             onSelect={(items: CatalogTargetItem[]) => setTargetSelection(items)}

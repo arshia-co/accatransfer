@@ -8,24 +8,101 @@ import {
   buildAccaProgramsUrl,
   buildAccaUniversityUrl,
   findCatalogProgram,
-  getCountryLabel,
   getSelectionItems,
   loadProgramCatalog,
   searchCatalogPrograms,
 } from '../../services/programCatalogService';
 
+// This picker is shared between the (Persian-only) central account portal and the
+// bilingual AI Transfer flow, so all copy is keyed by `lang` (default 'fa' keeps
+// the account portal unchanged).
+const COUNTRY_LABELS = {
+  fa: { KKTC: 'قبرس شمالی', Turkey: 'ترکیه' },
+  en: { KKTC: 'North Cyprus', Turkey: 'Türkiye' },
+};
+function countryLabel(country, lang) {
+  const table = COUNTRY_LABELS[lang] || COUNTRY_LABELS.fa;
+  return country === 'KKTC' ? table.KKTC : table.Turkey;
+}
+
 const PRODUCT_COPY = {
-  smart_apply: {
-    eyebrow: 'Smart Apply Target',
-    title: 'رشته و دانشگاه مقصد را انتخاب کنید',
-    body: 'انتخاب شما از کاتالوگ زنده آکادو وارد پرونده پذیرش می‌شود.',
-    action: 'انتخاب برای Smart Apply',
+  fa: {
+    smart_apply: {
+      eyebrow: 'Smart Apply Target',
+      title: 'رشته و دانشگاه مقصد را انتخاب کنید',
+      body: 'انتخاب شما از کاتالوگ زنده آکادو وارد پرونده پذیرش می‌شود.',
+      action: 'انتخاب برای Smart Apply',
+    },
+    ai_transfer: {
+      eyebrow: 'AI Transfer Target',
+      title: 'دانشگاه و رشته مقصد انتقالی را انتخاب کنید',
+      body: 'این انتخاب مبنای بررسی بعدی ریزنمرات و تطبیق مقدماتی دروس خواهد بود.',
+      action: 'انتخاب برای AI Transfer',
+    },
   },
-  ai_transfer: {
-    eyebrow: 'AI Transfer Target',
-    title: 'دانشگاه و رشته مقصد انتقالی را انتخاب کنید',
-    body: 'این انتخاب مبنای بررسی بعدی ریزنمرات و تطبیق مقدماتی دروس خواهد بود.',
-    action: 'انتخاب برای AI Transfer',
+  en: {
+    smart_apply: {
+      eyebrow: 'Smart Apply Target',
+      title: 'Choose your target program & university',
+      body: 'Your pick from the live ACCA catalog is added to your admission file.',
+      action: 'Select for Smart Apply',
+    },
+    ai_transfer: {
+      eyebrow: 'AI Transfer Target',
+      title: 'Choose your transfer destination & program',
+      body: 'This selection drives the next transcript review and preliminary course matching.',
+      action: 'Select for AI Transfer',
+    },
+  },
+};
+
+const UI = {
+  fa: {
+    searchPlaceholder: 'نام رشته، دانشگاه، شهر یا زبان...',
+    all: 'همه', turkey: 'ترکیه', cyprus: 'قبرس شمالی',
+    allUniversities: 'همه دانشگاه‌ها', allLanguages: 'همه زبان‌ها',
+    universityAria: 'دانشگاه مقصد', languageAria: 'زبان تحصیل', close: 'بستن',
+    source: 'منبع: کاتالوگ زنده آکادو',
+    countShown: (n) => `${n} گزینه قابل نمایش`,
+    loading: 'در حال دریافت کاتالوگ...',
+    empty: 'با این فیلتر گزینه‌ای پیدا نشد.',
+    inList: (n) => `${n} گزینه در فهرست`, current: 'انتخاب فعلی', notSelected: 'هنوز انتخاب نشده',
+    saving: 'در حال ذخیره...',
+    uniInfo: 'اطلاعات دانشگاه', add: 'افزودن به فهرست', remove: 'حذف از فهرست',
+  },
+  en: {
+    searchPlaceholder: 'Program, university, city or language…',
+    all: 'All', turkey: 'Türkiye', cyprus: 'North Cyprus',
+    allUniversities: 'All universities', allLanguages: 'All languages',
+    universityAria: 'Target university', languageAria: 'Language of study', close: 'Close',
+    source: 'Source: live ACCA catalog',
+    countShown: (n) => `${n} options available`,
+    loading: 'Loading catalog…',
+    empty: 'No options match this filter.',
+    inList: (n) => `${n} in shortlist`, current: 'Current selection', notSelected: 'Nothing selected yet',
+    saving: 'Saving…',
+    uniInfo: 'University info', add: 'Add to shortlist', remove: 'Remove from shortlist',
+  },
+};
+
+const CARD_UI = {
+  fa: {
+    emptyTitleTransfer: 'دانشگاه مقصد انتقالی را مشخص کنید',
+    emptyTitleSmart: 'دانشگاه و رشته موردنظر را انتخاب کنید',
+    emptySub: 'کاتالوگ آکادو فقط گزینه‌های ترکیه و قبرس شمالی را نمایش می‌دهد.',
+    cityFallback: 'شهر مقصد',
+    more: (n) => `+${n} گزینه دیگر`,
+    editList: 'ویرایش فهرست', changeOne: 'تغییر انتخاب',
+    uniInfo: 'اطلاعات دانشگاه', viewOnAcca: 'مشاهده در آکادو',
+  },
+  en: {
+    emptyTitleTransfer: 'Choose your transfer destination',
+    emptyTitleSmart: 'Choose your target program & university',
+    emptySub: 'The ACCA catalog shows Türkiye and North Cyprus options only.',
+    cityFallback: 'Destination city',
+    more: (n) => `+${n} more`,
+    editList: 'Edit shortlist', changeOne: 'Change selection',
+    uniInfo: 'University info', viewOnAcca: 'View on ACCA',
   },
 };
 
@@ -42,7 +119,8 @@ function ProgramLogo({ program }) {
   );
 }
 
-export function SelectedProgramCard({ selection, product, onChange }) {
+export function SelectedProgramCard({ selection, product, onChange, lang = 'fa' }) {
+  const t = CARD_UI[lang] || CARD_UI.fa;
   const items = getSelectionItems(selection);
   const program = items[0];
   if (!program?.university) {
@@ -50,8 +128,8 @@ export function SelectedProgramCard({ selection, product, onChange }) {
       <button type="button" className="catalog-empty-selection" onClick={onChange}>
         <span><GraduationCap size={20} /></span>
         <div>
-          <b>{product === 'ai_transfer' ? 'دانشگاه مقصد انتقالی را مشخص کنید' : 'دانشگاه و رشته موردنظر را انتخاب کنید'}</b>
-          <small>کاتالوگ آکادو فقط گزینه‌های ترکیه و قبرس شمالی را نمایش می‌دهد.</small>
+          <b>{product === 'ai_transfer' ? t.emptyTitleTransfer : t.emptyTitleSmart}</b>
+          <small>{t.emptySub}</small>
         </div>
         <ArrowUpLeft size={18} />
       </button>
@@ -69,8 +147,8 @@ export function SelectedProgramCard({ selection, product, onChange }) {
       <ProgramLogo program={program} />
       <div className="catalog-selected-copy">
         <span>
-          {getCountryLabel(program.country)} · {program.city || 'شهر مقصد'}
-          {extras.length > 0 && <b className="catalog-selected-count">+{extras.length} گزینه دیگر</b>}
+          {countryLabel(program.country, lang)} · {program.city || t.cityFallback}
+          {extras.length > 0 && <b className="catalog-selected-count">{t.more(extras.length)}</b>}
         </span>
         <h3>{program.program}</h3>
         <p>{program.university}</p>
@@ -92,13 +170,13 @@ export function SelectedProgramCard({ selection, product, onChange }) {
       </div>
       <div className="catalog-selected-actions">
         <button type="button" onClick={onChange}>
-          {items.length > 1 ? 'ویرایش فهرست' : 'تغییر انتخاب'}
+          {items.length > 1 ? t.editList : t.changeOne}
         </button>
         <a href={buildAccaUniversityUrl(program.university)} target="_blank" rel="noreferrer">
-          اطلاعات دانشگاه <ExternalLink size={13} />
+          {t.uniInfo} <ExternalLink size={13} />
         </a>
         <a href={buildAccaProgramsUrl(program)} target="_blank" rel="noreferrer">
-          مشاهده در آکادو <BookOpen size={13} />
+          {t.viewOnAcca} <BookOpen size={13} />
         </a>
       </div>
     </motion.article>
@@ -112,6 +190,7 @@ export default function ProgramCatalogPicker({
   initialUniversity = '',
   initialSelection = [],
   saving = false,
+  lang = 'fa',
   onClose,
   onSelect,
 }) {
@@ -123,7 +202,9 @@ export default function ProgramCatalogPicker({
   const [selectedList, setSelectedList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const copy = PRODUCT_COPY[product] || PRODUCT_COPY.smart_apply;
+  const langCopy = PRODUCT_COPY[lang] || PRODUCT_COPY.fa;
+  const copy = langCopy[product] || langCopy.smart_apply;
+  const t = UI[lang] || UI.fa;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -221,7 +302,7 @@ export default function ProgramCatalogPicker({
             className="catalog-picker"
             role="dialog"
             aria-modal="true"
-            dir="rtl"
+            dir={lang === 'en' ? 'ltr' : 'rtl'}
             initial={{ opacity: 0, y: 26, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.99 }}
@@ -235,7 +316,7 @@ export default function ProgramCatalogPicker({
                 <h2>{copy.title}</h2>
                 <p>{copy.body}</p>
               </div>
-              <button type="button" onClick={onClose} aria-label="بستن"><X size={18} /></button>
+              <button type="button" onClick={onClose} aria-label={t.close}><X size={18} /></button>
             </header>
 
             <div className="catalog-picker-filters">
@@ -245,15 +326,15 @@ export default function ProgramCatalogPicker({
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="نام رشته، دانشگاه، شهر یا زبان..."
+                  placeholder={t.searchPlaceholder}
                   autoFocus
                 />
               </label>
               <div className="catalog-country-tabs">
                 {[
-                  ['all', 'همه'],
-                  ['Turkey', 'ترکیه'],
-                  ['KKTC', 'قبرس شمالی'],
+                  ['all', t.all],
+                  ['Turkey', t.turkey],
+                  ['KKTC', t.cyprus],
                 ].map(([value, label]) => (
                   <button
                     type="button"
@@ -272,25 +353,25 @@ export default function ProgramCatalogPicker({
               <select
                 value={university}
                 onChange={(event) => { setUniversity(event.target.value); setLanguage(''); }}
-                aria-label="دانشگاه مقصد"
+                aria-label={t.universityAria}
               >
-                <option value="">همه دانشگاه‌ها</option>
+                <option value="">{t.allUniversities}</option>
                 {universityOptions.map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
-              <select value={language} onChange={(event) => setLanguage(event.target.value)} aria-label="زبان تحصیل">
-                <option value="">همه زبان‌ها</option>
+              <select value={language} onChange={(event) => setLanguage(event.target.value)} aria-label={t.languageAria}>
+                <option value="">{t.allLanguages}</option>
                 {languageOptions.map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
             </div>
 
             <div className="catalog-picker-meta">
-              <span>منبع: کاتالوگ زنده آکادو</span>
-              <b>{visiblePrograms.length} گزینه قابل نمایش</b>
+              <span>{t.source}</span>
+              <b>{t.countShown(visiblePrograms.length)}</b>
             </div>
 
             <div className="catalog-program-list">
               {loading ? (
-                <div className="catalog-picker-state"><LoaderCircle className="account-spin" /> در حال دریافت کاتالوگ...</div>
+                <div className="catalog-picker-state"><LoaderCircle className="account-spin" /> {t.loading}</div>
               ) : error ? (
                 <div className="catalog-picker-state is-error">{error}</div>
               ) : visiblePrograms.length ? (
@@ -300,7 +381,7 @@ export default function ProgramCatalogPicker({
                     <article key={program.id} className={isSelected ? 'is-selected' : ''}>
                       <ProgramLogo program={program} />
                       <button type="button" className="catalog-program-main" onClick={() => toggleProgram(program)}>
-                        <span><MapPin size={12} />{getCountryLabel(program.country)} · {program.city}</span>
+                        <span><MapPin size={12} />{countryLabel(program.country, lang)} · {program.city}</span>
                         <h3>{program.program}</h3>
                         <p>{program.university}</p>
                         <div>
@@ -310,10 +391,10 @@ export default function ProgramCatalogPicker({
                         </div>
                       </button>
                       <div className="catalog-program-actions">
-                        <a href={buildAccaUniversityUrl(program.university)} target="_blank" rel="noreferrer" title="اطلاعات دانشگاه">
+                        <a href={buildAccaUniversityUrl(program.university)} target="_blank" rel="noreferrer" title={t.uniInfo}>
                           <ExternalLink size={15} />
                         </a>
-                        <button type="button" onClick={() => toggleProgram(program)} aria-label={isSelected ? 'حذف از فهرست' : 'افزودن به فهرست'}>
+                        <button type="button" onClick={() => toggleProgram(program)} aria-label={isSelected ? t.remove : t.add}>
                           {isSelected ? <Check size={16} /> : <ArrowUpLeft size={16} />}
                         </button>
                       </div>
@@ -321,31 +402,31 @@ export default function ProgramCatalogPicker({
                   );
                 })
               ) : (
-                <div className="catalog-picker-state">با این فیلتر گزینه‌ای پیدا نشد.</div>
+                <div className="catalog-picker-state">{t.empty}</div>
               )}
             </div>
 
             <footer className="catalog-picker-footer">
               <div>
-                <small>{selectedList.length ? `${selectedList.length} گزینه در فهرست` : 'انتخاب فعلی'}</small>
+                <small>{selectedList.length ? t.inList(selectedList.length) : t.current}</small>
                 {selectedList.length ? (
                   <div className="catalog-selected-chips">
                     {selectedList.map((item) => (
                       <span key={item.id} title={`${item.program} · ${item.university}`}>
                         {item.university}
-                        <button type="button" onClick={() => toggleProgram(item)} aria-label="حذف از فهرست">
+                        <button type="button" onClick={() => toggleProgram(item)} aria-label={t.remove}>
                           <X size={11} />
                         </button>
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <b>هنوز انتخاب نشده</b>
+                  <b>{t.notSelected}</b>
                 )}
               </div>
               <button type="button" disabled={!selectedList.length || saving} onClick={() => onSelect(selectedList)}>
                 {saving ? <LoaderCircle className="account-spin" size={17} /> : <Check size={17} />}
-                {saving ? 'در حال ذخیره...' : `${copy.action}${selectedList.length > 1 ? ` (${selectedList.length})` : ''}`}
+                {saving ? t.saving : `${copy.action}${selectedList.length > 1 ? ` (${selectedList.length})` : ''}`}
               </button>
             </footer>
           </motion.section>
