@@ -1,9 +1,18 @@
-import { ExternalLink, Grid2X2, LayoutDashboard, LogIn } from 'lucide-react';
+import { ExternalLink, Grid2X2, LayoutDashboard, LogIn, Moon, Sun } from 'lucide-react';
 import { LOGO_SRC, MAIN_SITE_URL } from '../../lib/constants';
 import { useAuth } from '../../auth/AuthContext';
 
-export default function GatewayHeader({ compact = false }) {
+export default function GatewayHeader({
+  compact = false,
+  lang = 'fa',
+  theme = 'light',
+  onLangChange,
+  onThemeToggle,
+  showPreferences = false,
+}) {
   const { user, openAuth } = useAuth();
+  const fa = lang !== 'en';
+  const t = (faText, enText) => (fa ? faText : enText);
 
   const openPanel = () => {
     if (user) {
@@ -33,16 +42,33 @@ export default function GatewayHeader({ compact = false }) {
             ACCA AI Services
           </span>
           <span className="mt-0.5 block truncate text-xs font-extrabold text-navy/68">
-            مسیر هوشمند تحصیل بین‌المللی
+            {t('مسیر هوشمند تحصیل بین‌المللی', 'AI-guided international education')}
           </span>
         </span>
       </a>
 
-      <nav className="flex items-center gap-2" aria-label="ناوبری اصلی">
+      <nav className="gateway-nav" aria-label={t('ناوبری اصلی', 'Primary navigation')}>
+        {showPreferences && (
+          <div className="gateway-preferences" aria-label={t('تنظیمات نمایش', 'Display settings')}>
+            <div className="gateway-lang-seg" role="group" aria-label={t('انتخاب زبان', 'Choose language')}>
+              <button type="button" className={fa ? 'is-active' : ''} onClick={() => onLangChange?.('fa')}>فا</button>
+              <button type="button" className={!fa ? 'is-active' : ''} onClick={() => onLangChange?.('en')}>EN</button>
+            </div>
+            <button
+              type="button"
+              className="gateway-icon-button"
+              onClick={onThemeToggle}
+              aria-label={theme === 'dark' ? t('حالت روشن', 'Light mode') : t('حالت تاریک', 'Dark mode')}
+              title={theme === 'dark' ? t('حالت روشن', 'Light mode') : t('حالت تاریک', 'Dark mode')}
+            >
+              {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+        )}
         {compact && (
           <a href="/" className="gateway-header-button">
             <Grid2X2 className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">همه سرویس‌ها</span>
+            <span className="hidden sm:inline">{t('همه سرویس‌ها', 'All services')}</span>
           </a>
         )}
         <a
@@ -51,7 +77,7 @@ export default function GatewayHeader({ compact = false }) {
           target="_blank"
           rel="noreferrer"
         >
-          <span className="hidden sm:inline">وب‌سایت آکا</span>
+          <span className="hidden sm:inline">{t('وب‌سایت آکا', 'ACCA website')}</span>
           <span className="sm:hidden">ACCA</span>
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
@@ -59,10 +85,10 @@ export default function GatewayHeader({ compact = false }) {
           type="button"
           onClick={openPanel}
           className="gateway-header-button is-primary"
-          aria-label={user ? 'پنل کاربری من' : 'ورود به پنل کاربری'}
+          aria-label={user ? t('پنل کاربری من', 'My account panel') : t('ورود به پنل کاربری', 'Log in to account panel')}
         >
           {user ? <LayoutDashboard className="h-3.5 w-3.5" /> : <LogIn className="h-3.5 w-3.5" />}
-          <span>{user ? 'پنل من' : 'ورود به پنل'}</span>
+          <span>{user ? t('پنل من', 'My panel') : t('ورود به پنل', 'Login')}</span>
         </button>
       </nav>
     </header>

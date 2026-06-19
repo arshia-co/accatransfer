@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -28,30 +28,44 @@ const services = [
     eyebrow: 'AI ADMISSION ASSISTANT',
     title: 'Smart Apply',
     PersianTitle: 'دستیار هوشمند پذیرش',
+    englishTitle: 'AI admission assistant',
     description:
       'از شناخت هدفتان تا انتخاب رشته، بررسی مسیر پذیرش و آماده‌سازی مدارک؛ قدم‌به‌قدم با یک دستیار مرکزی.',
+    descriptionEn:
+      'From understanding your goal to major selection, admission guidance and document preparation, one central assistant guides the journey.',
     href: '/smart-apply',
     status: 'آماده شروع',
+    statusEn: 'Ready to start',
     statusTone: 'live',
     cta: 'شروع Smart Apply',
+    ctaEn: 'Start Smart Apply',
     note: 'بدون نیاز به ثبت‌نام اولیه',
+    noteEn: 'No account required to begin',
     icon: Bot,
     benefits: ['گفت‌وگوی شخصی‌سازی‌شده', 'راهنمایی مرحله‌به‌مرحله'],
+    benefitsEn: ['Personalized conversation', 'Step-by-step guidance'],
   },
   {
     id: 'transfer',
     eyebrow: 'AI TRANSFER PATHWAY',
     title: 'AI Transfer',
     PersianTitle: 'مسیر هوشمند انتقالی',
+    englishTitle: 'Smart transfer pathway',
     description:
       'یک فضای تخصصی برای بررسی مسیر انتقال، تطبیق اولیه واحدها و شناخت گزینه‌های مناسب دانشگاهی.',
+    descriptionEn:
+      'A focused workspace for transfer eligibility, preliminary course matching and clearer university options.',
     href: '/ai-transfer',
     status: 'آماده ورود',
+    statusEn: 'Ready to enter',
     statusTone: 'preview',
     cta: 'ورود به AI Transfer',
+    ctaEn: 'Enter AI Transfer',
     note: 'ارزیابی هوشمند مسیر انتقالی',
+    noteEn: 'AI-guided transfer review',
     icon: Route,
     benefits: ['نقشه انتقال دانشگاهی', 'چک‌لیست مدارک و واحدها'],
+    benefitsEn: ['University transfer map', 'Documents and credits checklist'],
   },
 ];
 
@@ -83,8 +97,9 @@ function AmbientStage() {
   );
 }
 
-function ServiceCard({ service, index }) {
+function ServiceCard({ service, index, lang }) {
   const Icon = service.icon;
+  const fa = lang !== 'en';
 
   return (
     <motion.article
@@ -100,7 +115,7 @@ function ServiceCard({ service, index }) {
         </span>
         <span className={`gateway-status gateway-status--${service.statusTone}`}>
           <span className="gateway-status-dot" />
-          {service.status}
+          {fa ? service.status : service.statusEn}
         </span>
       </div>
 
@@ -108,15 +123,15 @@ function ServiceCard({ service, index }) {
         <p className="gateway-eyebrow">{service.eyebrow}</p>
         <h2>
           <span>{service.title}</span>
-          <small>{service.PersianTitle}</small>
+          <small>{fa ? service.PersianTitle : service.englishTitle}</small>
         </h2>
-        <p className="gateway-service-description">{service.description}</p>
+        <p className="gateway-service-description">{fa ? service.description : service.descriptionEn}</p>
       </div>
 
       <ServicePreviewArt service={service.id} />
 
       <div className="gateway-benefit-row">
-        {service.benefits.map((benefit) => (
+        {(fa ? service.benefits : service.benefitsEn).map((benefit) => (
           <span key={benefit}>
             <CircleCheck className="h-3.5 w-3.5" />
             {benefit}
@@ -126,8 +141,8 @@ function ServiceCard({ service, index }) {
 
       <a href={service.href} className="gateway-service-action">
         <span>
-          <strong>{service.cta}</strong>
-          <small>{service.note}</small>
+          <strong>{fa ? service.cta : service.ctaEn}</strong>
+          <small>{fa ? service.note : service.noteEn}</small>
         </span>
         <span className="gateway-action-arrow" aria-hidden="true">
           <ArrowLeft className="h-4.5 w-4.5" />
@@ -138,18 +153,39 @@ function ServiceCard({ service, index }) {
 }
 
 export default function ServiceGateway() {
+  const [theme, setTheme] = useState(() => {
+    if (typeof localStorage === 'undefined') return 'light';
+    return localStorage.getItem('acca-gateway-theme') === 'dark' ? 'dark' : 'light';
+  });
+  const [lang, setLang] = useState(() => {
+    if (typeof localStorage === 'undefined') return 'fa';
+    return localStorage.getItem('acca-gateway-lang') === 'en' ? 'en' : 'fa';
+  });
+  const fa = lang !== 'en';
+
   useEffect(() => {
-    document.documentElement.lang = 'fa';
-    document.documentElement.dir = 'rtl';
-    document.title = 'ACCA AI Services | مسیر هوشمند تحصیل';
-  }, []);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = fa ? 'rtl' : 'ltr';
+    document.title = fa
+      ? 'ACCA AI Services | مسیر هوشمند تحصیل'
+      : 'ACCA AI Services | Digital education experience';
+  }, [fa, lang]);
+
+  useEffect(() => { try { localStorage.setItem('acca-gateway-theme', theme); } catch { /* ignore */ } }, [theme]);
+  useEffect(() => { try { localStorage.setItem('acca-gateway-lang', lang); } catch { /* ignore */ } }, [lang]);
 
   return (
-    <div dir="rtl" className="gateway-page">
+    <div dir={fa ? 'rtl' : 'ltr'} className="gateway-page" data-theme={theme}>
       <AmbientStage />
 
       <div className="gateway-shell">
-        <GatewayHeader />
+        <GatewayHeader
+          lang={lang}
+          theme={theme}
+          showPreferences
+          onLangChange={setLang}
+          onThemeToggle={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
+        />
 
         <main className="gateway-main">
           <motion.section
@@ -163,29 +199,30 @@ export default function ServiceGateway() {
               <span>ACCA DIGITAL EXPERIENCE</span>
             </div>
             <h1>
-              یک مقصد،
-              <span> دو مسیر هوشمند</span>
+              {fa ? 'یک مقصد،' : 'One destination,'}
+              <span>{fa ? ' دو مسیر هوشمند' : ' two intelligent paths'}</span>
             </h1>
             <p>
-              سرویس مورد نیازتان را انتخاب کنید. هر مسیر، فضای کاری و راهنمای هوشمند
-              اختصاصی خودش را دارد.
+              {fa
+                ? 'سرویس مورد نیازتان را انتخاب کنید. هر مسیر، فضای کاری و راهنمای هوشمند اختصاصی خودش را دارد.'
+                : 'Choose the service you need. Each path has its own focused workspace and intelligent guidance experience.'}
             </p>
-            <div className="gateway-trust-row" aria-label="ویژگی‌های تجربه">
-              <span><ShieldCheck className="h-3.5 w-3.5" /> شروع امن و بدون ورود</span>
-              <span><GraduationCap className="h-3.5 w-3.5" /> طراحی‌شده برای دانشجویان بین‌المللی</span>
+            <div className="gateway-trust-row" aria-label={fa ? 'ویژگی‌های تجربه' : 'Experience features'}>
+              <span><ShieldCheck className="h-3.5 w-3.5" /> {fa ? 'شروع امن و بدون ورود' : 'Secure start without login'}</span>
+              <span><GraduationCap className="h-3.5 w-3.5" /> {fa ? 'طراحی‌شده برای دانشجویان بین‌المللی' : 'Designed for international students'}</span>
             </div>
           </motion.section>
 
-          <section className="gateway-services" aria-label="انتخاب سرویس آکا">
+          <section className="gateway-services" aria-label={fa ? 'انتخاب سرویس آکا' : 'Choose an ACCA service'}>
             {services.map((service, index) => (
-              <ServiceCard key={service.id} service={service} index={index} />
+              <ServiceCard key={service.id} service={service} index={index} lang={lang} />
             ))}
           </section>
         </main>
 
         <footer className="gateway-footer">
           <span>ACCA EDU · AI-guided international education</span>
-          <span>هر تصمیم مهم، با یک مسیر روشن‌تر شروع می‌شود.</span>
+          <span>{fa ? 'هر تصمیم مهم، با یک مسیر روشن‌تر شروع می‌شود.' : 'Every important decision starts with a clearer path.'}</span>
         </footer>
       </div>
     </div>

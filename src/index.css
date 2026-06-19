@@ -292,6 +292,10 @@ textarea {
 .account-seg button.is-active { color: #102f48; background: #fff; box-shadow: 0 2px 8px rgba(16,47,72,.12); }
 .account-icon-btn { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(16,47,72,.1); border-radius: 50%; color: #102f48; background: rgba(255,255,255,.7); cursor: pointer; transition: background .15s ease; }
 .account-icon-btn:hover { background: #fff; }
+.account-header-actions > a,
+.account-header-actions > button:not(.account-icon-btn) { min-height: 34px; padding: 0 10px; border: 1px solid rgba(16,47,72,.08); border-radius: 999px; background: rgba(255,255,255,.45); transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+.account-header-actions > a:hover,
+.account-header-actions > button:not(.account-icon-btn):hover { border-color: rgba(20,116,95,.22); background: rgba(255,255,255,.82); transform: translateY(-1px); }
 
 /* ── Dark theme (account header toggle) ──────────────────────────────────── */
 .account-central[data-theme="dark"] { color-scheme: dark; background: radial-gradient(150% 120% at 82% -10%, #0d2540 0%, #081627 58%, #050e1b 100%); }
@@ -306,6 +310,10 @@ textarea {
 .account-central[data-theme="dark"] .account-seg button { color: rgba(231,238,251,.55); }
 .account-central[data-theme="dark"] .account-seg button.is-active { color: #0a1f3a; background: #e7eefb; box-shadow: none; }
 .account-central[data-theme="dark"] .account-icon-btn { border-color: rgba(255,255,255,.12); color: #f0d79a; background: rgba(255,255,255,.05); }
+.account-central[data-theme="dark"] .account-header-actions > a,
+.account-central[data-theme="dark"] .account-header-actions > button:not(.account-icon-btn) { border-color: rgba(255,255,255,.1); background: rgba(255,255,255,.045); }
+.account-central[data-theme="dark"] .account-header-actions > a:hover,
+.account-central[data-theme="dark"] .account-header-actions > button:not(.account-icon-btn):hover { border-color: rgba(240,215,154,.25); background: rgba(255,255,255,.08); }
 .account-central[data-theme="dark"] h1,
 .account-central[data-theme="dark"] h2,
 .account-central[data-theme="dark"] h3,
@@ -997,6 +1005,17 @@ textarea {
 @keyframes account-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 850px) {
+  .account-header { align-items: stretch; flex-wrap: wrap; gap: 10px; padding: 10px; }
+  .account-brand { min-height: 38px; flex: 0 0 auto; padding-inline: 10px; border-radius: 999px; background: rgba(255,255,255,.45); }
+  .account-header-actions { margin-inline-start: auto; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+  .account-header-meta { order: 3; flex: 1 0 100%; justify-content: flex-start; gap: 7px; overflow-x: auto; padding-top: 9px; border-top: 1px solid rgba(16,47,72,.08); scrollbar-width: none; }
+  .account-header-meta::-webkit-scrollbar { display: none; }
+  .account-header-dot { display: none; }
+  .account-header-greeting,
+  .account-header-chip { flex: 0 0 auto; min-height: 28px; padding: 0 10px; border: 1px solid rgba(16,47,72,.07); border-radius: 999px; background: rgba(255,255,255,.42); }
+  .account-central[data-theme="dark"] .account-brand,
+  .account-central[data-theme="dark"] .account-header-greeting,
+  .account-central[data-theme="dark"] .account-header-chip { border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.05); }
   .account-shell { padding-top: 38px; }
   .account-hero { align-items: stretch; flex-direction: column; }
   .account-identity { min-width: 0; }
@@ -1029,9 +1048,15 @@ textarea {
 @media (max-width: 560px) {
   .acca-auth-card { padding: 28px 20px 22px; border-radius: 24px; }
   .acca-auth-switch button, .acca-auth-methods button { font-size: 11px; }
-  .account-header { width: calc(100% - 20px); margin-top: 10px; }
-  .account-brand { font-size: 10px; }
-  .account-header-actions { gap: 8px; }
+  .account-header { width: calc(100% - 20px); margin-top: 10px; border-radius: 22px; }
+  .account-brand { width: 100%; justify-content: center; font-size: 10px; }
+  .account-header-actions { display: grid; width: 100%; grid-template-columns: minmax(110px, 1fr) 42px minmax(70px, 1fr) minmax(72px, 1fr); gap: 7px; margin-inline-start: 0; }
+  .account-header-actions > a,
+  .account-header-actions > button:not(.account-icon-btn),
+  .account-icon-btn { min-height: 40px; width: 100%; justify-content: center; }
+  .account-seg { width: 100%; justify-content: center; }
+  .account-seg button { flex: 1; min-height: 32px; }
+  .account-header-meta { padding-top: 8px; font-size: 10px; }
   .account-shell { width: calc(100% - 22px); }
   .account-hero h1 { font-size: 47px; }
   .account-profile-editor { padding: 15px; border-radius: 22px; }
@@ -1093,6 +1118,12 @@ textarea {
   .catalog-selected-chips { max-height: 46px; }
 }
 
+@media (max-width: 390px) {
+  .account-header-actions { grid-template-columns: minmax(0, 1fr) 42px; }
+  .account-header-actions > a,
+  .account-header-actions > button:not(.account-icon-btn) { grid-column: span 1; }
+}
+
 /* ---- ACCA AI services gateway ---- */
 .gateway-page {
   position: relative;
@@ -1103,6 +1134,14 @@ textarea {
     linear-gradient(180deg, rgba(255, 255, 255, 0.7), transparent 32%),
     #f7f1e8;
   isolation: isolate;
+}
+.gateway-page[data-theme="dark"] {
+  color-scheme: dark;
+  color: #eef5ff;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(198, 167, 104, 0.18), transparent 34%),
+    radial-gradient(circle at 84% 18%, rgba(20, 128, 106, 0.16), transparent 34%),
+    linear-gradient(145deg, #071426 0%, #0b1f36 54%, #050b16 100%);
 }
 
 .gateway-shell {
@@ -1132,6 +1171,13 @@ textarea {
   -webkit-backdrop-filter: blur(22px);
   backdrop-filter: blur(22px);
 }
+.gateway-page[data-theme="dark"] .gateway-header {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(9, 22, 39, 0.62);
+  box-shadow:
+    0 18px 58px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
 
 .gateway-brand {
   display: flex;
@@ -1139,6 +1185,95 @@ textarea {
   align-items: center;
   gap: 13px;
   text-decoration: none;
+}
+.gateway-nav {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.gateway-preferences {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid rgba(7, 26, 61, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.54);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+.gateway-lang-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.gateway-lang-seg button,
+.gateway-icon-button {
+  display: inline-flex;
+  min-width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(7, 26, 61, 0.58);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 950;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+.gateway-lang-seg button.is-active,
+.gateway-icon-button:hover {
+  color: #071a3d;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(7, 26, 61, 0.08);
+}
+.gateway-lang-seg button:hover,
+.gateway-icon-button:hover { transform: translateY(-1px); }
+.gateway-page[data-theme="dark"] .gateway-brand span span:last-child { color: rgba(238, 245, 255, 0.64); }
+.gateway-page[data-theme="dark"] .gateway-brand-divider { background: linear-gradient(transparent, rgba(255, 255, 255, 0.2), transparent); }
+.gateway-page[data-theme="dark"] .gateway-preferences,
+.gateway-page[data-theme="dark"] .gateway-header-button {
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(238, 245, 255, 0.72);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+.gateway-page[data-theme="dark"] .gateway-lang-seg button,
+.gateway-page[data-theme="dark"] .gateway-icon-button { color: rgba(238, 245, 255, 0.62); }
+.gateway-page[data-theme="dark"] .gateway-lang-seg button.is-active,
+.gateway-page[data-theme="dark"] .gateway-icon-button:hover {
+  color: #071426;
+  background: #eef5ff;
+}
+.gateway-page[data-theme="dark"] .gateway-header-button:hover {
+  color: #fff;
+  border-color: rgba(198, 167, 104, 0.42);
+  background: rgba(255, 255, 255, 0.1);
+}
+.gateway-page[data-theme="dark"] .gateway-hero h1,
+.gateway-page[data-theme="dark"] .gateway-service-copy h2,
+.gateway-page[data-theme="dark"] .gateway-footer { color: #eef5ff; }
+.gateway-page[data-theme="dark"] .gateway-hero > p,
+.gateway-page[data-theme="dark"] .gateway-service-description,
+.gateway-page[data-theme="dark"] .gateway-service-action small,
+.gateway-page[data-theme="dark"] .gateway-footer span:last-child { color: rgba(238, 245, 255, 0.6); }
+.gateway-page[data-theme="dark"] .gateway-service-copy h2 small,
+.gateway-page[data-theme="dark"] .gateway-eyebrow { color: rgba(240, 215, 154, 0.78); }
+.gateway-page[data-theme="dark"] .gateway-status { color: rgba(238, 245, 255, 0.78); }
+.gateway-page[data-theme="dark"] .gateway-service-card {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035));
+  box-shadow: 0 24px 76px rgba(0, 0, 0, 0.32);
+}
+.gateway-page[data-theme="dark"] .gateway-trust-row span,
+.gateway-page[data-theme="dark"] .gateway-benefit-row span {
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(238, 245, 255, 0.72);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .gateway-brand-divider {
@@ -2095,6 +2230,21 @@ textarea {
     border-radius: 20px;
   }
 
+  .gateway-nav {
+    gap: 6px;
+  }
+
+  .gateway-preferences {
+    min-height: 39px;
+    padding: 3px;
+  }
+
+  .gateway-lang-seg button,
+  .gateway-icon-button {
+    min-width: 30px;
+    height: 30px;
+  }
+
   .gateway-brand {
     gap: 9px;
   }
@@ -2272,16 +2422,63 @@ textarea {
   }
 
   .gateway-header {
+    flex-wrap: wrap;
     gap: 8px;
   }
 
   .gateway-header nav {
+    width: 100%;
     gap: 6px;
+    justify-content: space-between;
   }
 
   .gateway-header-button {
     width: 39px;
+    flex: 0 0 39px;
     padding-inline: 0;
+  }
+
+  .gateway-header-button.is-primary span {
+    display: none;
+  }
+
+  .gateway-preferences {
+    flex: 1 1 auto;
+    justify-content: space-between;
+  }
+
+  .gateway-lang-seg {
+    flex: 1;
+    justify-content: stretch;
+  }
+
+  .gateway-lang-seg button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 380px) {
+  .gateway-shell,
+  .transfer-shell {
+    padding-inline: 8px;
+  }
+
+  .gateway-brand img {
+    max-width: 82px;
+    height: 34px;
+  }
+
+  .gateway-header {
+    border-radius: 18px;
+  }
+
+  .gateway-header nav {
+    gap: 5px;
+  }
+
+  .gateway-header-button {
+    width: 38px;
+    flex-basis: 38px;
   }
 }
 
