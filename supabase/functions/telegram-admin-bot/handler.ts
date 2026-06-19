@@ -202,6 +202,14 @@ function hasPermission(admin: Admin, permission: string) {
   return admin.permissions.includes("*") || admin.permissions.includes(permission);
 }
 
+function canViewLetters(admin: Admin) {
+  return hasPermission(admin, "manage_letters") || hasPermission(admin, "view_applications");
+}
+
+function canViewNotifications(admin: Admin) {
+  return hasPermission(admin, "send_notifications") || hasPermission(admin, "view_users");
+}
+
 function keyboard(rows: Json[][]) {
   return { inline_keyboard: rows };
 }
@@ -444,14 +452,14 @@ function mainMenu(admin: Admin) {
   if (hasPermission(admin, "view_users")) rows.push([button("👥 مدیریت کاربران", "users:0")]);
   if (hasPermission(admin, "view_applications")) rows.push([button("📝 مدیریت درخواست‌ها", "apps:0")]);
   if (hasPermission(admin, "view_documents")) rows.push([button("📂 مدیریت مدارک", "docs:0")]);
-  rows.push([
-    button("📄 نامه‌ها و پذیرش‌ها", "letters"),
-    button("📧 ارسال ایمیل", "email"),
-  ]);
-  rows.push([
-    button("🔔 اعلان‌های پنل", "notifications"),
-    button("📊 آمار", "stats"),
-  ]);
+  const opsRow: Json[] = [];
+  if (canViewLetters(admin)) opsRow.push(button("📄 نامه‌ها و پذیرش‌ها", "letters"));
+  if (hasPermission(admin, "send_notifications")) opsRow.push(button("📧 ارسال ایمیل", "email"));
+  if (opsRow.length) rows.push(opsRow);
+  const insightRow: Json[] = [];
+  if (canViewNotifications(admin)) insightRow.push(button("🔔 اعلان‌های پنل", "notifications"));
+  if (hasPermission(admin, "view_stats")) insightRow.push(button("📊 آمار", "stats"));
+  if (insightRow.length) rows.push(insightRow);
   if (hasPermission(admin, "view_logs")) rows.push([button("🕘 لاگ‌ها", "logs:0")]);
   rows.push([button("🔍 جستجوی سریع", "search"), button("⚙️ تنظیمات", "settings")]);
   return keyboard(rows);
@@ -524,16 +532,36 @@ async function renderUsers(update: TelegramUpdate, admin: Admin, page: number) {
 
 async function renderUserDetail(update: TelegramUpdate, admin: Admin, userId: string) {
   if (!hasPermission(admin, "view_users")) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
-  const [{ data: authUser }, profileResult, docsResult, submissionsResult, selectionsResult] = await Promise.all([
+  const [
+    { data: authUser },
+    profileResult,
+    docsResult,
+    submissionsResult,
+    selectionsResult,
+    smartApplyResult,
+    deepProfileResult,
+    transferResult,
+    notificationsResult,
+    lettersResult,
+  ] = await Promise.all([
     supabase.auth.admin.getUserById(userId),
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
     supabase.from("student_documents").select("id", { count: "exact", head: true }).eq("user_id", userId),
     supabase.from("application_submissions").select("*").eq("user_id", userId).order("submitted_at", { ascending: false }).limit(5),
     supabase.from("student_program_selections").select("*").eq("user_id", userId),
+    supabase.from("smart_apply_sessions").select("id,goal,status,profile_snapshot,result,transcript,updated_at").eq("user_id", userId).order("updated_at", { ascending: false }).limit(2),
+    supabase.from("smart_apply_deep_profiles").select("status,answers,result,completed_at,updated_at").eq("user_id", userId).maybeSingle(),
+    supabase.from("transfer_assessments").select("status,current_university,current_program,target_university,target_program,ai_result,updated_at").eq("user_id", userId).order("updated_at", { ascending: false }).limit(2),
+    supabase.from("user_notifications").select("id,title,notification_type,priority,read_at,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(3),
+    supabase.from("user_letters").select("id,title,letter_type,email_status,panel_status,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(3),
   ]);
   const profile = profileResult.data as Json | null;
   const user = authUser.user;
   const latestSubmission = submissionsResult.data?.[0] as Json | undefined;
+  const smartSessions = smartApplyResult.data ?? [];
+  const transferAssessments = transferResult.data ?? [];
+  const notifications = notificationsResult.data ?? [];
+  const letters = lettersResult.data ?? [];
   const lines = [
     "<b>پرونده کاربر</b>",
     "",
@@ -547,14 +575,26 @@ async function renderUserDetail(update: TelegramUpdate, admin: Admin, userId: st
     `درخواست‌ها: <b>${submissionsResult.data?.length ?? 0}</b>`,
     `آخرین وضعیت: <code>${escapeHtml(latestSubmission?.admin_status || latestSubmission?.status || "—")}</code>`,
     "",
-    "انتخاب‌های برنامه:",
-    ...(selectionsResult.data?.length
-      ? selectionsResult.data.map((item: Json) => `• ${escapeHtml(item.product)} | ${escapeHtml(item.university_name)} / ${escapeHtml(item.program_name)}`)
-      : ["—"]),
+    ...smartApplyInsightLines(smartSessions, deepProfileResult.data as Json | null),
+    "",
+    ...transferInsightLines(transferAssessments),
+    "",
+    ...selectionLines(selectionsResult.data ?? []),
+    "",
+    ...recentActivityLines({
+      docsCount: docsResult.count ?? 0,
+      submissions: submissionsResult.data ?? [],
+      notifications,
+      letters,
+    }),
   ];
   const rows: Json[][] = [];
   rows.push([button("درخواست‌های کاربر", await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "user_applications", { user_id: userId }))]);
   rows.push([button("مدارک کاربر", await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "user_documents", { user_id: userId }))]);
+  rows.push([
+    button("نامه‌ها/پذیرش‌های کاربر", await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "user_letters", { user_id: userId })),
+    button("اعلان‌های کاربر", await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "user_notifications", { user_id: userId })),
+  ]);
   rows.push([button("ارسال اعلان پنل", await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "notify_user_prepare", { user_id: userId }))]);
   rows.push([button("بازگشت", "users:0"), button("منوی اصلی", "menu")]);
   await audit(admin, "user_viewed", { target_entity_type: "user", target_entity_id: userId, affected_user_id: userId });
@@ -662,6 +702,209 @@ function statusLabel(status: string) {
 
 function productLabel(product?: string | null) {
   return product === "ai_transfer" ? "AI Transfer" : "Smart Apply";
+}
+
+const ACADEMIC_AREA_LABELS: Record<string, string> = {
+  Health: "سلامت و درمان",
+  Business: "کسب‌وکار و مدیریت",
+  Tech: "فناوری و مهندسی",
+  Creative: "هنر و خلاقیت",
+  Research: "علم و پژوهش",
+  People: "انسان و جامعه",
+  Stability: "ثبات و ساختار",
+  Leadership: "رهبری و تصمیم‌گیری",
+  Communication: "ارتباطات",
+  Precision: "دقت و جزئیات",
+  GlobalMobility: "مسیر بین‌المللی",
+};
+
+const ARCHETYPE_LABELS: Record<string, string> = {
+  health_care: "کاوشگر سلامت و مراقبت",
+  research_science: "تحلیلگر پژوهش و علم",
+  business_strategy: "سازنده کسب‌وکار و استراتژی",
+  creative_design: "طراح خلاق",
+  tech_problem_solver: "حل‌کننده مسئله فناورانه",
+  people_community: "انسان‌محور و اجتماعی",
+  structured_operator: "سازمان‌دهنده ساختاریافته",
+  global_bridge: "پل‌ساز مسیر بین‌المللی",
+  precision_specialist: "متخصص دقت و جزئیات",
+  human_insight: "کاوشگر شناخت و رفتار انسانی",
+};
+
+const MAJOR_LABELS: Record<string, string> = {
+  medicine: "پزشکی",
+  dentistry: "دندانپزشکی",
+  physiotherapy: "فیزیوتراپی",
+  psychology: "روانشناسی",
+  nutrition: "تغذیه",
+  nursing: "پرستاری",
+  biomedical: "مهندسی پزشکی",
+  cs_ai: "کامپیوتر و هوش مصنوعی",
+  data_science: "دیتا ساینس",
+  business: "مدیریت کسب‌وکار",
+  marketing: "مارکتینگ",
+  ir: "روابط بین‌الملل",
+  law: "حقوق",
+  architecture: "معماری",
+  interior: "طراحی داخلی",
+  molecular: "زیست مولکولی و ژنتیک",
+  health_mgmt: "مدیریت سلامت",
+};
+
+const RIASEC_LABELS: Record<string, string> = {
+  R: "عملی/فنی",
+  I: "تحلیلی/پژوهشی",
+  A: "خلاق/هنری",
+  S: "اجتماعی/کمک‌محور",
+  E: "رهبری/تجاری",
+  C: "ساختارمند/دقیق",
+};
+
+const TRANSFER_STATUS_LABELS: Record<string, string> = {
+  draft: "پیش‌نویس",
+  documents_ready: "مدارک آماده",
+  analyzing: "در حال تحلیل",
+  preliminary_result: "نتیجه اولیه",
+  human_review: "بررسی انسانی",
+  archived: "آرشیو",
+};
+
+const LETTER_TYPE_LABELS: Record<string, string> = {
+  conditional_acceptance: "پذیرش مشروط",
+  final_acceptance: "پذیرش نهایی",
+  document_request: "درخواست تکمیل مدرک",
+  rejection_notice: "اعلام نتیجه منفی",
+  application_status_update: "به‌روزرسانی پرونده",
+};
+
+const PRIORITY_LABELS: Record<string, string> = {
+  low: "کم",
+  normal: "معمولی",
+  high: "مهم",
+  urgent: "فوری",
+};
+
+function labelFrom(map: Record<string, string>, value?: unknown) {
+  const key = String(value ?? "").trim();
+  return key ? (map[key] ?? key) : "—";
+}
+
+function compactText(value: unknown, fallback = "—", max = 120) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return fallback;
+  return truncate(text, max);
+}
+
+function labelList(values: unknown, map: Record<string, string> = {}, limit = 3) {
+  const list = Array.isArray(values) ? values : [];
+  const labels = list
+    .map((item) => typeof item === "string" ? item : item?.key ?? item?.majorId ?? item?.id)
+    .filter(Boolean)
+    .slice(0, limit)
+    .map((item) => labelFrom(map, item));
+  return labels.length ? labels.join("، ") : "—";
+}
+
+function recommendedMajorList(result?: Json | null, limit = 4) {
+  const majors = Array.isArray(result?.recommendedMajors) ? result!.recommendedMajors : [];
+  return majors.slice(0, limit).map((item: Json) => {
+    const label = labelFrom(MAJOR_LABELS, item.majorId);
+    return item.match ? `${label} (${item.match}٪)` : label;
+  }).join("، ") || "—";
+}
+
+function smartApplyInsightLines(sessions: Json[], deepProfile?: Json | null) {
+  const latest = sessions?.[0] ?? null;
+  const result = deepProfile?.result ?? latest?.result ?? null;
+  const answersCount = Array.isArray(deepProfile?.answers) ? deepProfile!.answers.length : 0;
+  const transcriptCount = Array.isArray(latest?.transcript) ? latest.transcript.length : 0;
+  if (!latest && !deepProfile) {
+    return [
+      "<b>🧠 Smart Apply / پروفایل آموزشی</b>",
+      "هنوز گفت‌وگو یا تست عمیق ذخیره‌شده‌ای برای این کاربر نداریم.",
+    ];
+  }
+  return [
+    "<b>🧠 Smart Apply / پروفایل آموزشی</b>",
+    `هدف/نیاز: ${escapeHtml(compactText(latest?.goal || latest?.profile_snapshot?.goal || "—", "—", 90))}`,
+    `وضعیت جلسه: <code>${escapeHtml(latest?.status || deepProfile?.status || "—")}</code>`,
+    `تست عمیق: ${deepProfile?.status === "completed" ? "تکمیل شده" : deepProfile ? "در حال تکمیل" : "ثبت نشده"}${answersCount ? ` · ${answersCount} پاسخ` : ""}`,
+    `الگوی ترجیحی غیرتشخیصی: <b>${escapeHtml(result?.mbtiLike?.type || "—")}</b>${result?.mbtiLike?.secondaryType ? ` / ${escapeHtml(result.mbtiLike.secondaryType)}` : ""}`,
+    `ACCA Academic Archetype: <b>${escapeHtml(labelFrom(ARCHETYPE_LABELS, result?.accaArchetype?.primary))}</b>`,
+    `حوزه‌های علاقه: ${escapeHtml(labelList(result?.accaTop || result?.interests, ACADEMIC_AREA_LABELS, 4))}`,
+    `RIASEC snapshot: ${escapeHtml(labelList(result?.riasec?.top, RIASEC_LABELS, 3))}${result?.riasec?.code ? ` · <code>${escapeHtml(result.riasec.code)}</code>` : ""}`,
+    `رشته‌های پیشنهادی: ${escapeHtml(recommendedMajorList(result, 4))}`,
+    `آخرین گفت‌وگوی ذخیره‌شده: ${transcriptCount ? `${transcriptCount} پیام` : "—"}${latest?.updated_at ? ` · ${fmtDate(latest.updated_at)}` : ""}`,
+  ];
+}
+
+function transferInsightLines(transfers: Json[]) {
+  const latest = transfers?.[0] ?? null;
+  if (!latest) {
+    return [
+      "<b>🔁 AI Transfer / مسیر انتقالی</b>",
+      "هنوز ارزیابی انتقالی ذخیره نشده است.",
+    ];
+  }
+  const result = latest.ai_result ?? {};
+  const academic = result.academic_profile ?? result.academicProfile ?? {};
+  const transfer = result.transfer_analysis ?? result.transferAnalysis ?? {};
+  const score = transfer.estimated_transfer_match
+    ?? result.estimated_transfer_match
+    ?? result.estimatedTransferMatch
+    ?? transfer.transfer_score
+    ?? null;
+  const recognized = transfer.likely_recognized_courses
+    ?? result.likely_recognized_courses
+    ?? result.likelyRecognizedCourses
+    ?? "—";
+  const missing = result.missing_documents_count
+    ?? result.missingDocumentsCount
+    ?? transfer.missing_documents_count
+    ?? (Array.isArray(result.missing_documents) ? result.missing_documents.length : null);
+  return [
+    "<b>🔁 AI Transfer / مسیر انتقالی</b>",
+    `وضعیت: <code>${escapeHtml(labelFrom(TRANSFER_STATUS_LABELS, latest.status))}</code>`,
+    `از: ${escapeHtml(compactText(latest.current_university, "—", 70))} / ${escapeHtml(compactText(latest.current_program, "—", 70))}`,
+    `به: ${escapeHtml(compactText(latest.target_university, "—", 70))} / ${escapeHtml(compactText(latest.target_program, "—", 70))}`,
+    `معدل/واحد: ${escapeHtml(compactText(academic.gpa, "—", 40))}${academic.gpa_scale ? ` از ${escapeHtml(compactText(academic.gpa_scale, "—", 20))}` : ""}${academic.completed_credits ? ` · ${escapeHtml(compactText(academic.completed_credits, "—", 20))} واحد` : ""}`,
+    `نتیجه اولیه: ${score != null ? `${escapeHtml(score)}٪` : "—"} · دروس محتمل: ${escapeHtml(compactText(recognized, "—", 40))}`,
+    `مدارک ناقص/نیازمند پیگیری: ${missing ?? "—"}`,
+    `آخرین بروزرسانی: ${fmtDate(latest.updated_at)}`,
+  ];
+}
+
+function selectionLines(selections: Json[]) {
+  if (!selections?.length) return ["انتخاب‌های برنامه:", "—"];
+  return [
+    "انتخاب‌های برنامه:",
+    ...selections.map((item: Json) =>
+      `• ${escapeHtml(productLabel(item.product))}: ${escapeHtml(item.university_name || "—")} / ${escapeHtml(item.program_name || "—")}`,
+    ),
+  ];
+}
+
+function recentActivityLines({
+  docsCount,
+  submissions,
+  notifications,
+  letters,
+}: {
+  docsCount: number;
+  submissions: Json[];
+  notifications: Json[];
+  letters: Json[];
+}) {
+  const latestSubmission = submissions?.[0];
+  const latestNotification = notifications?.[0];
+  const latestLetter = letters?.[0];
+  return [
+    "<b>📌 اکشن‌ها و وضعیت عملیاتی</b>",
+    `مدارک: <b>${docsCount}</b>`,
+    `درخواست‌ها: <b>${submissions?.length ?? 0}</b>${latestSubmission ? ` · آخرین: <code>${escapeHtml(latestSubmission.admin_status || latestSubmission.status || "—")}</code>` : ""}`,
+    `آخرین نامه/پذیرش: ${latestLetter ? `${escapeHtml(compactText(latestLetter.title, "—", 80))} · <code>${escapeHtml(latestLetter.email_status || "—")}</code>` : "—"}`,
+    `آخرین اعلان پنل: ${latestNotification ? `${escapeHtml(compactText(latestNotification.title, "—", 80))} · ${fmtDate(latestNotification.created_at)}` : "—"}`,
+  ];
 }
 
 function appContext(app: Json) {
@@ -1364,6 +1607,87 @@ async function applyDocumentReview(update: TelegramUpdate, admin: Admin, documen
   ]));
 }
 
+async function renderLetters(update: TelegramUpdate, admin: Admin, page: number, userId?: string) {
+  if (!canViewLetters(admin)) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
+  const safePage = Math.max(0, page);
+  const from = safePage * PAGE_SIZE;
+  let query = supabase
+    .from("user_letters")
+    .select("id,user_id,application_id,title,letter_type,email_status,panel_status,original_name,created_at")
+    .order("created_at", { ascending: false })
+    .range(from, from + PAGE_SIZE - 1);
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query;
+  if (error) throw error;
+  const chatId = update.callback_query?.message?.chat.id ?? update.message!.chat.id;
+  const rows: Json[][] = [];
+  const lines = [
+    "<b>📄 نامه‌ها و پذیرش‌ها</b>",
+    userId ? "آخرین نامه‌های همین کاربر" : `صفحه ${safePage + 1}`,
+    "",
+  ];
+  for (const letter of data ?? []) {
+    lines.push(`• <b>${escapeHtml(compactText(letter.title, "—", 70))}</b>`);
+    lines.push(`  ${escapeHtml(labelFrom(LETTER_TYPE_LABELS, letter.letter_type))} | پنل: <code>${escapeHtml(letter.panel_status || "—")}</code> | ایمیل: <code>${escapeHtml(letter.email_status || "—")}</code>`);
+    lines.push(`  ${fmtDate(letter.created_at)}${letter.original_name ? ` | ${escapeHtml(compactText(letter.original_name, "", 45))}` : ""}`);
+    const actionRow: Json[] = [];
+    actionRow.push(button("کاربر", await createRef(admin, chatId, "user_detail", { user_id: letter.user_id })));
+    if (letter.application_id) {
+      actionRow.push(button("درخواست", await createRef(admin, chatId, "app_detail", { application_id: letter.application_id })));
+    }
+    rows.push(actionRow);
+  }
+  if (!data?.length) lines.push("نامه یا پذیرش ثبت‌شده‌ای پیدا نشد.");
+  if (userId) {
+    rows.push([button("بازگشت به کاربر", await createRef(admin, chatId, "user_detail", { user_id: userId })), button("منوی اصلی", "menu")]);
+  } else {
+    rows.push(...pageButtons("letters", safePage));
+  }
+  await audit(admin, "letters_listed", { metadata: { page: safePage, user_id: userId ?? null } });
+  return render(update, lines.join("\n"), keyboard(rows));
+}
+
+async function renderNotifications(update: TelegramUpdate, admin: Admin, page: number, userId?: string) {
+  if (!canViewNotifications(admin)) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
+  const safePage = Math.max(0, page);
+  const from = safePage * PAGE_SIZE;
+  let query = supabase
+    .from("user_notifications")
+    .select("id,user_id,application_id,title,message,notification_type,priority,delivery_status,read_at,created_at")
+    .order("created_at", { ascending: false })
+    .range(from, from + PAGE_SIZE - 1);
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query;
+  if (error) throw error;
+  const chatId = update.callback_query?.message?.chat.id ?? update.message!.chat.id;
+  const rows: Json[][] = [];
+  const lines = [
+    "<b>🔔 اعلان‌های پنل</b>",
+    userId ? "آخرین اعلان‌های همین کاربر" : `صفحه ${safePage + 1}`,
+    "",
+  ];
+  for (const note of data ?? []) {
+    lines.push(`• <b>${escapeHtml(compactText(note.title, "—", 70))}</b>`);
+    lines.push(`  نوع: <code>${escapeHtml(note.notification_type || "—")}</code> | اهمیت: ${escapeHtml(labelFrom(PRIORITY_LABELS, note.priority))} | ${note.read_at ? "خوانده‌شده" : "خوانده‌نشده"}`);
+    lines.push(`  ${escapeHtml(compactText(note.message, "—", 115))}`);
+    lines.push(`  ${fmtDate(note.created_at)} | ارسال: <code>${escapeHtml(note.delivery_status || "—")}</code>`);
+    const actionRow: Json[] = [];
+    actionRow.push(button("کاربر", await createRef(admin, chatId, "user_detail", { user_id: note.user_id })));
+    if (note.application_id) {
+      actionRow.push(button("درخواست", await createRef(admin, chatId, "app_detail", { application_id: note.application_id })));
+    }
+    rows.push(actionRow);
+  }
+  if (!data?.length) lines.push("اعلانی پیدا نشد.");
+  if (userId) {
+    rows.push([button("بازگشت به کاربر", await createRef(admin, chatId, "user_detail", { user_id: userId })), button("منوی اصلی", "menu")]);
+  } else {
+    rows.push(...pageButtons("notifications", safePage));
+  }
+  await audit(admin, "notifications_listed", { metadata: { page: safePage, user_id: userId ?? null } });
+  return render(update, lines.join("\n"), keyboard(rows));
+}
+
 async function renderStats(update: TelegramUpdate, admin: Admin) {
   if (!hasPermission(admin, "view_stats")) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
   const sinceToday = new Date();
@@ -1910,6 +2234,10 @@ async function handleRef(update: TelegramUpdate, admin: Admin, token: string) {
       return renderApplications(update, admin, 0, payload.user_id);
     case "user_documents":
       return renderDocuments(update, admin, 0, payload.user_id);
+    case "user_letters":
+      return renderLetters(update, admin, Number(payload.page ?? 0), payload.user_id);
+    case "user_notifications":
+      return renderNotifications(update, admin, Number(payload.page ?? 0), payload.user_id);
     case "app_detail":
       return renderApplicationDetail(update, admin, payload.application_id);
     case "app_status_menu":
@@ -2032,6 +2360,8 @@ async function handleCallback(update: TelegramUpdate, admin: Admin) {
   if (data.startsWith("users:")) return renderUsers(update, admin, Number(data.split(":")[1] || 0));
   if (data.startsWith("apps:")) return renderApplications(update, admin, Number(data.split(":")[1] || 0));
   if (data.startsWith("docs:")) return renderDocuments(update, admin, Number(data.split(":")[1] || 0));
+  if (data.startsWith("letters:")) return renderLetters(update, admin, Number(data.split(":")[1] || 0));
+  if (data.startsWith("notifications:")) return renderNotifications(update, admin, Number(data.split(":")[1] || 0));
   if (data.startsWith("logs:")) return renderLogs(update, admin, Number(data.split(":")[1] || 0));
   if (data === "stats") return renderStats(update, admin);
   if (data === "search") return renderSearchPrompt(update, admin);
@@ -2044,8 +2374,8 @@ async function handleCallback(update: TelegramUpdate, admin: Admin) {
   if (data === "email_audience_all") return renderEmailSubjectPrompt(update, admin, "all");
   if (data === "email_audience_smart_apply") return renderEmailSubjectPrompt(update, admin, "smart_apply");
   if (data === "email_audience_ai_transfer") return renderEmailSubjectPrompt(update, admin, "ai_transfer");
-  if (data === "letters") return renderComingSoon(update, "📄 نامه‌ها و پذیرش‌ها");
-  if (data === "notifications") return renderComingSoon(update, "🔔 اعلان‌های پنل");
+  if (data === "letters") return renderLetters(update, admin, 0);
+  if (data === "notifications") return renderNotifications(update, admin, 0);
   if (data.startsWith("r:")) return handleRef(update, admin, data.slice(2));
   return render(update, "دستور نامعتبر است.", keyboard([[button("منوی اصلی", "menu")]]));
 }
