@@ -9,6 +9,7 @@ import { WHATSAPP_URL } from '../lib/constants';
 import { L } from '../lib/lang';
 import { UI } from '../i18n/ui';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { getTurnstileToken } from '../lib/turnstile';
 import {
   loadSmartApplyDeepProfile,
   saveSmartApplyDeepProfile,
@@ -392,9 +393,13 @@ export const useSmartApplyStore = create((set, get) => {
       if (!clean || !supabase) return;
       set({ authBusy: true, authError: null, authEmail: clean });
       try {
+        const captchaToken = await getTurnstileToken('smart_apply_login');
         const { error } = await supabase.auth.signInWithOtp({
           email: clean,
-          options: { shouldCreateUser: true },
+          options: {
+            shouldCreateUser: true,
+            ...(captchaToken ? { captchaToken } : {}),
+          },
         });
         if (error) set({ authBusy: false, authError: error.message || true });
         else set({ authBusy: false, authStage: 'code_sent' });

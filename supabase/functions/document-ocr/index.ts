@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifyTurnstile } from "../_shared/security.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_OCR_MODEL")
@@ -436,11 +437,17 @@ Deno.serve(async (req) => {
     if (authError || !authData.user) return json(req, { error: "Invalid session" }, 401);
   }
 
-  let payload: { documentId?: string; force?: boolean };
+  let payload: { documentId?: string; force?: boolean; turnstileToken?: string };
   try {
     payload = await req.json();
   } catch {
     return json(req, { error: "Invalid JSON body" }, 400);
+  }
+  if (!isServiceRole) {
+    const security = await verifyTurnstile(req, payload.turnstileToken, "document_ocr");
+    if (!security.ok) {
+      return json(req, { error: security.message || "Security check failed." }, security.status || 403);
+    }
   }
   if (!payload.documentId) return json(req, { error: "Document is required" }, 400);
 

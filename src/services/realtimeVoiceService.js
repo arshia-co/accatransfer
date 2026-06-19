@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import { getTurnstileToken } from '../lib/turnstile';
 
 const permissionErrors = new Set(['NotAllowedError', 'PermissionDeniedError', 'SecurityError']);
 
@@ -37,6 +38,13 @@ export async function startRealtimeVoiceSession({
   onConnectionChange,
 }) {
   if (!supportsRealtimeVoice()) throw voiceError('unsupported');
+
+  let turnstileToken = null;
+  try {
+    turnstileToken = await getTurnstileToken('smart_apply_voice');
+  } catch (error) {
+    throw voiceError('security_check_failed', error);
+  }
 
   let microphone;
   try {
@@ -121,6 +129,7 @@ export async function startRealtimeVoiceSession({
         language,
         sessionId,
         context,
+        turnstileToken,
       },
     });
     if (error || !data?.sdp) throw voiceError('session_failed', error);

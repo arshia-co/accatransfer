@@ -1,10 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { verifyTurnstile } from "../_shared/security.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
 const allowedOrigins = new Set([
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
   "http://localhost:5173",
+  "http://localhost:5174",
   "https://accatransfer.com",
   "https://www.accatransfer.com",
   ...(Deno.env.get("APP_ORIGINS") ?? "").split(",").map((value) => value.trim()).filter(Boolean),
@@ -39,6 +42,7 @@ type Payload = {
   currentStep?: string;
   mode?: "guided_selection" | "scoped_faq";
   studentMessage?: string;
+  turnstileToken?: string;
 };
 
 function corsHeaders(req: Request) {
@@ -340,6 +344,11 @@ Deno.serve(async (req) => {
     payload = await req.json();
   } catch {
     return json(req, { error: "Invalid JSON body" }, 400);
+  }
+
+  const security = await verifyTurnstile(req, payload.turnstileToken, "smart_apply_chat");
+  if (!security.ok) {
+    return json(req, { error: security.message || "Security check failed." }, security.status || 403);
   }
 
   const studentMessage = String(payload.studentMessage || "").trim().slice(0, 2000);

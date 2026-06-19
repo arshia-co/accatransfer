@@ -77,3 +77,20 @@ DNS can take up to a few hours to propagate.
 - Model defaults to `gpt-4o-mini` (cheap). Replies capped at 600 tokens, last 12
   messages only. Set a **monthly usage limit** in the OpenAI billing dashboard.
 - Only open chat/FAQ calls the model; the structured quiz does not.
+
+## Cloudflare security
+- Create a Cloudflare Turnstile widget for `accatransfer.com`.
+- Add the public site key as `VITE_TURNSTILE_SITE_KEY` in the GitHub Pages
+  environment variables or the Vercel project env.
+- Add the secret as a Supabase Edge Function secret:
+  `supabase secrets set TURNSTILE_SECRET_KEY=<secret>`.
+- Enable CAPTCHA in Supabase Auth with the same Turnstile secret so
+  login/signup/password reset also validate the token server-side.
+- Deploy these functions after setting the secret:
+  `security-verify`, `guest-transcript-ocr`, `document-ocr`,
+  `transfer-analyze`, `smart-apply-chat`, `smart-apply-voice`.
+- `accatransfer.com` currently resolves through Google nameservers to GitHub
+  Pages. Cloudflare WAF, Bot Protection, Rate Limiting, HSTS and Worker headers
+  will only affect real traffic after the domain is added to Cloudflare and DNS
+  records are orange-cloud proxied. Use `cloudflare/security-rules.md` and
+  `cloudflare/security-worker.js` for the exact rules and header worker.

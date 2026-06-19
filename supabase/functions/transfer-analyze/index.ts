@@ -1,12 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifyTurnstile } from "../_shared/security.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const allowedOrigins = new Set([
-  "http://127.0.0.1:5173", "http://localhost:5173",
+  "http://127.0.0.1:5173", "http://127.0.0.1:5174", "http://localhost:5173", "http://localhost:5174",
   "https://accatransfer.com", "https://www.accatransfer.com",
   ...(Deno.env.get("APP_ORIGINS") ?? "").split(",").map((value) => value.trim()).filter(Boolean),
 ]);
@@ -63,11 +64,15 @@ Deno.serve(async (req) => {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) return json(req, { error: "Invalid session" }, 401);
 
-  let payload: { assessmentId?: string; documentId?: string };
+  let payload: { assessmentId?: string; documentId?: string; turnstileToken?: string };
   try {
     payload = await req.json();
   } catch {
     return json(req, { error: "Invalid JSON body" }, 400);
+  }
+  const security = await verifyTurnstile(req, payload.turnstileToken, "transfer_analyze");
+  if (!security.ok) {
+    return json(req, { error: security.message || "Security check failed." }, security.status || 403);
   }
   if (!payload.assessmentId || !payload.documentId) return json(req, { error: "Assessment and document are required" }, 400);
 

@@ -109,6 +109,7 @@ function DocumentUpload({ product, user, assessmentId, onUploaded }) {
   };
 
   const stageLabel = {
+    security: 'بررسی امنیتی سریع',
     quality: 'بررسی کیفیت',
     upload: 'آپلود امن',
     ocr: 'خواندن هوشمند مدرک',

@@ -1,6 +1,7 @@
 // Real AI decision provider. The Edge Function may classify a free-text reply
 // and write one short helper message, but it cannot advance the conversation.
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { getTurnstileToken } from '../lib/turnstile';
 import { L } from '../lib/lang';
 import { ACCA_CATEGORY_LABELS } from '../data/majorQuestions';
 
@@ -27,6 +28,7 @@ function profileSummary(state) {
 export async function realChat({ state, userText, context }) {
   if (!supabase) return null;
   try {
+    const turnstileToken = await getTurnstileToken('smart_apply_chat');
     const { data, error } = await supabase.functions.invoke('smart-apply-chat', {
       body: {
         language: state.language,
@@ -37,6 +39,7 @@ export async function realChat({ state, userText, context }) {
         currentStep: context.currentStep,
         mode: context.mode,
         studentMessage: userText,
+        turnstileToken,
       },
     });
     if (error) return null;

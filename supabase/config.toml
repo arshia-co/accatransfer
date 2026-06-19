@@ -17,6 +17,11 @@ verify_jwt = false
 # role calls are accepted only for internal admin-triggered OCR.
 verify_jwt = false
 
+[functions.guest-transcript-ocr]
+# Public pre-login transcript preview. Origin and Turnstile checks are enforced
+# inside the function before any AI/OCR provider call.
+verify_jwt = false
+
 [functions.submit-application]
 # The platform validates the user JWT; the function also resolves the user
 # before reading private profile and document rows.
@@ -25,4 +30,9 @@ verify_jwt = true
 [functions.account-event-email]
 # The platform validates the user JWT; the function sends only to the current
 # authenticated user's email address.
+verify_jwt = true
+
+[functions.security-verify]
+# Logged-in upload flows call this before storage writes. Guest routes use their
+# own public function validation, so this helper can require the user JWT.
 verify_jwt = true

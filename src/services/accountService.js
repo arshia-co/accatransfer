@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import { getTurnstileToken } from '../lib/turnstile';
 import { inspectDocumentQuality } from './documentQualityService';
 
 const DOCUMENT_BUCKET = 'student-documents';
@@ -9,6 +10,26 @@ const ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 function requireClient() {
   if (!supabase) throw new Error('Supabase is not configured.');
   return supabase;
+}
+
+async function turnstileToken(action) {
+  try {
+    return await getTurnstileToken(action);
+  } catch (error) {
+    throw new Error(error?.message || 'Security check failed. Please refresh and try again.');
+  }
+}
+
+async function verifySecurityGate(action) {
+  const token = await turnstileToken(action);
+  if (!token) return null;
+  const client = requireClient();
+  const { data, error } = await client.functions.invoke('security-verify', {
+    body: { turnstileToken: token, action },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
 }
 
 function safeFilename(name) {
@@ -94,9 +115,11 @@ export async function updateAccountPassword({ email, currentPassword, nextPasswo
   if (!currentPassword) throw new Error('رمز فعلی را وارد کنید.');
   if (!nextPassword || nextPassword.length < 8) throw new Error('رمز جدید باید حداقل ۸ کاراکتر باشد.');
 
+  const captchaToken = await turnstileToken('password_change_verify');
   const { error: signInError } = await client.auth.signInWithPassword({
     email,
     password: currentPassword,
+    ...(captchaToken ? { options: { captchaToken } } : {}),
   });
   if (signInError) throw new Error('رمز فعلی درست نیست یا حساب با رمز عبور فعال نشده است.');
 
@@ -114,7 +137,11 @@ export async function requestAccountPasswordReset(email) {
   const redirectTo = typeof window === 'undefined'
     ? undefined
     : `${window.location.origin}/?/reset-password`;
-  const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+  const captchaToken = await turnstileToken('password_reset');
+  const { error } = await client.auth.resetPasswordForEmail(email, {
+    redirectTo,
+    ...(captchaToken ? { captchaToken } : {}),
+  });
   if (error) throw error;
 }
 
@@ -413,6 +440,9 @@ export async function uploadStudentDocument({
 }) {
   validateDocument(file);
   const client = requireClient();
+  onStage?.('security');
+  onProgress?.(2);
+  await verifySecurityGate('document_upload');
   onStage?.('quality');
   onProgress?.(6);
   const qualityReport = await inspectDocumentQuality(file);
@@ -489,8 +519,9 @@ export async function createTransferAssessment(user, fields = {}) {
 
 export async function requestTransferAnalysis({ assessmentId, documentId }) {
   const client = requireClient();
+  const token = await turnstileToken('transfer_analyze');
   const { data, error } = await client.functions.invoke('transfer-analyze', {
-    body: { assessmentId, documentId },
+    body: { assessmentId, documentId, turnstileToken: token },
   });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
@@ -499,8 +530,9 @@ export async function requestTransferAnalysis({ assessmentId, documentId }) {
 
 export async function requestDocumentOcr({ documentId, force = false }) {
   const client = requireClient();
+  const token = await turnstileToken('document_ocr');
   const { data, error } = await client.functions.invoke('document-ocr', {
-    body: { documentId, force },
+    body: { documentId, force, turnstileToken: token },
   });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);

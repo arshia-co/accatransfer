@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { verifyTurnstile } from "../_shared/security.ts";
 
 // Public, no-auth transcript reader for the GUEST "Check Eligibility" flow.
 // The image is sent directly (data URL), read by the OpenAI vision model, and
@@ -10,33 +11,9 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_OCR_MODEL")
   ?? Deno.env.get("OPENAI_MODEL")
   ?? "gpt-4o-mini";
-// Cloudflare Turnstile secret. When set, every request must carry a valid,
-// unused Turnstile token before any OpenAI tokens are spent (anti-bot / anti
-// token-drain on this public endpoint). When unset, verification is skipped so
-// the endpoint keeps working until the key is configured.
-const TURNSTILE_SECRET_KEY = Deno.env.get("TURNSTILE_SECRET_KEY");
-
-async function verifyTurnstile(token: string, ip: string | null): Promise<boolean> {
-  if (!TURNSTILE_SECRET_KEY) return true; // dormant until configured
-  if (!token) return false;
-  try {
-    const form = new URLSearchParams();
-    form.append("secret", TURNSTILE_SECRET_KEY);
-    form.append("response", token);
-    if (ip) form.append("remoteip", ip);
-    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "POST",
-      body: form,
-    });
-    const data = await res.json();
-    return Boolean(data?.success);
-  } catch (error) {
-    console.error("turnstile verify error", error);
-    return false;
-  }
-}
 const allowedOrigins = new Set([
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
   "http://localhost:5173",
   "http://localhost:5174",
   "https://accatransfer.com",
@@ -128,9 +105,9 @@ Deno.serve(async (req) => {
   // Anti-bot gate — verified BEFORE any OpenAI call so a failed/missing token
   // never spends AI tokens.
   const turnstileToken = typeof body.turnstileToken === "string" ? body.turnstileToken : "";
-  const clientIp = req.headers.get("CF-Connecting-IP") ?? req.headers.get("x-forwarded-for");
-  if (!(await verifyTurnstile(turnstileToken, clientIp))) {
-    return json(req, { error: "Security check failed. Please refresh and try again." }, 403);
+  const security = await verifyTurnstile(req, turnstileToken, "transfer_upload");
+  if (!security.ok) {
+    return json(req, { error: security.message || "Security check failed. Please refresh and try again." }, security.status || 403);
   }
 
   const dataUrl = typeof body.imageBase64 === "string" ? body.imageBase64 : "";

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
+import { getTurnstileToken } from '../lib/turnstile';
 import { migrateGuestTransferDraft, sendAccountEventEmail, upsertProfile } from '../services/accountService';
 import { rememberAccountPreview } from './accountPreview';
 
@@ -40,10 +41,12 @@ export function AuthProvider({ children }) {
 
   const sendCode = useCallback(async ({ email, product, language = 'fa' }) => {
     if (!supabase) throw new Error('Authentication is not configured.');
+    const captchaToken = await getTurnstileToken('login_otp');
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
         shouldCreateUser: true,
+        ...(captchaToken ? { captchaToken } : {}),
         data: { current_product: product, language },
       },
     });
@@ -78,7 +81,12 @@ export function AuthProvider({ children }) {
 
   const signInWithPassword = useCallback(async ({ email, password, product = 'smart_apply' }) => {
     if (!supabase) throw new Error('Authentication is not configured.');
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const captchaToken = await getTurnstileToken('login_password');
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
+    });
     if (error) throw error;
     if (!data.user) throw new Error('Login could not be completed.');
     await upsertProfile(data.user, product, {
@@ -108,12 +116,14 @@ export function AuthProvider({ children }) {
     const redirectTo = typeof window === 'undefined'
       ? undefined
       : `${window.location.origin}/account`;
+    const captchaToken = await getTurnstileToken('signup_password');
 
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
         emailRedirectTo: redirectTo,
+        ...(captchaToken ? { captchaToken } : {}),
         data: {
           full_name: cleanName,
           current_product: product,
@@ -139,7 +149,11 @@ export function AuthProvider({ children }) {
     const redirectTo = typeof window === 'undefined'
       ? undefined
       : `${window.location.origin}/?/reset-password`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+    const captchaToken = await getTurnstileToken('password_reset');
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo,
+      ...(captchaToken ? { captchaToken } : {}),
+    });
     if (error) throw error;
   }, []);
 
