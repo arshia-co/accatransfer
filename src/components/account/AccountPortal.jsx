@@ -1255,14 +1255,14 @@ export default function AccountPortal() {
         <section className="account-hero">
           <div>
             <span className="account-kicker">ACCA Central Account</span>
-            <h1>پنل مرکزی شما</h1>
-            <p>تمام فعالیت‌های پذیرش و انتقال دانشگاهی شما، بدون ساخت حساب یا داشبورد جداگانه.</p>
+            <h1>{t('پنل مرکزی شما', 'Your central panel')}</h1>
+            <p>{t('تمام فعالیت‌های پذیرش و انتقال دانشگاهی شما، بدون ساخت حساب یا داشبورد جداگانه.', 'All your admission and university-transfer activity in one place — no separate account or dashboard.')}</p>
           </div>
           <div className="account-identity">
             <span className="account-identity-avatar">
               {accountAvatar ? <img src={accountAvatar} alt="" /> : <b>{accountInitial}</b>}
             </span>
-            <div><small>حساب فعال · {accountName}</small><b dir="ltr">{user.email}</b></div>
+            <div><small>{t('حساب فعال', 'Active account')} · {accountName}</small><b dir="ltr">{user.email}</b></div>
             <ShieldCheck size={20} />
           </div>
         </section>
@@ -1278,22 +1278,22 @@ export default function AccountPortal() {
           <article className="account-card account-progress-card">
             <div className="account-card-head">
               <span><BrainCircuit size={19} /></span>
-              <button type="button" onClick={refresh} aria-label="به‌روزرسانی"><RefreshCw size={15} /></button>
+              <button type="button" onClick={refresh} aria-label={t('به‌روزرسانی', 'Refresh')}><RefreshCw size={15} /></button>
             </div>
             <strong>{completion}%</strong>
-            <h3>آمادگی حساب</h3>
+            <h3>{t('آمادگی حساب', 'Account readiness')}</h3>
             <div className="account-progress"><span style={{ width: `${completion}%` }} /></div>
-            <p>اطلاعات هر دو سرویس در همین شاخص جمع‌بندی می‌شود.</p>
+            <p>{t('اطلاعات هر دو سرویس در همین شاخص جمع‌بندی می‌شود.', 'Both services roll up into this single readiness score.')}</p>
           </article>
           <article className="account-card">
             <div className="account-card-head"><span><Compass size={19} /></span><b>{usedProducts}/2</b></div>
-            <h3>سرویس‌های فعال</h3>
-            <p>{usedProducts ? 'سوابق سرویس‌های استفاده‌شده در پایین همین صفحه دیده می‌شود.' : 'هنوز فعالیتی از محصولات ACCA ذخیره نشده است.'}</p>
+            <h3>{t('سرویس‌های فعال', 'Active services')}</h3>
+            <p>{usedProducts ? t('سوابق سرویس‌های استفاده‌شده در پایین همین صفحه دیده می‌شود.', 'Your used services appear lower on this page.') : t('هنوز فعالیتی از محصولات ACCA ذخیره نشده است.', 'No ACCA product activity saved yet.')}</p>
           </article>
           <article className="account-card">
             <div className="account-card-head"><span><FileText size={19} /></span><b>{data.documents.length}</b></div>
-            <h3>مدارک خصوصی</h3>
-            <p>فایل‌ها با تفکیک کاربرد در همان حساب مرکزی نگهداری می‌شوند.</p>
+            <h3>{t('مدارک خصوصی', 'Private documents')}</h3>
+            <p>{t('فایل‌ها با تفکیک کاربرد در همان حساب مرکزی نگهداری می‌شوند.', 'Files are kept in your central account, organized by purpose.')}</p>
           </article>
         </section>
 
@@ -1337,11 +1337,11 @@ export default function AccountPortal() {
             <div>
               <span className="account-kicker">Admission Journey</span>
               <h2>Smart Apply</h2>
-              <p>پروفایل تحصیلی، نتیجه کشف رشته، مسیر پذیرش و مدارک مرتبط.</p>
+              <p>{t('پروفایل تحصیلی، نتیجه کشف رشته، مسیر پذیرش و مدارک مرتبط.', 'Academic profile, major-discovery result, admission path and related documents.')}</p>
             </div>
             <div className="account-product-actions">
               <StatusPill status={smartSession?.status || 'draft'} />
-              <a href="/smart-apply">ادامه Smart Apply</a>
+              <a href="/smart-apply">{t('ادامه Smart Apply', 'Continue Smart Apply')}</a>
             </div>
           </div>
 
@@ -1416,11 +1416,11 @@ export default function AccountPortal() {
             <div>
               <span className="account-kicker">University Transfer</span>
               <h2>AI Transfer</h2>
-              <p>ارزیابی انتقالی، ریزنمرات، تحلیل اولیه و مسیر بررسی انسانی.</p>
+              <p>{t('ارزیابی انتقالی، ریزنمرات، تحلیل اولیه و مسیر بررسی انسانی.', 'Transfer assessment, transcripts, preliminary analysis and the human-review path.')}</p>
             </div>
             <div className="account-product-actions">
               <StatusPill status={transferAssessment?.status || 'draft'} />
-              <a href="/ai-transfer">ادامه AI Transfer</a>
+              <a href="/ai-transfer">{t('ادامه AI Transfer', 'Continue AI Transfer')}</a>
             </div>
           </div>
 
@@ -1502,11 +1502,11 @@ export default function AccountPortal() {
         </section>
         )}
 
-        {loading && <div className="account-loading-line"><LoaderCircle className="account-spin" size={18} /> در حال همگام‌سازی حساب...</div>}
+        {loading && <div className="account-loading-line"><LoaderCircle className="account-spin" size={18} /> {t('در حال همگام‌سازی حساب...', 'Syncing your account…')}</div>}
 
         <footer className="account-footer-note">
           <Clock3 size={16} />
-          نتایج AI راهنمای اولیه آموزشی هستند و تضمین پذیرش یا معادل‌سازی واحد محسوب نمی‌شوند.
+          {t('نتایج AI راهنمای اولیه آموزشی هستند و تضمین پذیرش یا معادل‌سازی واحد محسوب نمی‌شوند.', 'AI results are preliminary educational guidance — not a guarantee of admission or course equivalency.')}
         </footer>
       </div>
 
@@ -1517,6 +1517,7 @@ export default function AccountPortal() {
         initialUniversity={catalogPicker?.initialUniversity}
         initialSelection={catalogPicker?.initialSelection || []}
         saving={selectionBusy}
+        lang={lang}
         onClose={() => setCatalogPicker(null)}
         onSelect={saveProgramSelection}
       />

@@ -261,7 +261,67 @@ textarea {
 .account-ambient { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 12% 5%, rgba(198,167,104,.22), transparent 32%), radial-gradient(circle at 88% 18%, rgba(22,126,104,.13), transparent 30%), linear-gradient(rgba(255,255,255,.55), transparent 45%); }
 .account-header { position: relative; z-index: 2; display: flex; width: min(calc(100% - 32px), 1240px); margin: 18px auto 0; align-items: center; justify-content: space-between; padding: 12px 16px; border: 1px solid rgba(255,255,255,.85); border-radius: 20px; background: rgba(255,255,255,.68); box-shadow: 0 14px 50px rgba(16,47,72,.08); backdrop-filter: blur(20px); }
 .account-brand, .account-header a, .account-header button { display: inline-flex; align-items: center; gap: 7px; border: 0; color: #102f48; background: transparent; font-size: 12px; font-weight: 850; text-decoration: none; cursor: pointer; }
-.account-header-actions { display: flex; gap: 14px; }
+.account-header-actions { display: flex; align-items: center; gap: 10px; }
+.account-header-meta { display: flex; flex: 1; align-items: center; justify-content: center; gap: 10px; min-width: 0; color: rgba(16,47,72,.6); font-size: 11px; }
+.account-header-greeting b { color: #102f48; font-weight: 900; }
+.account-header-chip { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.account-header-chip svg { color: #14745f; }
+.account-header-dot { width: 4px; height: 4px; flex: 0 0 auto; border-radius: 50%; background: rgba(16,47,72,.22); }
+.account-seg { display: inline-flex; flex: 0 0 auto; padding: 3px; border: 1px solid rgba(16,47,72,.1); border-radius: 999px; background: rgba(16,47,72,.04); }
+.account-seg button { padding: 4px 11px; border-radius: 999px; color: rgba(16,47,72,.55); background: transparent; font-size: 11px; font-weight: 900; line-height: 1; cursor: pointer; transition: color .15s ease, background .15s ease; }
+.account-seg button.is-active { color: #102f48; background: #fff; box-shadow: 0 2px 8px rgba(16,47,72,.12); }
+.account-icon-btn { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(16,47,72,.1); border-radius: 50%; color: #102f48; background: rgba(255,255,255,.7); cursor: pointer; transition: background .15s ease; }
+.account-icon-btn:hover { background: #fff; }
+
+/* ── Dark theme (account header toggle) ──────────────────────────────────── */
+.account-central[data-theme="dark"] { color-scheme: dark; background: radial-gradient(150% 120% at 82% -10%, #0d2540 0%, #081627 58%, #050e1b 100%); }
+.account-central[data-theme="dark"] .account-header { border-color: rgba(255,255,255,.08); background: rgba(16,34,56,.62); box-shadow: 0 16px 50px rgba(0,0,0,.45); }
+.account-central[data-theme="dark"] .account-brand,
+.account-central[data-theme="dark"] .account-header a,
+.account-central[data-theme="dark"] .account-header button { color: #e7eefb; }
+.account-central[data-theme="dark"] .account-header-meta { color: rgba(231,238,251,.6); }
+.account-central[data-theme="dark"] .account-header-greeting b { color: #fff; }
+.account-central[data-theme="dark"] .account-header-dot { background: rgba(231,238,251,.25); }
+.account-central[data-theme="dark"] .account-seg { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.05); }
+.account-central[data-theme="dark"] .account-seg button { color: rgba(231,238,251,.55); }
+.account-central[data-theme="dark"] .account-seg button.is-active { color: #0a1f3a; background: #e7eefb; box-shadow: none; }
+.account-central[data-theme="dark"] .account-icon-btn { border-color: rgba(255,255,255,.12); color: #f0d79a; background: rgba(255,255,255,.05); }
+.account-central[data-theme="dark"] h1,
+.account-central[data-theme="dark"] h2,
+.account-central[data-theme="dark"] h3,
+.account-central[data-theme="dark"] h4 { color: #f3f7ff; }
+.account-central[data-theme="dark"] .account-hero p,
+.account-central[data-theme="dark"] .account-card p,
+.account-central[data-theme="dark"] .account-product-head p,
+.account-central[data-theme="dark"] .account-footer-note { color: rgba(231,238,251,.62); }
+.account-central[data-theme="dark"] .account-identity,
+.account-central[data-theme="dark"] .account-card,
+.account-central[data-theme="dark"] .account-product-space,
+.account-central[data-theme="dark"] .account-profile-editor,
+.account-central[data-theme="dark"] .account-product-summary > div,
+.account-central[data-theme="dark"] .account-result-section,
+.account-central[data-theme="dark"] .account-transfer-stats > div,
+.account-central[data-theme="dark"] .account-equiv-row,
+.account-central[data-theme="dark"] .application-readiness,
+.account-central[data-theme="dark"] .acceptance-journey,
+.account-central[data-theme="dark"] .catalog-selected-card,
+.account-central[data-theme="dark"] .catalog-empty-selection { border-color: rgba(255,255,255,.09); background: rgba(255,255,255,.045); }
+.account-central[data-theme="dark"] .account-identity div b,
+.account-central[data-theme="dark"] .account-card strong,
+.account-central[data-theme="dark"] .account-product-summary b,
+.account-central[data-theme="dark"] .account-transfer-stats b,
+.account-central[data-theme="dark"] .account-equiv-pair b,
+.account-central[data-theme="dark"] .account-result-section li b { color: #f3f7ff; }
+.account-central[data-theme="dark"] .account-identity div small,
+.account-central[data-theme="dark"] .account-product-summary small,
+.account-central[data-theme="dark"] .account-transfer-stats small,
+.account-central[data-theme="dark"] .account-result-section li span { color: rgba(231,238,251,.5); }
+.account-central[data-theme="dark"] .account-product-tabs { border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.04); }
+.account-central[data-theme="dark"] .account-product-tabs button { color: rgba(231,238,251,.55); }
+.account-central[data-theme="dark"] .account-product-tabs button.is-active { color: #fff; background: rgba(255,255,255,.1); box-shadow: none; }
+.account-central[data-theme="dark"] .account-progress,
+.account-central[data-theme="dark"] .account-equiv-bar { background: rgba(255,255,255,.1); }
+.account-central[data-theme="dark"] .account-transfer-stats > div > span { background: rgba(20,116,95,.22); color: #4fd1ab; }
 .account-shell { position: relative; z-index: 1; width: min(calc(100% - 32px), 1160px); margin: 0 auto; padding: 64px 0 36px; }
 .account-hero { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin-bottom: 30px; }
 .account-hero h1 { margin: 8px 0 6px; color: #102f48; font-size: clamp(42px, 7vw, 78px); line-height: 1; letter-spacing: -.055em; }
