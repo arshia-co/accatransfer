@@ -4,7 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
   ?? namedKey("SUPABASE_SECRET_KEYS");
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
+const TELEGRAM_BOT_TOKEN_ENV = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM_ADDRESS = Deno.env.get("EMAIL_FROM_ADDRESS") ?? "ACCA Admissions <no-reply@accatransfer.com>";
 const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") ?? "https://accatransfer.com").replace(/\/$/, "");
@@ -22,6 +22,7 @@ const SESSION_TTL_MINUTES = 30;
 const DOCUMENT_BUCKET = "student-documents";
 const MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024;
 const EMAIL_ATTACHMENT_LIMIT = 8 * 1024 * 1024;
+let cachedTelegramBotToken: string | null = null;
 const ALLOWED_ATTACHMENT_MIME = new Set([
   "application/pdf",
   "image/jpeg",
@@ -102,8 +103,9 @@ function methodResponse(method: string, payload: Json) {
 }
 
 async function telegram(method: string, payload: Json) {
-  if (!TELEGRAM_BOT_TOKEN) return methodResponse(method, payload);
-  const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${method}`, {
+  const token = await getTelegramBotToken();
+  if (!token) return methodResponse(method, payload);
+  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -232,11 +234,19 @@ async function render(update: TelegramUpdate, text: string, replyMarkup?: Json) 
 async function getSettings() {
   const { data, error } = await supabase
     .from("telegram_bot_settings")
-    .select("webhook_secret, bot_label")
+    .select("webhook_secret, bot_label, bot_token")
     .eq("id", true)
     .maybeSingle();
   if (error) throw error;
   return data;
+}
+
+async function getTelegramBotToken() {
+  if (TELEGRAM_BOT_TOKEN_ENV) return TELEGRAM_BOT_TOKEN_ENV;
+  if (cachedTelegramBotToken !== null) return cachedTelegramBotToken;
+  const settings = await getSettings();
+  cachedTelegramBotToken = settings?.bot_token?.trim() || "";
+  return cachedTelegramBotToken;
 }
 
 async function verifyWebhook(req: Request) {
@@ -805,10 +815,11 @@ function validateTelegramAttachment(attachment: Json) {
 }
 
 async function getTelegramFilePath(fileId: string) {
-  if (!TELEGRAM_BOT_TOKEN) {
-    throw new Error("TELEGRAM_BOT_TOKEN is required to download Telegram files.");
+  const token = await getTelegramBotToken();
+  if (!token) {
+    throw new Error("Telegram bot token is not available in bot settings.");
   }
-  const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`);
+  const res = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`);
   const body = await res.json();
   if (!res.ok || !body?.ok || !body?.result?.file_path) {
     throw new Error(body?.description || "Telegram file could not be resolved.");
@@ -817,7 +828,11 @@ async function getTelegramFilePath(fileId: string) {
 }
 
 async function downloadTelegramFile(filePath: string) {
-  const res = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`);
+  const token = await getTelegramBotToken();
+  if (!token) {
+    throw new Error("Telegram bot token is not available in bot settings.");
+  }
+  const res = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`);
   if (!res.ok) throw new Error(`Telegram file download failed with ${res.status}.`);
   return await res.arrayBuffer();
 }
@@ -1004,6 +1019,7 @@ async function renderStatusNotePrompt(update: TelegramUpdate, admin: Admin, appl
 async function renderStatusAttachmentPrompt(update: TelegramUpdate, admin: Admin, applicationId: string, status: string, note?: string | null) {
   const chatId = update.callback_query?.message?.chat.id ?? update.message!.chat.id;
   const user = update.callback_query?.from ?? update.message!.from!;
+  const hasTelegramToken = Boolean(await getTelegramBotToken());
   await upsertSession(user, chatId, "awaiting_status_attachment", { application_id: applicationId, status, note: note ?? null });
   return render(update, [
     "<b>ارسال فایل پیوست پرونده</b>",
@@ -1012,9 +1028,9 @@ async function renderStatusAttachmentPrompt(update: TelegramUpdate, admin: Admin
     "فایل PDF، JPG، PNG، DOC یا DOCX را همینجا ارسال کنید.",
     "برای پذیرش مشروط یا نهایی، فایل در بخش پذیرش پنل دانشجو هم نمایش داده می‌شود.",
     "",
-    TELEGRAM_BOT_TOKEN
+    hasTelegramToken
       ? "پس از دریافت فایل، وضعیت پرونده ثبت و ایمیل/اعلان ساخته می‌شود."
-      : "برای دانلود فایل از تلگرام باید secret به نام TELEGRAM_BOT_TOKEN روی Edge Function تنظیم شود.",
+      : "توکن بات در تنظیمات داخلی پیدا نشد. webhook فعال است، اما دسترسی دانلود فایل هنوز آماده نیست.",
   ].join("\n"), keyboard([[button("لغو", "cancel")], [button("منوی اصلی", "menu")]]));
 }
 
@@ -1449,8 +1465,8 @@ async function handleStatusAttachmentMessage(update: TelegramUpdate, admin: Admi
   if (!attachment) {
     return render(update, "لطفاً فایل PDF، JPG، PNG، DOC یا DOCX را همینجا ارسال کنید، یا /cancel را بفرستید.", keyboard([[button("لغو", "cancel")], [button("منوی اصلی", "menu")]]));
   }
-  if (!TELEGRAM_BOT_TOKEN) {
-    return render(update, "برای دریافت فایل از تلگرام، secret به نام TELEGRAM_BOT_TOKEN باید روی Edge Function تنظیم شود. بعد از تنظیم، همین فایل را دوباره ارسال کنید.", keyboard([[button("منوی اصلی", "menu")]]));
+  if (!await getTelegramBotToken()) {
+    return render(update, "توکن بات تلگرام در تنظیمات داخلی پیدا نشد. webhook بات فعال است اما دسترسی دانلود فایل ندارد.", keyboard([[button("منوی اصلی", "menu")]]));
   }
   const validationError = validateTelegramAttachment(attachment);
   if (validationError) return render(update, validationError, keyboard([[button("لغو", "cancel")], [button("منوی اصلی", "menu")]]));
