@@ -10,6 +10,31 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_OCR_MODEL")
   ?? Deno.env.get("OPENAI_MODEL")
   ?? "gpt-5.4-mini";
+// Cloudflare Turnstile secret. When set, every request must carry a valid,
+// unused Turnstile token before any OpenAI tokens are spent (anti-bot / anti
+// token-drain on this public endpoint). When unset, verification is skipped so
+// the endpoint keeps working until the key is configured.
+const TURNSTILE_SECRET_KEY = Deno.env.get("TURNSTILE_SECRET_KEY");
+
+async function verifyTurnstile(token: string, ip: string | null): Promise<boolean> {
+  if (!TURNSTILE_SECRET_KEY) return true; // dormant until configured
+  if (!token) return false;
+  try {
+    const form = new URLSearchParams();
+    form.append("secret", TURNSTILE_SECRET_KEY);
+    form.append("response", token);
+    if (ip) form.append("remoteip", ip);
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body: form,
+    });
+    const data = await res.json();
+    return Boolean(data?.success);
+  } catch (error) {
+    console.error("turnstile verify error", error);
+    return false;
+  }
+}
 const allowedOrigins = new Set([
   "http://127.0.0.1:5173",
   "http://localhost:5173",
@@ -93,11 +118,19 @@ Deno.serve(async (req) => {
   if (origin && !allowedOrigins.has(origin)) return json(req, { error: "Origin not allowed" }, 403);
   if (!OPENAI_API_KEY) return json(req, { error: "AI service is not configured." }, 500);
 
-  let body: { imageBase64?: string; mimeType?: string };
+  let body: { imageBase64?: string; mimeType?: string; turnstileToken?: string };
   try {
     body = await req.json();
   } catch {
     return json(req, { error: "Invalid JSON body" }, 400);
+  }
+
+  // Anti-bot gate — verified BEFORE any OpenAI call so a failed/missing token
+  // never spends AI tokens.
+  const turnstileToken = typeof body.turnstileToken === "string" ? body.turnstileToken : "";
+  const clientIp = req.headers.get("CF-Connecting-IP") ?? req.headers.get("x-forwarded-for");
+  if (!(await verifyTurnstile(turnstileToken, clientIp))) {
+    return json(req, { error: "Security check failed. Please refresh and try again." }, 403);
   }
 
   const dataUrl = typeof body.imageBase64 === "string" ? body.imageBase64 : "";

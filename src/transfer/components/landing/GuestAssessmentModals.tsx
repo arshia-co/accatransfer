@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
@@ -48,6 +48,7 @@ import {
 } from "@/lib/guest-assessment";
 import ProgramCatalogPicker, { SelectedProgramCard } from "../../../components/account/ProgramCatalogPicker";
 import { getCountryLabel } from "../../../services/programCatalogService";
+import { isTurnstileEnabled, renderTurnstile } from "../../../lib/turnstile";
 import {
   computeCourseMatches,
   newCoreCourse,
@@ -170,6 +171,35 @@ export function GuestAssessmentModal() {
   const analyzeTimer = useRef<number | null>(null);
   const [ocr, setOcr] = useState<{ status: "idle" | "loading" | "done" | "empty" | "error"; count?: number }>({ status: "idle" });
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Anti-bot gate (Cloudflare Turnstile). When configured, the free flow can't
+  // start — and the OCR/AI endpoint won't run — until the human check passes.
+  const [humanVerified, setHumanVerified] = useState(() => !isTurnstileEnabled());
+  const [gateError, setGateError] = useState(false);
+  const turnstileRef = useRef<{ reset: () => void; remove: () => void } | null>(null);
+  const turnstileTokenRef = useRef<string | null>(null);
+
+  // Callback ref: render the Turnstile widget exactly when the host node mounts
+  // (avoids the effect-runs-before-ref-attaches race). Stable identity so React
+  // doesn't re-fire it every render.
+  const turnstileHostCb = useCallback((node: HTMLDivElement | null) => {
+    if (!node) {
+      try { turnstileRef.current?.remove(); } catch { /* ignore */ }
+      turnstileRef.current = null;
+      return;
+    }
+    if (!isTurnstileEnabled() || turnstileRef.current) return;
+    renderTurnstile(node, {
+      onToken: (token: string) => {
+        turnstileTokenRef.current = token;
+        setHumanVerified(true);
+        setGateError(false);
+      },
+      onError: () => setGateError(true),
+      onExpire: () => { turnstileTokenRef.current = null; },
+    })
+      .then((controls) => { if (controls) turnstileRef.current = controls; })
+      .catch(() => setGateError(true));
+  }, []);
 
   const step = STEPS[stepIndex];
   const answers = draft.answers;
@@ -190,6 +220,15 @@ export function GuestAssessmentModal() {
   useEffect(() => () => {
     if (analyzeTimer.current) window.clearTimeout(analyzeTimer.current);
   }, []);
+
+  // When the modal closes, require re-verification next time (the callback ref
+  // removes the widget itself when the host node unmounts).
+  useEffect(() => {
+    if (open) return;
+    turnstileTokenRef.current = null;
+    setHumanVerified(!isTurnstileEnabled());
+    setGateError(false);
+  }, [open]);
 
   const progress = useMemo(() => Math.round((stepIndex / (STEPS.length - 1)) * 100), [stepIndex]);
 
@@ -235,7 +274,10 @@ export function GuestAssessmentModal() {
   const runGuestOcr = async (file: File) => {
     setOcr({ status: "loading" });
     try {
-      const result = await guestTranscriptOcr(file);
+      const result = await guestTranscriptOcr(file, turnstileTokenRef.current);
+      // Turnstile tokens are single-use; fetch a fresh one for any later upload.
+      turnstileTokenRef.current = null;
+      turnstileRef.current?.reset();
       const extracted: CoreCourse[] = (Array.isArray(result?.courses) ? result.courses : [])
         .filter((c: { title?: string }) => Boolean(c?.title && c.title.trim()))
         .map((c: { title: string; grade?: string | null }) => ({
@@ -420,6 +462,41 @@ export function GuestAssessmentModal() {
           </DialogDescription>
         </DialogHeader>
 
+        {/* Anti-bot gate: the free OCR/AI flow only starts after the human check. */}
+        {isTurnstileEnabled() && (
+          <div className={humanVerified ? "sr-only" : "flex flex-col items-center gap-4 rounded-3xl border border-[color:var(--ta-navy)]/10 bg-white/70 px-6 py-9 text-center"}>
+            {!humanVerified && (
+              <>
+                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[color:var(--ta-gold)]/10">
+                  <ShieldCheck className="h-7 w-7 text-[color:var(--ta-gold-deep)]" />
+                </span>
+                <div>
+                  <div className="text-base font-semibold text-foreground">
+                    {fa ? "تأیید امنیتی سریع" : "Quick security check"}
+                  </div>
+                  <p className="mx-auto mt-2 max-w-sm text-xs leading-6 text-muted-foreground">
+                    {fa
+                      ? "این بررسی رایگان از OCR و هوش مصنوعی استفاده می‌کند؛ برای جلوگیری از ربات‌ها لطفاً تأیید کنید که انسان هستید. معمولاً خودکار انجام می‌شود."
+                      : "This free check uses OCR & AI. To keep bots out, please confirm you’re human — it usually completes automatically."}
+                  </p>
+                </div>
+              </>
+            )}
+            <div ref={turnstileHostCb} className="min-h-[65px]" />
+            {!humanVerified && gateError && (
+              <button
+                type="button"
+                onClick={() => { setGateError(false); turnstileRef.current?.reset(); }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--ta-gold)]/40 bg-white px-3 py-1.5 text-[11px] font-semibold text-[color:var(--ta-gold-deep)]"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> {fa ? "تلاش دوباره" : "Retry"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {(!isTurnstileEnabled() || humanVerified) && (
+        <>
         {/* ── STEP: transcript ─────────────────────────────────────────────── */}
         {step === "transcript" && (
           <div className="space-y-3">
@@ -797,6 +874,8 @@ export function GuestAssessmentModal() {
             </>
           )}
         </DialogFooter>
+        </>
+        )}
 
         {/* The exact account-portal catalog picker (multi-select, search, country
             filter), reused here so step 4 matches the central panel 1:1. It is

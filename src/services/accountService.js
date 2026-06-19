@@ -543,11 +543,11 @@ function fileToDataUrl(file) {
  * `guest-transcript-ocr` Edge Function and returns the extracted courses/GPA for
  * the student to confirm. Nothing is uploaded to storage or persisted.
  */
-export async function guestTranscriptOcr(file) {
+export async function guestTranscriptOcr(file, turnstileToken = null) {
   const client = requireClient();
   const imageBase64 = await fileToDataUrl(file);
   const { data, error } = await client.functions.invoke('guest-transcript-ocr', {
-    body: { imageBase64, mimeType: file.type || 'image/jpeg', fileName: file.name },
+    body: { imageBase64, mimeType: file.type || 'image/jpeg', fileName: file.name, turnstileToken },
   });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
