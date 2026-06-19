@@ -8,10 +8,12 @@ orange-cloud proxied.
 ## Turnstile
 
 - Site key: expose as `VITE_TURNSTILE_SITE_KEY`.
+- Spin siteverify Worker: expose as `VITE_TURNSTILE_VERIFY_URL`.
 - Secret key: set in Supabase Edge Function secrets as `TURNSTILE_SECRET_KEY`.
 - Supabase Auth: enable CAPTCHA in the Supabase Auth dashboard and select
   Cloudflare Turnstile using the same secret.
 - Server validation exists in:
+  - `turnstile-siteverify-acca-smart-apply` Cloudflare Worker
   - `guest-transcript-ocr`
   - `security-verify`
   - `document-ocr`

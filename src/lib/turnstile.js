@@ -1,16 +1,21 @@
-// Cloudflare Turnstile loader for public and high-cost flows. The server-side
-// validation inside Supabase Edge Functions is the real enforcement point; this
-// file only produces single-use tokens for Auth, AI, OCR and upload gates.
+// Cloudflare Turnstile loader for public and high-cost flows. Supabase Edge
+// Functions remain the enforcement point for private flows; the optional Spin
+// siteverify Worker protects public OCR entry points before high-cost work runs.
 //
 // Dormant by design: if VITE_TURNSTILE_SITE_KEY is not set, isTurnstileEnabled()
 // is false and the UI skips the gate entirely (so dev/builds without keys work).
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
+const SITEVERIFY_URL = import.meta.env.VITE_TURNSTILE_VERIFY_URL || '';
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 let scriptPromise = null;
 
 export function isTurnstileEnabled() {
   return Boolean(SITE_KEY);
+}
+
+export function isTurnstileWorkerEnabled() {
+  return Boolean(SITEVERIFY_URL);
 }
 
 function loadScript() {
@@ -43,6 +48,36 @@ function normalizeAction(action) {
     .replace(/[^a-z0-9_-]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .slice(0, 32) || 'acca_security';
+}
+
+function idempotencyKey() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const parts = crypto.getRandomValues(new Uint32Array(2));
+    return `${Date.now()}-${parts[0].toString(16)}${parts[1].toString(16)}`;
+  }
+  return `${Date.now()}`;
+}
+
+export async function verifyTurnstileWithWorker(token, action = 'turnstile-spin-v1') {
+  if (!SITEVERIFY_URL) return { success: true, skipped: true };
+  if (!token) throw new Error('Security check is required. Please try again.');
+
+  const response = await fetch(SITEVERIFY_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      token,
+      action: normalizeAction(action),
+      idempotency_key: idempotencyKey(),
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data?.success !== true) {
+    throw new Error('Security check failed. Please refresh and try again.');
+  }
+  return data;
 }
 
 // Renders a managed Turnstile widget into `el` and returns control helpers.

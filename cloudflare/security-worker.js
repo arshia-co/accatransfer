@@ -8,7 +8,7 @@ const SECURITY_HEADERS = {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.accaco.com https://accaco.com https://challenges.cloudflare.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.accaco.com https://accaco.com https://challenges.cloudflare.com https://turnstile-siteverify-acca-smart-apply.accatransfer.workers.dev",
     "frame-src https://challenges.cloudflare.com",
     "media-src 'self' blob:",
     "form-action 'self'",

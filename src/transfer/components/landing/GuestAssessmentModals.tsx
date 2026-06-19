@@ -48,7 +48,7 @@ import {
 } from "@/lib/guest-assessment";
 import ProgramCatalogPicker, { SelectedProgramCard } from "../../../components/account/ProgramCatalogPicker";
 import { getCountryLabel } from "../../../services/programCatalogService";
-import { isTurnstileEnabled, renderTurnstile } from "../../../lib/turnstile";
+import { getTurnstileToken, isTurnstileEnabled, renderTurnstile, verifyTurnstileWithWorker } from "../../../lib/turnstile";
 import {
   computeCourseMatches,
   newCoreCourse,
@@ -62,6 +62,8 @@ import { guestTranscriptOcr } from "../../../services/accountService";
 
 // Number of saved answer fields (mirrors emptyAnswers() in guest-assessment.ts).
 const ANSWER_FIELD_COUNT = 8;
+const TURNSTILE_SPIN_ACTION = "turnstile-spin-v1";
+const TURNSTILE_BACKEND_ACTION = "transfer_upload";
 
 type StepId = "transcript" | "current" | "standing" | "target" | "courses" | "result";
 const STEPS: StepId[] = ["transcript", "current", "standing", "target", "courses", "result"];
@@ -189,6 +191,7 @@ export function GuestAssessmentModal() {
     }
     if (!isTurnstileEnabled() || turnstileRef.current) return;
     renderTurnstile(node, {
+      action: TURNSTILE_SPIN_ACTION,
       onToken: (token: string) => {
         turnstileTokenRef.current = token;
         setHumanVerified(true);
@@ -274,7 +277,10 @@ export function GuestAssessmentModal() {
   const runGuestOcr = async (file: File) => {
     setOcr({ status: "loading" });
     try {
-      const result = await guestTranscriptOcr(file, turnstileTokenRef.current);
+      const visibleToken = turnstileTokenRef.current;
+      await verifyTurnstileWithWorker(visibleToken, TURNSTILE_SPIN_ACTION);
+      const backendToken = await getTurnstileToken(TURNSTILE_BACKEND_ACTION);
+      const result = await guestTranscriptOcr(file, backendToken ?? visibleToken);
       // Turnstile tokens are single-use; fetch a fresh one for any later upload.
       turnstileTokenRef.current = null;
       turnstileRef.current?.reset();

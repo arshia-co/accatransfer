@@ -36,10 +36,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://qysluhfrjpcguhneqsuz.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_uhclsIDMqnKxbUzkbgcYsg_a70CzU29
-          # Cloudflare Turnstile site key (public). Set repo Variable
-          # VITE_TURNSTILE_SITE_KEY in GitHub → Settings → Secrets and variables →
-          # Actions → Variables to enable the anti-bot gate. Empty = gate disabled.
-          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
+          # Cloudflare Turnstile public keys for the ACCA Smart Apply / AI Transfer OCR gate.
+          VITE_TURNSTILE_SITE_KEY: 0x4AAAAAADnyH7hcmmXxhRgD
+          VITE_TURNSTILE_VERIFY_URL: https://turnstile-siteverify-acca-smart-apply.accatransfer.workers.dev/siteverify
         run: npm run build
 
       - name: Add direct SPA route entries
