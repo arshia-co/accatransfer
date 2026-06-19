@@ -187,6 +187,17 @@ export async function migrateGuestTransferDraft(user) {
     .single();
 
   if (error) throw error;
+
+  // Carry the destination programs the guest shortlisted (step 4 catalog picker)
+  // into the account's AI Transfer selection so they don't have to re-pick.
+  if (Array.isArray(draft.targetSelection) && draft.targetSelection.length) {
+    try {
+      await upsertProgramSelection(user, 'ai_transfer', draft.targetSelection);
+    } catch {
+      // Non-fatal: the assessment is already saved; selection can be redone in-panel.
+    }
+  }
+
   window.localStorage.removeItem(GUEST_TRANSFER_KEY);
   window.dispatchEvent(new CustomEvent('acca-transfer-guest-assessment-change', { detail: null }));
   return { assessment: data, documentMetadata: draft.document || null };

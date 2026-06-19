@@ -559,7 +559,14 @@ export default function AccountPortal() {
   });
   const [activeProduct, setActiveProduct] = useState(() => {
     const deepLink = readCatalogDeepLink();
-    return deepLink?.product === 'ai_transfer' ? 'ai_transfer' : 'smart_apply';
+    if (deepLink?.product === 'ai_transfer') return 'ai_transfer';
+    // The AI Transfer eligibility flow returns here with ?product=ai_transfer so
+    // the panel opens on the AI Transfer tab instead of Smart Apply.
+    if (typeof window !== 'undefined'
+      && new URLSearchParams(window.location.search).get('product') === 'ai_transfer') {
+      return 'ai_transfer';
+    }
+    return 'smart_apply';
   });
 
   const refresh = useCallback(async () => {

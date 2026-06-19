@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -37,11 +38,16 @@ import {
   buildGuestPreliminaryResult,
   clearGuestAssessment,
   createGuestAssessmentDraft,
+  CREDIT_SYSTEMS,
+  creditsToEcts,
   guestAssessmentProgress,
   readGuestAssessment,
   saveGuestAssessment,
+  type CatalogTargetItem,
   type GuestAssessmentDraft,
 } from "@/lib/guest-assessment";
+import ProgramCatalogPicker, { SelectedProgramCard } from "../../../components/account/ProgramCatalogPicker";
+import { getCountryLabel } from "../../../services/programCatalogService";
 import {
   computeCourseMatches,
   newCoreCourse,
@@ -117,17 +123,38 @@ function localizeResultValue(value: string, fa: boolean) {
   return labels[value] ?? value;
 }
 
-function firstNumber(value: string): number | null {
-  const ascii = (value ?? "").replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
-  const match = ascii.match(/\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : null;
-}
-
 function entryLevelFromCredits(credits: number | null): string {
   if (credits === null) return "Cannot be estimated without verified credits";
   if (credits >= 60) return "Year 2 may be possible";
   if (credits >= 30) return "Year 1 or Year 2 may be possible";
   return "Year 1 is more likely";
+}
+
+// Grading scales differ by country, so the student picks the scale instead of
+// typing it; the value + scale are stored together as "16 / 20" so the existing
+// parseGradeRatio()/normalizedGpa() helpers keep working for any scale.
+const GPA_SCALES = [
+  { value: "4", fa: "از ۴", en: "out of 4" },
+  { value: "5", fa: "از ۵", en: "out of 5" },
+  { value: "10", fa: "از ۱۰", en: "out of 10" },
+  { value: "20", fa: "از ۲۰", en: "out of 20" },
+  { value: "100", fa: "از ۱۰۰ (درصد)", en: "out of 100 (%)" },
+] as const;
+
+const YEAR_OPTIONS = [
+  { value: "Year 1", fa: "سال اول", en: "Year 1" },
+  { value: "Year 2", fa: "سال دوم", en: "Year 2" },
+  { value: "Year 3", fa: "سال سوم", en: "Year 3" },
+  { value: "Year 4", fa: "سال چهارم", en: "Year 4" },
+  { value: "Year 5+", fa: "سال پنجم یا بالاتر", en: "Year 5 or higher" },
+  { value: "Graduated", fa: "فارغ‌التحصیل", en: "Graduated" },
+] as const;
+
+/** Split a stored "value / scale" GPA string back into its parts for the inputs. */
+function splitGpa(combined: string): { value: string; scale: string } {
+  const ascii = (combined ?? "").replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+  const nums = ascii.replace(",", ".").match(/\d+(?:\.\d+)?/g) ?? [];
+  return { value: nums[0] ?? "", scale: nums[1] ?? "20" };
 }
 
 export function GuestAssessmentModal() {
@@ -142,6 +169,7 @@ export function GuestAssessmentModal() {
   const [analyzing, setAnalyzing] = useState(false);
   const analyzeTimer = useRef<number | null>(null);
   const [ocr, setOcr] = useState<{ status: "idle" | "loading" | "done" | "empty" | "error"; count?: number }>({ status: "idle" });
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const step = STEPS[stepIndex];
   const answers = draft.answers;
@@ -176,6 +204,31 @@ export function GuestAssessmentModal() {
   };
 
   const setCourses = (next: CoreCourse[]) => setDraft((d) => ({ ...d, courses: next }));
+
+  // GPA is stored as "value / scale" so any scale parses correctly downstream.
+  const gpaParts = splitGpa(answers.gpa);
+  const setGpa = (value: string, scale: string) =>
+    setAnswer("gpa", value.trim() ? `${value.trim()} / ${scale}` : "");
+  const setCreditSystem = (value: string) =>
+    setDraft((d) => ({ ...d, creditSystem: value as GuestAssessmentDraft["creditSystem"] }));
+
+  // Step 4 reuses the exact account-portal catalog picker (multi-select). We
+  // store the full shortlist and mirror the primary pick into the legacy answer
+  // fields so matching, the preliminary result and migration keep working.
+  const setTargetSelection = (items: CatalogTargetItem[]) => {
+    const first = items[0];
+    persist({
+      ...draft,
+      targetSelection: items,
+      answers: {
+        ...draft.answers,
+        targetProgram: first?.program || "",
+        targetUniversity: first?.university || "",
+        targetCountry: first?.country ? getCountryLabel(first.country) : "",
+      },
+    });
+    setPickerOpen(false);
+  };
 
   // Reads the uploaded transcript with AI and pre-fills the courses + GPA for
   // the student to confirm (no manual entry). Nothing is uploaded or persisted.
@@ -233,7 +286,7 @@ export function GuestAssessmentModal() {
     [courses, answers.currentProgram, answers.targetProgram, answers.gpa],
   );
   const overall = useMemo(() => overallMatch(matches), [matches]);
-  const credits = firstNumber(answers.completedCredits);
+  const credits = creditsToEcts(answers.completedCredits, draft.creditSystem);
   const entryLevel = entryLevelFromCredits(credits);
   const namedCourses = courses.filter((c) => c.name.trim().length > 0);
   const confidence =
@@ -248,7 +301,7 @@ export function GuestAssessmentModal() {
       case "standing":
         return Boolean(answers.gpa.trim());
       case "target":
-        return Boolean(answers.targetProgram.trim());
+        return draft.targetSelection.length >= 1;
       case "courses":
         return namedCourses.length >= 1;
       default:
@@ -309,11 +362,12 @@ export function GuestAssessmentModal() {
   const saveAndContinue = () => {
     persist(draft);
     closeModal();
+    // Land directly on the AI Transfer tab in the central panel (not Smart Apply).
     if (user) {
-      window.location.href = "/account";
+      window.location.href = "/account?product=ai_transfer";
       return;
     }
-    openAuth("ai_transfer", { returnTo: "/account" });
+    openAuth("ai_transfer", { returnTo: "/account?product=ai_transfer" });
   };
 
   // ── Course rows helpers ────────────────────────────────────────────────────
@@ -326,10 +380,16 @@ export function GuestAssessmentModal() {
   };
 
   const inputClass = "mt-2 h-12 rounded-xl bg-white text-base sm:text-sm";
+  const selectClass = "h-12 rounded-xl border border-[color:var(--ta-navy)]/15 bg-white px-2 text-base text-foreground sm:text-sm";
 
   return (
     <Dialog open={open} onOpenChange={(value) => !value && closeModal()}>
-      <DialogContent className="sm:max-w-xl ta-glass-strong max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-xl ta-glass-strong max-h-[90vh] overflow-y-auto"
+        onPointerDownOutside={(e) => { if (pickerOpen) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (pickerOpen) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => { if (pickerOpen) { e.preventDefault(); setPickerOpen(false); } }}
+      >
         <DialogHeader>
           <div className="mb-2 flex items-center justify-between gap-3 pe-7">
             <span className="inline-flex items-center gap-2 rounded-full bg-[color:var(--ta-gold)]/10 px-3 py-1.5 text-[11px] font-semibold text-[color:var(--ta-gold-deep)]">
@@ -449,72 +509,85 @@ export function GuestAssessmentModal() {
           <div className="space-y-4">
             <Field
               label={fa ? "معدل و مقیاس آن" : "GPA and its scale"}
-              hint={fa ? "مثلاً ۱۶ از ۲۰، یا ۲٫۹۱ از ۴" : "e.g. 2.91 / 4.00 or 16 / 20"}
+              hint={fa
+                ? "نمره را وارد و مقیاس آن را انتخاب کنید (مثلاً ۱۶ از ۲۰ یا ۳٫۴ از ۴)."
+                : "Enter the value and pick its scale (e.g. 16 out of 20, or 3.4 out of 4)."}
             >
-              <Input
-                autoFocus
-                value={answers.gpa}
-                onChange={(e) => setAnswer("gpa", e.target.value)}
-                placeholder={fa ? "۱۶ / ۲۰" : "2.91 / 4.00"}
-                className={inputClass}
-                inputMode="decimal"
-              />
+              <div className="mt-2 flex gap-2">
+                <Input
+                  autoFocus
+                  value={gpaParts.value}
+                  onChange={(e) => setGpa(e.target.value, gpaParts.scale)}
+                  placeholder={fa ? "مثلاً ۱۶" : "e.g. 16"}
+                  className="h-12 flex-1 rounded-xl bg-white text-base sm:text-sm"
+                  inputMode="decimal"
+                />
+                <select
+                  value={gpaParts.scale}
+                  onChange={(e) => setGpa(gpaParts.value, e.target.value)}
+                  aria-label={fa ? "مقیاس نمره" : "Grade scale"}
+                  className={selectClass + " w-32 shrink-0"}
+                >
+                  {GPA_SCALES.map((s) => <option key={s.value} value={s.value}>{fa ? s.fa : s.en}</option>)}
+                </select>
+              </div>
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={fa ? "واحد گذرانده (ECTS)" : "Completed credits (ECTS)"}>
+
+            <Field
+              label={fa ? "واحد گذرانده" : "Completed credits"}
+              hint={
+                draft.creditSystem !== "ects" && credits !== null
+                  ? (fa ? `معادل تقریبی ${credits} واحد ECTS` : `≈ ${credits} ECTS equivalent`)
+                  : (fa ? "تعداد واحدهای گذرانده و سیستم واحد کشورتان را انتخاب کنید." : "Enter your completed credits and pick your country's credit system.")
+              }
+            >
+              <div className="mt-2 flex gap-2">
                 <Input
                   value={answers.completedCredits}
                   onChange={(e) => setAnswer("completedCredits", e.target.value)}
                   placeholder={fa ? "مثلاً ۷۲" : "e.g. 72"}
-                  className={inputClass}
+                  className="h-12 flex-1 rounded-xl bg-white text-base sm:text-sm"
                   inputMode="numeric"
                 />
-              </Field>
-              <Field label={fa ? "سال / ترم فعلی" : "Current year / semester"}>
-                <Input
-                  value={answers.currentYear}
-                  onChange={(e) => setAnswer("currentYear", e.target.value)}
-                  placeholder={fa ? "مثلاً سال دوم" : "e.g. Year 2"}
-                  className={inputClass}
-                />
-              </Field>
-            </div>
+                <select
+                  value={draft.creditSystem}
+                  onChange={(e) => setCreditSystem(e.target.value)}
+                  aria-label={fa ? "سیستم واحد" : "Credit system"}
+                  className={selectClass + " w-40 shrink-0"}
+                >
+                  {CREDIT_SYSTEMS.map((s) => <option key={s.value} value={s.value}>{fa ? s.fa : s.en}</option>)}
+                </select>
+              </div>
+            </Field>
+
+            <Field label={fa ? "سال / ترم فعلی" : "Current year / semester"}>
+              <select
+                value={answers.currentYear}
+                onChange={(e) => setAnswer("currentYear", e.target.value)}
+                aria-label={fa ? "سال تحصیلی" : "Academic year"}
+                className={selectClass + " mt-2 w-full"}
+              >
+                <option value="">{fa ? "انتخاب کنید…" : "Select…"}</option>
+                {YEAR_OPTIONS.map((o) => <option key={o.value} value={o.value}>{fa ? o.fa : o.en}</option>)}
+              </select>
+            </Field>
           </div>
         )}
 
         {/* ── STEP: transfer target ────────────────────────────────────────── */}
         {step === "target" && (
-          <div className="space-y-4">
-            <Field
-              label={fa ? "رشته مقصد" : "Target program"}
-              hint={fa ? "تطبیق دروس نسبت به این رشته محاسبه می‌شود." : "Course matching is computed against this program."}
-            >
-              <Input
-                autoFocus
-                value={answers.targetProgram}
-                onChange={(e) => setAnswer("targetProgram", e.target.value)}
-                placeholder={fa ? "رشته‌ای که می‌خواهید منتقل شوید" : "Program you want to transfer into"}
-                className={inputClass}
-              />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={fa ? "کشور مقصد" : "Target country"}>
-                <Input
-                  value={answers.targetCountry}
-                  onChange={(e) => setAnswer("targetCountry", e.target.value)}
-                  placeholder={fa ? "مثلاً ترکیه" : "e.g. Türkiye"}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label={fa ? "دانشگاه مقصد" : "Target university"}>
-                <Input
-                  value={answers.targetUniversity}
-                  onChange={(e) => setAnswer("targetUniversity", e.target.value)}
-                  placeholder={fa ? "نام دانشگاه یا «نامشخص»" : "University, or 'Not sure'"}
-                  className={inputClass}
-                />
-              </Field>
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-2xl bg-[color:var(--ta-gold)]/[0.06] p-3 text-[11px] leading-5 text-muted-foreground">
+              <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color:var(--ta-gold-deep)]" />
+              {fa
+                ? "از کاتالوگ زندهٔ آکادو، دانشگاه و رشتهٔ مقصد انتقالی را انتخاب کنید؛ می‌توانید چند گزینه را هم‌زمان به فهرست اضافه کنید. تطبیق دروس نسبت به اولین انتخاب محاسبه می‌شود."
+                : "Pick your destination university & program from the live ACCA catalog — you can shortlist several. Course matching is computed against your first pick."}
             </div>
+            <SelectedProgramCard
+              selection={{ items: draft.targetSelection }}
+              product="ai_transfer"
+              onChange={() => setPickerOpen(true)}
+            />
           </div>
         )}
 
@@ -720,6 +793,21 @@ export function GuestAssessmentModal() {
             </>
           )}
         </DialogFooter>
+
+        {/* The exact account-portal catalog picker (multi-select, search, country
+            filter), reused here so step 4 matches the central panel 1:1. It is
+            portaled to <body> so its fixed overlay isn't trapped by the dialog's
+            transform; the dialog's outside-guards keep it open while picking. */}
+        {createPortal(
+          <ProgramCatalogPicker
+            open={pickerOpen}
+            product="ai_transfer"
+            initialSelection={draft.targetSelection}
+            onClose={() => setPickerOpen(false)}
+            onSelect={(items: CatalogTargetItem[]) => setTargetSelection(items)}
+          />,
+          document.body,
+        )}
       </DialogContent>
     </Dialog>
   );

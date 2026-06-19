@@ -27,6 +27,35 @@ export type GuestAssessmentAnswers = {
   targetProgram: string;
 };
 
+/** One row from the live ACCA program catalog (shape mirrors programCatalogService). */
+export type CatalogTargetItem = {
+  id: string;
+  program?: string;
+  university?: string;
+  country?: string;
+  city?: string;
+  degree?: string;
+  language?: string;
+  tuitionFee?: string;
+  universityLogo?: string;
+};
+
+/**
+ * Academic credit systems used around the world, with a rough factor that
+ * converts one unit into ECTS (a full academic year ≈ 60 ECTS). Used so the
+ * entry-level estimate is comparable no matter which system the student picks.
+ */
+export const CREDIT_SYSTEMS = [
+  { value: 'ects', factor: 1, fa: 'ECTS (اروپا)', en: 'ECTS (Europe)' },
+  { value: 'us_semester', factor: 2, fa: 'واحد ترمی آمریکا', en: 'US semester credits' },
+  { value: 'us_quarter', factor: 1.333, fa: 'واحد فصلی آمریکا', en: 'US quarter credits' },
+  { value: 'uk_cats', factor: 0.5, fa: 'واحد بریتانیا (CATS)', en: 'UK credits (CATS)' },
+  { value: 'iran', factor: 1.8, fa: 'واحد دانشگاهی ایران', en: 'Iranian university units' },
+  { value: 'other', factor: 1, fa: 'سایر / نامشخص', en: 'Other / not sure' },
+] as const;
+
+export type CreditSystem = (typeof CREDIT_SYSTEMS)[number]['value'];
+
 export type GuestPreliminaryResult = {
   headline: string;
   overview: string;
@@ -56,6 +85,10 @@ export type GuestAssessmentDraft = {
   document: GuestDocument | null;
   documentDeferred: boolean;
   answers: GuestAssessmentAnswers;
+  /** Which credit system `answers.completedCredits` is expressed in. */
+  creditSystem: CreditSystem;
+  /** Multi-select destination programs picked from the live ACCA catalog. */
+  targetSelection: CatalogTargetItem[];
   /** Core / specialised courses the student entered, for per-course matching. */
   courses: CoreCourse[];
   preliminaryResult: GuestPreliminaryResult | null;
@@ -84,6 +117,8 @@ export function createGuestAssessmentDraft(): GuestAssessmentDraft {
     document: null,
     documentDeferred: false,
     answers: emptyAnswers(),
+    creditSystem: 'ects',
+    targetSelection: [],
     courses: [],
     preliminaryResult: null,
     completed: false,
@@ -101,6 +136,8 @@ export function readGuestAssessment(): GuestAssessmentDraft | null {
       ...createGuestAssessmentDraft(),
       ...parsed,
       answers: { ...emptyAnswers(), ...parsed.answers },
+      creditSystem: parsed.creditSystem ?? 'ects',
+      targetSelection: Array.isArray(parsed.targetSelection) ? parsed.targetSelection : [],
       courses: Array.isArray(parsed.courses) ? parsed.courses : [],
       preliminaryResult: parsed.preliminaryResult ?? null,
     };
@@ -133,6 +170,14 @@ export function guestAssessmentProgress(draft: GuestAssessmentDraft | null) {
 function parseFirstNumber(value: string) {
   const match = value.replace(",", ".").match(/\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : null;
+}
+
+/** Convert a completed-credits value into ECTS-equivalent using the chosen system. */
+export function creditsToEcts(value: string, system: string): number | null {
+  const raw = parseFirstNumber(value ?? "");
+  if (raw === null) return null;
+  const found = CREDIT_SYSTEMS.find((s) => s.value === system);
+  return Math.round(raw * (found ? found.factor : 1));
 }
 
 function normalizedGpa(value: string) {
@@ -169,7 +214,9 @@ function programAlignment(currentProgram: string, targetProgram: string) {
 export function buildGuestPreliminaryResult(draft: GuestAssessmentDraft): GuestPreliminaryResult {
   const answers = draft.answers;
   const gpaRatio = normalizedGpa(answers.gpa);
-  const completedCredits = parseFirstNumber(answers.completedCredits);
+  // Normalise to ECTS so the credit thresholds below mean the same thing for
+  // every grading system the student might pick (US, UK, Iranian, …).
+  const completedCredits = creditsToEcts(answers.completedCredits, draft.creditSystem);
   const populatedAnswers = Object.values(answers).filter(Boolean).length;
 
   let match = 35;
