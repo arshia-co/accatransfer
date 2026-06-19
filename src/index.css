@@ -771,6 +771,66 @@ textarea {
 .account-result-section li span { color: rgba(16,47,72,.55); font-size: 9px; line-height: 1.6; }
 .account-result-reality { display: flex; align-items: flex-start; gap: 8px; margin-top: 13px; padding: 11px 13px; border-radius: 13px; color: rgba(16,47,72,.62); background: rgba(16,47,72,.045); font-size: 9px; line-height: 1.8; }
 .account-result-reality svg { flex: 0 0 auto; color: #14745f; }
+
+/* ── AI Transfer — futuristic analysis panel ─────────────────────────────── */
+.account-transfer-hero { position: relative; overflow: hidden; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; padding: 22px; border-radius: 20px; color: #eaf2ff; background: linear-gradient(135deg, #0a1f3a 0%, #102f48 48%, #124b46 100%); }
+.account-transfer-hero-glow { position: absolute; inset: -45% 25% auto -10%; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(198,167,104,.5), transparent 70%); filter: blur(42px); opacity: .5; pointer-events: none; }
+.account-transfer-hero-main { position: relative; z-index: 1; flex: 1 1 280px; min-width: 0; }
+.account-transfer-hero-kicker { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; color: #f0d79a; background: rgba(198,167,104,.16); font-size: 9px; font-weight: 900; letter-spacing: .03em; }
+.account-transfer-hero-main h3 { margin: 11px 0 6px; color: #fff; font-size: 19px; }
+.account-transfer-hero-main p { margin: 0; max-width: 520px; color: rgba(234,242,255,.66); font-size: 11px; line-height: 1.9; }
+.account-transfer-fit { display: inline-block; margin-top: 11px; padding: 6px 12px; border-radius: 999px; color: #0a1f3a; background: linear-gradient(145deg,#ead49d,#c6a768); font-size: 9px; font-weight: 900; }
+.account-transfer-hero-ring { position: relative; z-index: 1; display: flex; flex: 0 0 auto; flex-direction: column; align-items: center; gap: 6px; }
+.account-transfer-hero-ring > div { text-align: center; }
+.account-transfer-hero-ring > div b { display: block; color: #f0d79a; font-size: 12px; }
+.account-transfer-hero-ring > div small { color: rgba(234,242,255,.5); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.account-ai-ring { position: relative; width: 104px; height: 104px; }
+.account-ai-ring svg { width: 100%; height: 100%; }
+.account-ai-ring-track { fill: none; stroke: rgba(255,255,255,.12); stroke-width: 9; }
+.account-ai-ring-fill { fill: none; stroke: #c6a768; stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset .9s cubic-bezier(.2,.7,.2,1); filter: drop-shadow(0 0 6px rgba(198,167,104,.55)); }
+.account-ai-ring-center { position: absolute; inset: 0; display: grid; place-items: center; }
+.account-ai-ring-center b { color: #fff; font-size: 26px; font-weight: 900; line-height: 1; }
+.account-ai-ring-center b span { font-size: 13px; color: rgba(234,242,255,.6); }
+.account-transfer-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 9px; margin-top: 12px; }
+.account-transfer-stats > div { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 12px; border: 1px solid rgba(16,47,72,.07); border-radius: 15px; background: rgba(255,255,255,.74); }
+.account-transfer-stats > div > span { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border-radius: 10px; color: #14745f; background: rgba(20,116,95,.1); }
+.account-transfer-stats > div > div { display: grid; gap: 2px; min-width: 0; }
+.account-transfer-stats small { color: rgba(16,47,72,.45); font-size: 8px; }
+.account-transfer-stats b { overflow: hidden; color: #102f48; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.account-transfer-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.account-transfer-legend span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 999px; font-size: 9px; font-weight: 800; }
+.account-transfer-legend b { font-size: 11px; font-weight: 900; }
+.account-transfer-legend .is-likely { color: #116d5b; background: rgba(20,128,106,.12); }
+.account-transfer-legend .is-review { color: #8a6c1f; background: rgba(210,168,72,.16); }
+.account-transfer-legend .is-unlikely { color: #a23b2a; background: rgba(196,76,52,.12); }
+.account-equiv-list { display: grid; gap: 8px; }
+.account-equiv-row { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(70px,1fr) auto auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid rgba(16,47,72,.06); border-radius: 13px; background: rgba(255,255,255,.8); }
+.account-equiv-pair { display: grid; gap: 2px; min-width: 0; }
+.account-equiv-pair b { overflow: hidden; color: #102f48; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.account-equiv-pair b em { color: rgba(16,47,72,.5); font-style: normal; font-weight: 700; }
+.account-equiv-pair span { display: inline-flex; align-items: center; gap: 4px; overflow: hidden; color: rgba(16,47,72,.5); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.account-equiv-bar { height: 6px; overflow: hidden; border-radius: 999px; background: rgba(16,47,72,.08); }
+.account-equiv-bar span { display: block; height: 100%; border-radius: inherit; transition: width .6s ease; }
+.account-equiv-bar .is-likely { background: linear-gradient(90deg,#14745f,#1aa37f); }
+.account-equiv-bar .is-review { background: linear-gradient(90deg,#c6a768,#e0b95a); }
+.account-equiv-bar .is-unlikely { background: linear-gradient(90deg,#c44c34,#e07a5f); }
+.account-equiv-score { font-size: 11px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.account-equiv-score.is-likely { color: #116d5b; }
+.account-equiv-score.is-review { color: #8a6c1f; }
+.account-equiv-score.is-unlikely { color: #a23b2a; }
+.account-equiv-badge { padding: 4px 8px; border-radius: 999px; font-size: 8px; font-weight: 900; white-space: nowrap; }
+.account-equiv-badge.is-likely { color: #116d5b; background: rgba(20,128,106,.12); }
+.account-equiv-badge.is-review { color: #8a6c1f; background: rgba(210,168,72,.16); }
+.account-equiv-badge.is-unlikely { color: #a23b2a; background: rgba(196,76,52,.12); }
+.account-doc-checklist { display: flex; flex-wrap: wrap; gap: 7px; }
+.account-doc-checklist span { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 999px; font-size: 9px; font-weight: 800; }
+.account-doc-checklist .is-ok { color: #116d5b; background: rgba(20,128,106,.1); }
+.account-doc-checklist .is-pending { color: #8a6c1f; background: rgba(210,168,72,.14); }
+@media (max-width: 640px) {
+  .account-transfer-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .account-equiv-row { grid-template-columns: minmax(0,1fr) auto auto; }
+  .account-equiv-bar { grid-column: 1 / -1; order: 5; }
+}
 .account-selection-notice { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 12px 15px; border: 1px solid rgba(20,116,95,.15); border-radius: 15px; color: #116d5b; background: rgba(20,128,106,.08); font-size: 11px; font-weight: 850; }
 .application-readiness { margin-top: 16px; padding: 22px; border: 1px solid rgba(198,167,104,.22); border-radius: 24px; background: linear-gradient(145deg, rgba(255,255,255,.92), rgba(241,248,246,.86)); box-shadow: 0 18px 52px rgba(16,47,72,.06); }
 .application-readiness-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px; }

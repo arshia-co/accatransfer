@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  AlertTriangle, ArrowLeft, BadgeCheck, Bell, BookOpen, BrainCircuit, CheckCircle2, ChevronDown, ChevronUp, Clock3, CloudUpload, Compass,
-  FileText, FolderLock, GraduationCap, LayoutGrid, ListChecks, LoaderCircle, LogOut, Paperclip,
-  RefreshCw, ScanText, ShieldCheck, Sparkles, Target,
+  AlertTriangle, ArrowLeft, BadgeCheck, Bell, BookOpen, BrainCircuit, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CloudUpload, Compass,
+  FileCheck2, FileText, FolderLock, GraduationCap, Layers, LayoutGrid, ListChecks, LoaderCircle, LogOut, Paperclip, Percent,
+  RefreshCw, ScanText, ShieldCheck, Sparkles, Target, XCircle,
 } from 'lucide-react';
+import { computeCourseMatches, overallMatch, parseGradeRatio } from '../../transfer/lib/course-matching';
 import { useAuth } from '../../auth/AuthContext';
 import { rememberAccountPreview } from '../../auth/accountPreview';
 import {
@@ -380,60 +381,179 @@ function AccountNotifications({ notifications = [], documents = [] }) {
   );
 }
 
-function TransferAnalysisPanel({ result }) {
+const TRANSFER_STATUS_META = {
+  likely: { fa: 'محتمل', cls: 'is-likely' },
+  review: { fa: 'نیازمند بررسی', cls: 'is-review' },
+  unlikely: { fa: 'کم‌احتمال', cls: 'is-unlikely' },
+};
+
+function localizeEntry(value) {
+  const map = {
+    'Year 2 may be possible': 'سال دوم',
+    'Year 1 or Year 2 may be possible': 'سال ۱ یا ۲',
+    'Year 1 is more likely': 'سال اول',
+    'Cannot be estimated without verified credits': 'نیازمند تأیید واحد',
+  };
+  return value ? (map[value] || value) : '—';
+}
+
+function localizeConfidence(value) {
+  const map = { Low: 'پایین', Medium: 'متوسط', High: 'بالا' };
+  return value ? (map[value] || value) : '—';
+}
+
+function transferStatusFromScore(score) {
+  if (score >= 80) return 'likely';
+  if (score >= 58) return 'review';
+  return 'unlikely';
+}
+
+function docVerified(doc) {
+  const status = (doc?.review_status || '').toLowerCase();
+  return status === 'confirmed' || status === 'verified' || status === 'approved';
+}
+
+function AiConfidenceRing({ value }) {
+  const v = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <div className="account-ai-ring" role="img" aria-label={`${v}%`}>
+      <svg viewBox="0 0 120 120">
+        <circle className="account-ai-ring-track" cx="60" cy="60" r={radius} />
+        <circle
+          className="account-ai-ring-fill"
+          cx="60" cy="60" r={radius}
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - v / 100)}
+          transform="rotate(-90 60 60)"
+        />
+      </svg>
+      <div className="account-ai-ring-center" dir="ltr"><b>{v}<span>%</span></b></div>
+    </div>
+  );
+}
+
+function TransferAnalysisPanel({ result, documents = [] }) {
+  // Course-by-course equivalency: use the stored preview if present, otherwise
+  // compute it on the fly from the saved guest courses + answers so the table
+  // is always populated (the matching engine is deterministic).
+  const courses = useMemo(() => {
+    if (!result) return [];
+    if (Array.isArray(result.course_equivalency_preview) && result.course_equivalency_preview.length) {
+      return result.course_equivalency_preview.map((c) => {
+        const score = c.match_score == null ? null : Number(c.match_score);
+        return {
+          name: c.source_course,
+          target: c.suggested_target_course || '',
+          grade: c.grade || '',
+          score,
+          tone: c.tone || (score == null ? 'review' : transferStatusFromScore(score)),
+        };
+      });
+    }
+    const answers = result.guest_answers || {};
+    const guestCourses = Array.isArray(result.guest_courses) ? result.guest_courses : [];
+    if (!guestCourses.length) return [];
+    return computeCourseMatches(guestCourses, {
+      currentProgram: answers.currentProgram || '',
+      targetProgram: answers.targetProgram || '',
+      gpaRatio: parseGradeRatio(answers.gpa || ''),
+    }).map((m) => ({
+      name: m.name,
+      target: answers.targetProgram || '',
+      grade: m.gradeLabel,
+      score: m.matchScore,
+      tone: m.status,
+    }));
+  }, [result]);
+
   if (!result) return null;
-  const metrics = [
-    ['برآورد آمادگی انتقال', result.estimated_transfer_match != null ? `${result.estimated_transfer_match}٪` : '—'],
-    ['اطمینان تحلیل AI', result.ai_confidence || '—'],
-    ['سطح ریسک', result.risk_level || '—'],
-    ['ورودی احتمالی', result.estimated_entry_level || '—'],
-    ['دروس محتمل برای بررسی', result.likely_recognized_courses || '—'],
+
+  const answers = result.guest_answers || {};
+  const matchValue = result.estimated_transfer_match != null
+    ? Number(result.estimated_transfer_match)
+    : (courses.length
+      ? overallMatch(courses.map((c, i) => ({ id: String(i), name: c.name, gradeLabel: c.grade, matchScore: c.score ?? 0, status: c.tone }))).score
+      : 0);
+  const counts = courses.reduce((acc, c) => { acc[c.tone] = (acc[c.tone] || 0) + 1; return acc; }, {});
+  const stats = [
+    { icon: GraduationCap, label: 'معدل', value: answers.gpa || '—' },
+    { icon: Layers, label: 'واحد گذرانده', value: answers.completedCredits || '—' },
+    { icon: Percent, label: 'برآورد تطبیق', value: matchValue ? `${Math.round(matchValue)}٪` : '—' },
+    { icon: CalendarClock, label: 'ورودی احتمالی', value: localizeEntry(result.estimated_entry_level) },
   ];
-  const courses = Array.isArray(result.course_equivalency_preview) ? result.course_equivalency_preview : [];
   const missingDocuments = Array.isArray(result.missing_documents) ? result.missing_documents : [];
   const risks = Array.isArray(result.risk_factors) ? result.risk_factors : [];
 
   return (
-    <motion.div className="account-transfer-result" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="account-transfer-result-head">
-        <div>
-          <span className="account-kicker">گزارش مرحله چهارم</span>
+    <motion.div className="account-transfer-result" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="account-transfer-hero">
+        <span className="account-transfer-hero-glow" aria-hidden="true" />
+        <div className="account-transfer-hero-main">
+          <span className="account-transfer-hero-kicker"><Sparkles size={13} /> Matching Engine · تحلیل هوشمند</span>
           <h3>{result.headline || 'تحلیل مقدماتی انتقالی'}</h3>
-          <p>{result.overview || result.admission_reality_note}</p>
+          <p>{result.overview || result.admission_reality_note || 'تطبیق دروس شما با برنامهٔ دانشگاه مقصد، بر پایهٔ ریزنمرات، واحدها و معدل.'}</p>
+          {result.preliminary_transfer_fit && <span className="account-transfer-fit">{result.preliminary_transfer_fit}</span>}
         </div>
-        {result.preliminary_transfer_fit && <strong>{result.preliminary_transfer_fit}</strong>}
+        <div className="account-transfer-hero-ring">
+          <AiConfidenceRing value={matchValue} />
+          <div><b>{localizeConfidence(result.ai_confidence)}</b><small>AI Confidence</small></div>
+        </div>
       </div>
 
-      <div className="account-transfer-metrics">
-        {metrics.map(([label, value]) => <div key={label}><small>{label}</small><b>{value}</b></div>)}
+      <div className="account-transfer-stats">
+        {stats.map(({ icon: Icon, label, value }) => (
+          <div key={label}>
+            <span><Icon size={15} /></span>
+            <div><small>{label}</small><b dir="auto">{value}</b></div>
+          </div>
+        ))}
       </div>
+
+      {(counts.likely || counts.review || counts.unlikely) ? (
+        <div className="account-transfer-legend">
+          <span className="is-likely"><b>{counts.likely || 0}</b> محتمل</span>
+          <span className="is-review"><b>{counts.review || 0}</b> نیازمند بررسی</span>
+          <span className="is-unlikely"><b>{counts.unlikely || 0}</b> کم‌احتمال</span>
+        </div>
+      ) : null}
 
       {courses.length > 0 && (
         <section className="account-result-section">
-          <div className="account-result-section-title"><ListChecks size={17} /><h4>پیش‌نمایش تطبیق درس‌ها</h4></div>
-          <div className="account-course-table-wrap">
-            <table className="account-course-table account-match-table">
-              <thead>
-                <tr>
-                  <th>درس مبدأ</th>
-                  <th>پیشنهاد مقصد</th>
-                  <th>امتیاز</th>
-                  <th>وضعیت</th>
-                  <th>اقدام لازم</th>
-                </tr>
-              </thead>
-              <tbody>
-                {courses.map((course, index) => (
-                  <tr key={`${course.source_course}-${index}`}>
-                    <td>{course.source_course}</td>
-                    <td>{course.suggested_target_course || 'نیازمند چارت مقصد'}</td>
-                    <td>{course.match_score == null ? '—' : `${course.match_score}٪`}</td>
-                    <td><span className="account-match-status">{course.status}</span></td>
-                    <td>{course.required_next_action || course.explanation}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="account-result-section-title"><ListChecks size={17} /><h4>تطبیق درس‌به‌درس</h4></div>
+          <div className="account-equiv-list">
+            {courses.map((course, index) => {
+              const meta = TRANSFER_STATUS_META[course.tone] || TRANSFER_STATUS_META.review;
+              return (
+                <div className="account-equiv-row" key={`${course.name}-${index}`}>
+                  <div className="account-equiv-pair">
+                    <b>{course.name}{course.grade ? <em> · {course.grade}</em> : null}</b>
+                    <span><BookOpen size={11} />{course.target || 'برنامهٔ مقصد'}</span>
+                  </div>
+                  <div className="account-equiv-bar"><span className={meta.cls} style={{ width: `${course.score ?? 0}%` }} /></div>
+                  <span className={`account-equiv-score ${meta.cls}`} dir="ltr">{course.score == null ? '—' : `${course.score}%`}</span>
+                  <span className={`account-equiv-badge ${meta.cls}`}>{meta.fa}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {documents.length > 0 && (
+        <section className="account-result-section">
+          <div className="account-result-section-title"><FileCheck2 size={17} /><h4>چک‌لیست مدارک</h4></div>
+          <div className="account-doc-checklist">
+            {documents.map((doc) => {
+              const ok = docVerified(doc);
+              return (
+                <span key={doc.id} className={ok ? 'is-ok' : 'is-pending'}>
+                  {ok ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}
+                  {documentKindLabel(doc.document_kind) || doc.original_name || 'مدرک'}
+                </span>
+              );
+            })}
           </div>
         </section>
       )}
@@ -978,7 +1098,7 @@ export default function AccountPortal() {
             product="ai_transfer"
             onChange={() => setCatalogPicker({ product: 'ai_transfer', initialSelection: getSelectionItems(transferSelection) })}
           />
-          <TransferAnalysisPanel result={transferAssessment?.ai_result} />
+          <TransferAnalysisPanel result={transferAssessment?.ai_result} documents={transferDocuments} />
           <div className="account-transfer-tools">
             <DocumentUpload
               product="ai_transfer"
