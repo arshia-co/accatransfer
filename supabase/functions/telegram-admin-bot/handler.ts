@@ -24,8 +24,10 @@ const DOCUMENT_BUCKET = "student-documents";
 const MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024;
 const EMAIL_ATTACHMENT_LIMIT = 8 * 1024 * 1024;
 const BULK_EMAIL_LIMIT = 500;
+const RESEND_SEND_INTERVAL_MS = 650;
 let cachedTelegramBotToken: string | null = null;
 let cachedEmailSettings: Json | null = null;
+let lastResendRequestAt = 0;
 const ALLOWED_ATTACHMENT_MIME = new Set([
   "application/pdf",
   "image/jpeg",
@@ -177,6 +179,17 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
     binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
   }
   return btoa(binary);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function throttleResendRequest() {
+  const now = Date.now();
+  const waitMs = Math.max(0, RESEND_SEND_INTERVAL_MS - (now - lastResendRequestAt));
+  if (waitMs > 0) await sleep(waitMs);
+  lastResendRequestAt = Date.now();
 }
 
 function displayName(user?: TelegramUser) {
@@ -788,6 +801,7 @@ async function sendStudentEmail({
   };
   if (attachment) payload.attachments = [attachment];
 
+  await throttleResendRequest();
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -798,10 +812,19 @@ async function sendStudentEmail({
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
+    const failureReason = body?.message || `Resend responded with ${res.status}`;
+    if (res.status === 429) {
+      return {
+        status: "queued",
+        provider: "resend",
+        failure_reason: failureReason,
+        provider_message_id: null,
+      };
+    }
     return {
       status: "failed",
       provider: "resend",
-      failure_reason: body?.message || `Resend responded with ${res.status}`,
+      failure_reason: failureReason,
       provider_message_id: null,
     };
   }
