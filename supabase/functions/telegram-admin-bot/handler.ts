@@ -836,6 +836,35 @@ async function sendStudentEmail({
   };
 }
 
+async function loadRetryEmailAttachment(log: Json) {
+  if (!log?.letter_id) return null;
+  const { data: letter, error } = await supabase
+    .from("user_letters")
+    .select("bucket_id, object_path, original_name, mime_type, size_bytes")
+    .eq("id", log.letter_id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!letter?.object_path) return null;
+  const sizeBytes = Number(letter.size_bytes ?? 0);
+  if (sizeBytes > EMAIL_ATTACHMENT_LIMIT) return null;
+
+  const bucketId = letter.bucket_id || DOCUMENT_BUCKET;
+  const { data, error: downloadError } = await supabase.storage
+    .from(bucketId)
+    .download(letter.object_path);
+  if (downloadError) throw downloadError;
+  if (!data) return null;
+  const buffer = await data.arrayBuffer();
+  if (buffer.byteLength > EMAIL_ATTACHMENT_LIMIT) return null;
+
+  const filename = safeFilename(letter.original_name || `attachment-${log.letter_id}`);
+  return {
+    filename,
+    content: arrayBufferToBase64(buffer),
+    content_type: inferMimeType(filename, letter.mime_type),
+  };
+}
+
 function getMessageAttachment(message?: TelegramMessage) {
   if (!message) return null;
   if (message.document?.file_id) {
@@ -1731,30 +1760,54 @@ async function retryQueuedEmails(update: TelegramUpdate, admin: Admin) {
 
   let sent = 0;
   let failed = 0;
+  let queued = 0;
   for (const log of logs) {
-    const delivery = await sendStudentEmail({
-      to: log.recipient_email,
-      subject: log.subject,
-      text: log.body_text || "",
-      html: log.body_html || marketingEmailHtml(log.subject, log.body_text || ""),
-    });
+    let retryAttachment: { filename: string; content: string; content_type: string } | null = null;
+    let attachmentFailure: string | null = null;
+    try {
+      retryAttachment = await loadRetryEmailAttachment(log);
+    } catch (error) {
+      attachmentFailure = error instanceof Error ? error.message : String(error);
+    }
+    const delivery = attachmentFailure
+      ? {
+        status: "failed",
+        provider: "resend",
+        provider_message_id: null,
+        failure_reason: `Attachment could not be loaded for retry: ${attachmentFailure}`,
+      }
+      : await sendStudentEmail({
+        to: log.recipient_email,
+        subject: log.subject,
+        text: log.body_text || "",
+        html: log.body_html || marketingEmailHtml(log.subject, log.body_text || ""),
+        attachment: retryAttachment,
+      });
     if (delivery.status === "sent") sent += 1;
     if (delivery.status === "failed") failed += 1;
+    if (delivery.status === "queued") queued += 1;
     await supabase.from("email_logs").update({
       status: delivery.status,
       provider: delivery.provider,
       provider_message_id: delivery.provider_message_id ?? null,
       failure_reason: delivery.failure_reason ?? null,
+      metadata: {
+        ...(log.metadata ?? {}),
+        retry_attempted_at: new Date().toISOString(),
+        retry_attachment_included: Boolean(retryAttachment),
+        retry_attachment_required: Boolean(log.letter_id),
+      },
       updated_at: new Date().toISOString(),
     }).eq("id", log.id);
   }
-  await audit(admin, "queued_emails_retried", { metadata: { attempted: logs.length, sent, failed } });
+  await audit(admin, "queued_emails_retried", { metadata: { attempted: logs.length, sent, failed, queued } });
   return render(update, [
     "<b>ارسال دوباره ایمیل‌های صف انجام شد</b>",
     "",
     `تعداد بررسی‌شده: <b>${logs.length}</b>`,
     `ارسال‌شده: <b>${sent}</b>`,
     `ناموفق: <b>${failed}</b>`,
+    `در صف: <b>${queued}</b>`,
   ].join("\n"), keyboard([[button("مرکز ایمیل", "email")], [button("منوی اصلی", "menu")]]));
 }
 
