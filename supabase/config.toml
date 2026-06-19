@@ -13,10 +13,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.document-ocr]
-# Explicit bearer validation is performed with supabase.auth.getUser().
+# Explicit bearer validation is performed with supabase.auth.getUser(); service
+# role calls are accepted only for internal admin-triggered OCR.
 verify_jwt = false
 
 [functions.submit-application]
 # The platform validates the user JWT; the function also resolves the user
 # before reading private profile and document rows.
+verify_jwt = true
+
+[functions.account-event-email]
+# The platform validates the user JWT; the function sends only to the current
+# authenticated user's email address.
 verify_jwt = true

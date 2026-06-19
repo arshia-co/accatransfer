@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import {
   requestAccountPasswordReset,
+  sendAccountEventEmail,
   updateAccountPassword,
   updateProfileDetails,
   uploadAvatar,
@@ -146,11 +147,40 @@ export default function ProfileEditor({ user, profile, onSaved }) {
     setSavingProfile(true);
     resetMessages();
     try {
+      const previousName = (profile?.full_name || user?.user_metadata?.full_name || '').trim();
+      const previousCountryCode = profile?.phone_country_code || '+90';
+      const previousPhone = (profile?.phone_number || '').trim();
+      const changedFields = [
+        name.trim() !== previousName && {
+          field: 'full_name',
+          label: 'نام و نام خانوادگی',
+          previous: previousName || 'ثبت نشده',
+          next: name.trim() || 'خالی شد',
+        },
+        phoneCountryCode !== previousCountryCode && {
+          field: 'phone_country_code',
+          label: 'کد کشور شماره تماس',
+          previous: previousCountryCode || 'ثبت نشده',
+          next: phoneCountryCode || 'خالی شد',
+        },
+        cleanPhone !== previousPhone && {
+          field: 'phone_number',
+          label: 'شماره تماس',
+          previous: previousPhone || 'ثبت نشده',
+          next: cleanPhone || 'خالی شد',
+        },
+      ].filter(Boolean);
       await updateProfileDetails(user, {
         fullName: name,
         phoneCountryCode,
         phoneNumber: cleanPhone,
       });
+      if (changedFields.length) {
+        await sendAccountEventEmail('profile_updated', {
+          source: 'profile_editor',
+          changedFields,
+        }).catch(() => null);
+      }
       setPhoneNumber(cleanPhone);
       setNotice('مشخصات پروفایل ذخیره شد.');
       onSaved?.();

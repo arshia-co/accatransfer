@@ -250,6 +250,26 @@ textarea {
 .acca-auth-submit, .acca-auth-close, .acca-auth-back { transition: transform .2s ease, box-shadow .2s ease, background .2s ease; }
 .acca-auth-submit:hover:not(:disabled), .acca-auth-close:hover, .acca-auth-back:hover:not(:disabled) { transform: translateY(-1px); }
 
+.reset-password-page { min-height: 100dvh; display: grid; place-items: center; padding: clamp(18px, 4vw, 44px); color: #102f48; background: radial-gradient(circle at 22% 18%, rgba(232,201,134,.32), transparent 35%), radial-gradient(circle at 82% 12%, rgba(20,128,106,.18), transparent 31%), linear-gradient(135deg, #fbf7ef, #f5faf7); }
+.reset-password-card { position: relative; display: grid; width: min(540px, 100%); gap: 14px; justify-items: center; overflow: hidden; padding: clamp(26px, 5vw, 44px); border: 1px solid rgba(255,255,255,.8); border-radius: 34px; background: rgba(255,255,255,.82); box-shadow: 0 30px 95px rgba(16,47,72,.16); text-align: center; backdrop-filter: blur(24px); }
+.reset-password-card::before { content: ""; position: absolute; inset: -140px auto auto -120px; width: 280px; height: 280px; border-radius: 999px; background: radial-gradient(circle, rgba(20,128,106,.16), transparent 70%); pointer-events: none; }
+.reset-password-orb { display: grid; width: 82px; height: 82px; place-items: center; border: 1px solid rgba(16,47,72,.12); border-radius: 28px; color: #102f48; background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(232,201,134,.22)); box-shadow: 0 18px 46px rgba(16,47,72,.12); }
+.reset-password-card h1 { margin: 0; font-size: clamp(28px, 5vw, 42px); letter-spacing: -.045em; }
+.reset-password-card > p:not(.account-kicker) { max-width: 440px; margin: 0; color: rgba(16,47,72,.62); line-height: 1.9; }
+.reset-password-form, .reset-password-actions { display: grid; width: 100%; gap: 11px; margin-top: 8px; }
+.reset-password-form label { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 0 13px; border: 1px solid rgba(16,47,72,.12); border-radius: 17px; background: rgba(255,255,255,.92); color: rgba(16,47,72,.6); }
+.reset-password-form input { flex: 1; min-width: 0; min-height: 52px; border: 0; outline: 0; color: #102f48; background: transparent; font: inherit; font-size: 15px; }
+.reset-password-form label button { display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: 999px; color: rgba(16,47,72,.58); background: rgba(16,47,72,.045); cursor: pointer; }
+.reset-password-primary, .reset-password-secondary { display: inline-flex; min-height: 50px; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; font-weight: 950; text-decoration: none; transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease; }
+.reset-password-primary { border: 0; color: #fff; background: #14745f; box-shadow: 0 14px 32px rgba(20,116,95,.22); cursor: pointer; }
+.reset-password-secondary { border: 1px solid rgba(16,47,72,.1); color: #102f48; background: #fff; }
+.reset-password-primary:hover:not(:disabled), .reset-password-secondary:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(16,47,72,.1); }
+.reset-password-primary:disabled { opacity: .5; cursor: not-allowed; }
+.reset-password-subtle { color: rgba(16,47,72,.55); font-size: 12px; font-weight: 850; text-decoration: none; }
+.reset-password-error, .reset-password-status { margin: 0; padding: 11px 13px; border-radius: 15px; font-size: 12px; font-weight: 850; }
+.reset-password-error { color: #a7372d; background: rgba(180,35,24,.08); }
+.reset-password-status { display: flex; align-items: center; justify-content: center; gap: 8px; color: #116d5b; background: rgba(20,128,106,.09); }
+
 /* Shared student account portal */
 .account-page {
   position: relative;

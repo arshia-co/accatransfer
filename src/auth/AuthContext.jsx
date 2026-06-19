@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
-import { migrateGuestTransferDraft, upsertProfile } from '../services/accountService';
+import { migrateGuestTransferDraft, sendAccountEventEmail, upsertProfile } from '../services/accountService';
 import { rememberAccountPreview } from './accountPreview';
 
 const AuthContext = createContext(null);
@@ -65,6 +65,11 @@ export function AuthProvider({ children }) {
       fullName: data.user.user_metadata?.full_name || data.user.user_metadata?.name,
       avatarUrl: data.user.user_metadata?.avatar_url,
     });
+    await sendAccountEventEmail('login', {
+      method: 'email_otp',
+      product,
+      source: 'auth_modal',
+    }).catch(() => null);
     rememberAccountPreview(data.user);
     const migratedDraft = await migrateGuestTransferDraft(data.user);
     setAuthRequest(null);
@@ -80,6 +85,11 @@ export function AuthProvider({ children }) {
       fullName: data.user.user_metadata?.full_name || data.user.user_metadata?.name,
       avatarUrl: data.user.user_metadata?.avatar_url,
     });
+    await sendAccountEventEmail('login', {
+      method: 'password',
+      product,
+      source: 'auth_modal',
+    }).catch(() => null);
     rememberAccountPreview(data.user);
     const migratedDraft = await migrateGuestTransferDraft(data.user);
     setAuthRequest(null);
@@ -128,7 +138,7 @@ export function AuthProvider({ children }) {
     if (!supabase) throw new Error('Authentication is not configured.');
     const redirectTo = typeof window === 'undefined'
       ? undefined
-      : `${window.location.origin}/account`;
+      : `${window.location.origin}/reset-password`;
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
     if (error) throw error;
   }, []);

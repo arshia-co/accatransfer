@@ -10,11 +10,16 @@ const OCR_PROVIDER = Deno.env.get("OCR_PROVIDER") ?? "auto";
 const CRM_SYNC_WEBHOOK_URL = Deno.env.get("CRM_SYNC_WEBHOOK_URL");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+  ?? namedKey("SUPABASE_SECRET_KEYS");
 const allowedOrigins = new Set([
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
   "http://localhost:5173",
+  "http://localhost:5174",
   "https://accatransfer.com",
   "https://www.accatransfer.com",
+  "https://accatransfer.vercel.app",
   ...(Deno.env.get("APP_ORIGINS") ?? "")
     .split(",")
     .map((value) => value.trim())
@@ -32,6 +37,15 @@ type DocumentRow = {
   mime_type: string | null;
   quality_report: Record<string, unknown> | null;
 };
+
+function namedKey(envName: string) {
+  try {
+    const value = JSON.parse(Deno.env.get(envName) ?? "{}");
+    return value.default ?? Object.values(value)[0] ?? "";
+  } catch {
+    return "";
+  }
+}
 
 function responseHeaders(req: Request) {
   const origin = req.headers.get("origin") ?? "";
@@ -407,12 +421,20 @@ Deno.serve(async (req) => {
   const authorization = req.headers.get("authorization");
   if (!authorization) return json(req, { error: "Authentication required" }, 401);
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authorization } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) return json(req, { error: "Invalid session" }, 401);
+  const bearer = authorization.replace(/^Bearer\s+/i, "").trim();
+  const isServiceRole = Boolean(SUPABASE_SERVICE_ROLE_KEY && bearer === SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createClient(
+    SUPABASE_URL,
+    isServiceRole ? SUPABASE_SERVICE_ROLE_KEY : SUPABASE_ANON_KEY,
+    {
+      global: { headers: { Authorization: authorization } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    },
+  );
+  if (!isServiceRole) {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) return json(req, { error: "Invalid session" }, 401);
+  }
 
   let payload: { documentId?: string; force?: boolean };
   try {

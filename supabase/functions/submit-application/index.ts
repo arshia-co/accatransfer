@@ -6,12 +6,19 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")
   ?? namedKey("SUPABASE_PUBLISHABLE_KEYS");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
   ?? namedKey("SUPABASE_SECRET_KEYS");
+const RESEND_API_KEY_ENV = Deno.env.get("RESEND_API_KEY") ?? "";
+const DEFAULT_EMAIL_FROM_ADDRESS = "ACCA Admissions <no-reply@accatransfer.com>";
+const EMAIL_FROM_ADDRESS_ENV = Deno.env.get("EMAIL_FROM_ADDRESS") ?? "";
+const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") ?? "https://accatransfer.com").replace(/\/$/, "");
 
 const allowedOrigins = new Set([
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
   "http://localhost:5173",
+  "http://localhost:5174",
   "https://accatransfer.com",
   "https://www.accatransfer.com",
+  "https://accatransfer.vercel.app",
   ...(Deno.env.get("APP_ORIGINS") ?? "")
     .split(",")
     .map((value) => value.trim())
@@ -38,6 +45,8 @@ type DocumentRow = {
   quality_report: Record<string, any> | null;
   created_at: string;
 };
+
+type ApplicationIntent = "apply" | "consultation" | "registration_help";
 
 function namedKey(envName: string) {
   try {
@@ -115,6 +124,147 @@ function localized(value: any) {
   return value.fa ?? value.en ?? "";
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function getEmailSettings(admin: ReturnType<typeof createClient>) {
+  const { data, error } = await admin
+    .from("email_delivery_settings")
+    .select("enabled, provider, resend_api_key, from_address")
+    .eq("id", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? {
+    enabled: false,
+    provider: "resend",
+    resend_api_key: null,
+    from_address: DEFAULT_EMAIL_FROM_ADDRESS,
+  };
+}
+
+function productLabel(product: string) {
+  return product === "ai_transfer" ? "AI Transfer" : "Smart Apply";
+}
+
+function intentTitle(intent: ApplicationIntent) {
+  if (intent === "registration_help") return "درخواست کمک حضوری رایگان برای ثبت‌نام";
+  if (intent === "consultation") return "درخواست مشاوره با پرونده کامل";
+  return "درخواست اپلای";
+}
+
+function buildSubmissionEmail({
+  product,
+  intent,
+  submission,
+  profile,
+  selection,
+  documentsCount,
+}: Record<string, any>) {
+  const accountUrl = `${APP_BASE_URL}/account?product=${product}`;
+  const studentName = profile?.full_name || "دانشجوی عزیز";
+  const title = intentTitle(intent);
+  const subject = intent === "registration_help"
+    ? "درخواست کمک حضوری شما ثبت شد"
+    : "مدارک شما با موفقیت به ACCA ارسال شد";
+  const actionLine = intent === "registration_help"
+    ? "درخواست شما برای هماهنگی کمک حضوری رایگان ثبت شد و کارشناس ACCA برای ادامه مسیر با شما هماهنگ می‌کند."
+    : "مدارک و اطلاعات پرونده شما با موفقیت برای تیم ACCA ارسال شد و در صف بررسی قرار گرفت.";
+  const details = [
+    `سرویس: ${productLabel(product)}`,
+    `نوع درخواست: ${title}`,
+    `کد پیگیری: ${submission?.id || "-"}`,
+    `دانشگاه: ${selection?.university_name || "-"}`,
+    `رشته: ${selection?.program_name || "-"}`,
+    `تعداد مدارک ارسال‌شده: ${documentsCount ?? 0}`,
+  ].join("\n");
+  const text = [
+    `سلام ${studentName}،`,
+    "",
+    actionLine,
+    "",
+    details,
+    "",
+    "برای مشاهده وضعیت پرونده وارد پنل مرکزی شوید:",
+    accountUrl,
+    "",
+    "ACCA Admissions",
+  ].join("\n");
+  const html = `
+    <div dir="rtl" style="font-family:Arial,Tahoma,sans-serif;line-height:1.9;color:#102f48">
+      <h2 style="margin:0 0 12px">${escapeHtml(subject)}</h2>
+      <p>سلام ${escapeHtml(studentName)}،</p>
+      <p>${escapeHtml(actionLine)}</p>
+      <pre style="white-space:pre-wrap;font-family:Arial,Tahoma,sans-serif;background:#f7f3ec;border-radius:16px;padding:14px;color:#102f48">${escapeHtml(details)}</pre>
+      <p><a href="${escapeHtml(accountUrl)}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#14745f;color:white;text-decoration:none;font-weight:700">مشاهده پرونده در پنل مرکزی</a></p>
+    </div>
+  `;
+  return { subject, text, html, accountUrl };
+}
+
+async function sendStudentEmail({
+  admin,
+  to,
+  subject,
+  text,
+  html,
+}: {
+  admin: ReturnType<typeof createClient>;
+  to?: string | null;
+  subject: string;
+  text: string;
+  html: string;
+}) {
+  if (!to) {
+    return {
+      status: "skipped",
+      provider: "resend",
+      provider_message_id: null,
+      failure_reason: "Student email is missing.",
+    };
+  }
+  const settings = await getEmailSettings(admin);
+  const resendApiKey = RESEND_API_KEY_ENV || (settings?.enabled ? settings?.resend_api_key?.trim() : "");
+  const from = EMAIL_FROM_ADDRESS_ENV || settings?.from_address || DEFAULT_EMAIL_FROM_ADDRESS;
+  if (!resendApiKey) {
+    return {
+      status: "queued",
+      provider: "resend",
+      provider_message_id: null,
+      failure_reason: "Email provider is not configured.",
+    };
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ from, to: [to], subject, text, html }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      status: response.status === 429 ? "queued" : "failed",
+      provider: "resend",
+      provider_message_id: null,
+      failure_reason: body?.message || `Resend responded with ${response.status}`,
+    };
+  }
+  return {
+    status: "sent",
+    provider: "resend",
+    provider_message_id: body?.id ?? null,
+    failure_reason: null,
+  };
+}
+
 function telegramSummary({
   submissionId,
   intent,
@@ -133,9 +283,11 @@ function telegramSummary({
     .map((major: any) => localized(major.name))
     .filter(Boolean)
     .join("، ");
-  const title = intent === "consultation"
-    ? "درخواست مشاوره با پرونده کامل"
-    : "درخواست جدید اپلای";
+  const title = intent === "registration_help"
+    ? "درخواست کمک حضوری رایگان برای ثبت‌نام"
+    : intent === "consultation"
+      ? "درخواست مشاوره با پرونده کامل"
+      : "درخواست جدید اپلای";
 
   return [
     `ACCA | ${title}`,
@@ -185,7 +337,7 @@ Deno.serve(async (req) => {
 
   let payload: {
     product?: "smart_apply" | "ai_transfer";
-    intent?: "apply" | "consultation";
+    intent?: ApplicationIntent;
     consent?: boolean;
     dryRun?: boolean;
   };
@@ -198,7 +350,7 @@ Deno.serve(async (req) => {
   const product = payload.product ?? "smart_apply";
   const intent = payload.intent ?? "apply";
   if (!REQUIRED_DOCUMENTS[product]) return json(req, { error: "Invalid product" }, 400);
-  if (!["apply", "consultation"].includes(intent)) return json(req, { error: "Invalid intent" }, 400);
+  if (!["apply", "consultation", "registration_help"].includes(intent)) return json(req, { error: "Invalid intent" }, 400);
   if (!payload.dryRun && payload.consent !== true) {
     return json(req, { error: "Explicit document sharing consent is required." }, 400);
   }
@@ -238,7 +390,7 @@ Deno.serve(async (req) => {
   const selection = selectionResult.data;
   const readiness = buildReadiness(product, documents, Boolean(selection));
   if (payload.dryRun) return json(req, { readiness });
-  if (!readiness.can_submit) {
+  if (intent !== "registration_help" && !readiness.can_submit) {
     return json(req, {
       error: readiness.has_selection
         ? `Required documents are not ready: ${readiness.missing.join(", ")}`
@@ -385,6 +537,48 @@ Deno.serve(async (req) => {
           .eq("id", transferResult.data?.id ?? "00000000-0000-0000-0000-000000000000"),
     ]);
 
+    let emailStatus = "skipped";
+    try {
+      const emailCopy = buildSubmissionEmail({
+        product,
+        intent,
+        submission,
+        profile: profileResult.data,
+        selection,
+        documentsCount: documents.length,
+      });
+      const emailDelivery = await sendStudentEmail({
+        admin,
+        to: authData.user.email,
+        subject: emailCopy.subject,
+        text: emailCopy.text,
+        html: emailCopy.html,
+      });
+      emailStatus = emailDelivery.status;
+      await admin.from("email_logs").insert({
+        user_id: userId,
+        application_id: submission.id,
+        recipient_email: authData.user.email,
+        subject: emailCopy.subject,
+        body_text: emailCopy.text,
+        body_html: emailCopy.html,
+        status: emailDelivery.status,
+        provider: emailDelivery.provider,
+        provider_message_id: emailDelivery.provider_message_id ?? null,
+        failure_reason: emailDelivery.failure_reason ?? null,
+        metadata: {
+          source: "submit_application",
+          product,
+          intent,
+          account_url: emailCopy.accountUrl,
+          queued_items: queueItems.length,
+        },
+      });
+    } catch (emailError) {
+      console.error("submit-application confirmation email failed", emailError);
+      emailStatus = "failed";
+    }
+
     return json(req, {
       submission: {
         id: submission.id,
@@ -395,6 +589,7 @@ Deno.serve(async (req) => {
       },
       readiness,
       queued_items: queueItems.length,
+      email_status: emailStatus,
     });
   } catch (deliveryError) {
     console.error("submit-application delivery failed", deliveryError);

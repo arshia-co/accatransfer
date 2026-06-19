@@ -102,6 +102,10 @@ export async function updateAccountPassword({ email, currentPassword, nextPasswo
 
   const { error } = await client.auth.updateUser({ password: nextPassword });
   if (error) throw error;
+  await sendAccountEventEmail('password_changed', {
+    method: 'current_password',
+    source: 'profile_editor',
+  }).catch(() => null);
 }
 
 export async function requestAccountPasswordReset(email) {
@@ -109,7 +113,7 @@ export async function requestAccountPasswordReset(email) {
   if (!email) throw new Error('ایمیل حساب مشخص نیست.');
   const redirectTo = typeof window === 'undefined'
     ? undefined
-    : `${window.location.origin}/account`;
+    : `${window.location.origin}/reset-password`;
   const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
@@ -134,7 +138,21 @@ export async function uploadAvatar(user, file) {
     .from('profiles')
     .upsert({ id: user.id, avatar_url: avatarUrl, updated_at: new Date().toISOString() }, { onConflict: 'id' });
   if (updateError) throw updateError;
+  await sendAccountEventEmail('profile_updated', {
+    source: 'profile_editor',
+    changedFields: [{ field: 'avatar_url', label: 'عکس پروفایل', next: 'به‌روزرسانی شد' }],
+  }).catch(() => null);
   return avatarUrl;
+}
+
+export async function sendAccountEventEmail(eventType, details = {}) {
+  const client = requireClient();
+  const { data, error } = await client.functions.invoke('account-event-email', {
+    body: { eventType, details },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
 }
 
 export async function migrateGuestTransferDraft(user) {

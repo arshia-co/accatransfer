@@ -1156,14 +1156,14 @@ export default function AccountPortal() {
     }
   };
 
-  const requestRegistrationHelp = async () => {
+  const requestRegistrationHelp = async (product = 'smart_apply') => {
     setHelpBusy(true);
     setError('');
     try {
-      // Reuses the existing submit-application → company Telegram seam with a
+      // Reuses the existing submit-application to company Telegram path with a
       // dedicated intent so the team is notified the student wants in-person help.
       await requestApplicationSubmission({
-        product: 'smart_apply',
+        product,
         intent: 'registration_help',
         consent: true,
       });
@@ -1402,7 +1402,7 @@ export default function AccountPortal() {
             <AcceptanceJourneyPanel
               submission={smartSubmission}
               acceptanceDoc={acceptanceDoc}
-              onRequestRegistrationHelp={requestRegistrationHelp}
+              onRequestRegistrationHelp={() => requestRegistrationHelp('smart_apply')}
               helpBusy={helpBusy}
             />
           )}
@@ -1495,7 +1495,7 @@ export default function AccountPortal() {
             <AcceptanceJourneyPanel
               submission={transferSubmission}
               acceptanceDoc={acceptanceDoc}
-              onRequestRegistrationHelp={requestRegistrationHelp}
+              onRequestRegistrationHelp={() => requestRegistrationHelp('ai_transfer')}
               helpBusy={helpBusy}
             />
           )}

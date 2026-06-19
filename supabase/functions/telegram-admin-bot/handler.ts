@@ -939,15 +939,37 @@ function letterTypeForStatus(status: string) {
   return "application_status_update";
 }
 
+function attachmentOcrLines(attachment?: Json | null) {
+  if (!attachment) return [];
+  const extraction = attachment.ocr_extraction ?? {};
+  const offer = extraction.offer_details ?? {};
+  const fields = extraction.fields ?? {};
+  const lines = [
+    attachment.original_name ? `فایل پیوست: ${attachment.original_name}` : "",
+    attachment.document_kind ? `نوع مدرک: ${attachment.document_kind}` : "",
+    Number.isFinite(Number(attachment.ocr_confidence))
+      ? `اطمینان OCR: ${attachment.ocr_confidence}%`
+      : attachment.ocr_status
+        ? `وضعیت OCR: ${attachment.ocr_status}`
+        : "",
+    extraction.summary ? `خلاصه OCR: ${String(extraction.summary).slice(0, 450)}` : "",
+    offer.tuition_amount ? `شهریه: ${offer.tuition_amount}${offer.tuition_currency ? ` ${offer.tuition_currency}` : ""}` : "",
+    offer.deposit_amount ? `دیپوزیت: ${offer.deposit_amount}${offer.deposit_currency ? ` ${offer.deposit_currency}` : ""}` : "",
+    offer.payment_deadline ? `مهلت پرداخت: ${offer.payment_deadline}` : "",
+    offer.registration_deadline ? `مهلت ثبت‌نام: ${offer.registration_deadline}` : "",
+    fields.institution ? `مؤسسه/دانشگاه روی مدرک: ${fields.institution}` : "",
+    fields.program ? `برنامه/رشته روی مدرک: ${fields.program}` : "",
+  ].filter(Boolean);
+  return lines.length ? ["", "جزئیات فایل و OCR:", ...lines] : [];
+}
+
 function buildStudentStatusCopy(app: Json, status: string, note?: string | null, attachment?: Json | null) {
   const context = appContext(app);
   const label = statusLabel(status);
   const missing = context.missingDocuments.length
     ? `\nمدارک نیازمند تکمیل: ${context.missingDocuments.join("، ")}`
     : "";
-  const attachmentLine = attachment?.original_name
-    ? `\nفایل پیوست: ${attachment.original_name}`
-    : "";
+  const attachmentLine = attachmentOcrLines(attachment).join("\n");
   const noteLine = note?.trim() ? `\n\nیادداشت تیم پذیرش:\n${note.trim().slice(0, 1400)}` : "";
 
   const statusSpecific: Record<string, string> = {
@@ -987,7 +1009,7 @@ function buildStudentStatusCopy(app: Json, status: string, note?: string | null,
 function buildStatusEmail(app: Json, status: string, note?: string | null, attachment?: Json | null) {
   const context = appContext(app);
   const copy = buildStudentStatusCopy(app, status, note, attachment);
-  const accountUrl = `${APP_BASE_URL}/account`;
+  const accountUrl = `${APP_BASE_URL}/account?product=${app.product || "smart_apply"}`;
   const text = [
     `سلام ${context.studentName} عزیز،`,
     "",
@@ -1167,12 +1189,29 @@ async function downloadTelegramFile(filePath: string) {
 }
 
 async function maybeRunDocumentOcr(documentId: string, mimeType: string) {
+  if (!["application/pdf", "image/jpeg", "image/png"].includes(mimeType)) return null;
+  try {
+    const { data, error } = await supabase.functions.invoke("document-ocr", {
+      body: { documentId, force: true },
+    });
+    if (error) {
+      console.error("document OCR invoke failed", error);
+      return null;
+    }
+    return data?.document ?? null;
+  } catch (error) {
+    console.error("document OCR failed", error);
+    return null;
+  }
+}
+
+function scheduleDocumentOcrFallback(documentId: string, mimeType: string) {
   if (!["application/pdf", "image/jpeg", "image/png"].includes(mimeType)) return;
   try {
     const task = supabase.functions.invoke("document-ocr", {
       body: { documentId, force: true },
     }).then(({ error }) => {
-      if (error) console.error("document OCR invoke failed", error);
+      if (error) console.error("document OCR fallback invoke failed", error);
     });
     EdgeRuntime.waitUntil(task);
   } catch (error) {
@@ -1263,15 +1302,22 @@ async function saveStatusAttachment({
     .single();
   if (letterError) throw letterError;
 
-  await maybeRunDocumentOcr(document.id, mimeType);
+  const ocrDocument = await maybeRunDocumentOcr(document.id, mimeType);
+  if (!ocrDocument && ["application/pdf", "image/jpeg", "image/png"].includes(mimeType)) {
+    scheduleDocumentOcrFallback(document.id, mimeType);
+  }
 
   return {
     document_id: document.id,
     letter_id: letter.id,
+    document_kind: documentKind,
     original_name: originalName,
     mime_type: mimeType,
     size_bytes: fileBuffer.byteLength,
     object_path: objectPath,
+    ocr_status: ocrDocument?.ai_extraction ? "completed" : "queued",
+    ocr_confidence: ocrDocument?.ocr_confidence ?? null,
+    ocr_extraction: ocrDocument?.ai_extraction ?? null,
     emailAttachment: fileBuffer.byteLength <= EMAIL_ATTACHMENT_LIMIT
       ? {
         filename: originalName,
