@@ -943,10 +943,15 @@ async function renderStatusMenu(update: TelegramUpdate, admin: Admin, applicatio
   const rows: Json[][] = [];
   for (let i = 0; i < ADMIN_STATUSES.length; i += 2) {
     const chunk = ADMIN_STATUSES.slice(i, i + 2);
-    rows.push(await Promise.all(chunk.map(async ([status, label]) => button(label, await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "app_status_confirm", { application_id: applicationId, status })))));
+    rows.push(await Promise.all(chunk.map(async ([status, label]) => button(label, await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "app_status_apply", { application_id: applicationId, status })))));
   }
   rows.push([button("بازگشت به درخواست", await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "app_detail", { application_id: applicationId }))]);
-  return render(update, "وضعیت جدید درخواست را انتخاب کنید. مرحله بعدی تأیید نهایی است.", keyboard(rows));
+  return render(update, [
+    "وضعیت جدید درخواست را انتخاب کنید.",
+    "",
+    "با انتخاب هر وضعیت، همان لحظه پرونده به‌روزرسانی می‌شود، اعلان پنل ساخته می‌شود و ایمیل دانشجو به صورت خودکار آماده/ارسال می‌شود.",
+    "اگر فایل پذیرش یا پیوست دارید، بعد از ثبت وضعیت از دکمه «ارسال فایل برای همین وضعیت» استفاده کنید.",
+  ].join("\n"), keyboard(rows));
 }
 
 async function confirmApplicationStatus(update: TelegramUpdate, admin: Admin, applicationId: string, status: string, note?: string | null) {
@@ -1118,14 +1123,28 @@ async function applyApplicationStatus(update: TelegramUpdate, admin: Admin, appl
       email_status: emailDelivery.status,
     },
   });
+  const chatId = update.callback_query?.message?.chat.id ?? update.message!.chat.id;
+  const attachmentRef = await createRef(admin, chatId, "app_status_attachment_prepare", {
+    application_id: applicationId,
+    status,
+    note: note ?? null,
+  });
+  const noteRef = await createRef(admin, chatId, "app_status_note_prepare", {
+    application_id: applicationId,
+    status,
+    note: note ?? null,
+  });
+  const appRef = await createRef(admin, chatId, "app_detail", { application_id: applicationId });
   return render(update, [
     "وضعیت درخواست با موفقیت به‌روزرسانی شد.",
     "",
     `اعلان پنل: ثبت شد`,
-    `ایمیل: ${emailDelivery.status === "sent" ? "ارسال شد" : emailDelivery.status === "queued" ? "در صف/نیازمند تنظیم provider" : emailDelivery.status}`,
+    `ایمیل: ${emailDelivery.status === "sent" ? "ارسال شد" : emailDelivery.status === "queued" ? "در صف ارسال" : emailDelivery.status === "skipped" ? "ایمیل دانشجو پیدا نشد" : "ثبت نشد"}`,
     attachment?.original_name ? `فایل: ${attachment.original_name}` : "",
   ].filter(Boolean).join("\n"), keyboard([
-    [button("مشاهده درخواست", await createRef(admin, update.callback_query?.message?.chat.id ?? update.message!.chat.id, "app_detail", { application_id: applicationId }))],
+    [button("ارسال فایل برای همین وضعیت", attachmentRef)],
+    [button("افزودن متن اختصاصی", noteRef)],
+    [button("مشاهده درخواست", appRef)],
     [button("منوی اصلی", "menu")],
   ]));
 }

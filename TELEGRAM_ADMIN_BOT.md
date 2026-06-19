@@ -103,11 +103,10 @@ The function validates Telegram's `X-Telegram-Bot-Api-Secret-Token` header.
 
 1. Open an application in the bot.
 2. Choose `تغییر وضعیت`.
-3. Pick the new status.
-4. Choose one of:
-   - `ثبت و اطلاع‌رسانی بدون فایل`
-   - `افزودن متن اختصاصی`
-   - `ثبت همراه فایل پیوست`
+3. Pick the new status. The change is applied immediately and student email /
+   panel notification is created automatically.
+4. After the status is saved, use `ارسال فایل برای همین وضعیت` when the
+   status needs an attachment such as a conditional/final acceptance letter.
 5. The function updates `application_submissions.admin_status`, writes
    `application_status_history`, creates `user_notifications`, logs/sends
    email through `email_logs`, and stores any attachment in `student_documents`.
