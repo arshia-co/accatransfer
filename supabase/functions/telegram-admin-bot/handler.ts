@@ -5,8 +5,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
   ?? namedKey("SUPABASE_SECRET_KEYS");
 const TELEGRAM_BOT_TOKEN_ENV = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
-const EMAIL_FROM_ADDRESS = Deno.env.get("EMAIL_FROM_ADDRESS") ?? "ACCA Admissions <no-reply@accatransfer.com>";
+const RESEND_API_KEY_ENV = Deno.env.get("RESEND_API_KEY") ?? "";
+const DEFAULT_EMAIL_FROM_ADDRESS = "ACCA Admissions <no-reply@accatransfer.com>";
+const EMAIL_FROM_ADDRESS_ENV = Deno.env.get("EMAIL_FROM_ADDRESS") ?? "";
 const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") ?? "https://accatransfer.com").replace(/\/$/, "");
 const AUTHORIZED_TELEGRAM_ADMIN_IDS = new Set(
   (Deno.env.get("AUTHORIZED_TELEGRAM_ADMIN_IDS") ?? "")
@@ -22,7 +23,9 @@ const SESSION_TTL_MINUTES = 30;
 const DOCUMENT_BUCKET = "student-documents";
 const MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024;
 const EMAIL_ATTACHMENT_LIMIT = 8 * 1024 * 1024;
+const BULK_EMAIL_LIMIT = 500;
 let cachedTelegramBotToken: string | null = null;
+let cachedEmailSettings: Json | null = null;
 const ALLOWED_ATTACHMENT_MIME = new Set([
   "application/pdf",
   "image/jpeg",
@@ -247,6 +250,34 @@ async function getTelegramBotToken() {
   const settings = await getSettings();
   cachedTelegramBotToken = settings?.bot_token?.trim() || "";
   return cachedTelegramBotToken;
+}
+
+async function getEmailSettings() {
+  if (cachedEmailSettings) return cachedEmailSettings;
+  const { data, error } = await supabase
+    .from("email_delivery_settings")
+    .select("enabled, provider, resend_api_key, from_address")
+    .eq("id", true)
+    .maybeSingle();
+  if (error) throw error;
+  cachedEmailSettings = data ?? {
+    enabled: false,
+    provider: "resend",
+    resend_api_key: null,
+    from_address: DEFAULT_EMAIL_FROM_ADDRESS,
+  };
+  return cachedEmailSettings;
+}
+
+async function getEmailProviderState() {
+  const settings = await getEmailSettings();
+  const resendKey = RESEND_API_KEY_ENV || (settings?.enabled ? settings?.resend_api_key?.trim() : "");
+  return {
+    provider: "resend",
+    configured: Boolean(resendKey),
+    fromAddress: EMAIL_FROM_ADDRESS_ENV || settings?.from_address || DEFAULT_EMAIL_FROM_ADDRESS,
+    source: RESEND_API_KEY_ENV ? "edge_secret" : settings?.resend_api_key ? "bot_settings" : "missing",
+  };
 }
 
 async function verifyWebhook(req: Request) {
@@ -742,11 +773,14 @@ async function sendStudentEmail({
   attachment?: { filename: string; content: string; content_type: string } | null;
 }) {
   if (!to) return { status: "skipped", provider: "resend", failure_reason: "Student email is missing." };
-  if (!RESEND_API_KEY) {
-    return { status: "queued", provider: "resend", failure_reason: "RESEND_API_KEY is not configured." };
+  const emailState = await getEmailProviderState();
+  const settings = await getEmailSettings();
+  const resendApiKey = RESEND_API_KEY_ENV || settings?.resend_api_key?.trim() || "";
+  if (!emailState.configured || !resendApiKey) {
+    return { status: "queued", provider: "resend", failure_reason: "Email provider is not configured." };
   }
   const payload: Json = {
-    from: EMAIL_FROM_ADDRESS,
+    from: emailState.fromAddress,
     to: [to],
     subject,
     text,
@@ -757,7 +791,7 @@ async function sendStudentEmail({
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
+      Authorization: `Bearer ${resendApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
@@ -1381,6 +1415,404 @@ async function renderSearchResults(update: TelegramUpdate, admin: Admin, term: s
   return render(update, lines.join("\n"), keyboard(rows));
 }
 
+function canManageEmailSettings(admin: Admin) {
+  return admin.role === "super_admin" || admin.permissions.includes("*");
+}
+
+function emailAudienceLabel(audience: string) {
+  if (audience === "smart_apply") return "کاربران Smart Apply";
+  if (audience === "ai_transfer") return "کاربران AI Transfer";
+  return "همه کاربران دارای ایمیل";
+}
+
+function marketingEmailHtml(subject: string, body: string) {
+  const accountUrl = `${APP_BASE_URL}/account`;
+  return `
+    <div dir="rtl" style="font-family:Arial,Tahoma,sans-serif;line-height:1.9;color:#102f48;max-width:640px;margin:0 auto">
+      <h2 style="margin:0 0 16px">${escapeHtml(subject)}</h2>
+      <div style="white-space:pre-line;font-size:15px">${escapeHtml(body)}</div>
+      <p style="margin-top:24px"><a href="${escapeHtml(accountUrl)}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#14745f;color:white;text-decoration:none;font-weight:700">ورود به پنل مرکزی ACCA</a></p>
+      <p style="font-size:12px;color:#64748b;margin-top:24px">این پیام از طرف ACCA Admissions ارسال شده است.</p>
+    </div>
+  `;
+}
+
+function addRecipient(recipients: Map<string, Json>, userId?: string | null, email?: string | null, name?: string | null) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return;
+  if (!recipients.has(normalizedEmail)) {
+    recipients.set(normalizedEmail, {
+      user_id: userId ?? null,
+      email: normalizedEmail,
+      name: name || normalizedEmail,
+    });
+  }
+}
+
+async function listAudienceRecipients(audience: string, limit = BULK_EMAIL_LIMIT) {
+  const recipients = new Map<string, Json>();
+  if (audience === "all") {
+    for (let page = 1; page <= 10 && recipients.size < limit; page += 1) {
+      const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
+      if (error) throw error;
+      const users = data.users ?? [];
+      for (const user of users) {
+        addRecipient(
+          recipients,
+          user.id,
+          user.email,
+          user.user_metadata?.full_name || user.user_metadata?.name || null,
+        );
+        if (recipients.size >= limit) break;
+      }
+      if (users.length < 100) break;
+    }
+    return [...recipients.values()];
+  }
+
+  const product = audience === "ai_transfer" ? "ai_transfer" : "smart_apply";
+  const { data, error } = await supabase
+    .from("application_submissions")
+    .select("user_id, payload_snapshot, submitted_at")
+    .eq("product", product)
+    .order("submitted_at", { ascending: false })
+    .limit(limit * 2);
+  if (error) throw error;
+
+  const missingEmailUserIds = new Set<string>();
+  for (const item of data ?? []) {
+    const snap = item.payload_snapshot as Json;
+    const email = snap?.user?.email ?? null;
+    const name = snap?.user?.profile?.full_name ?? null;
+    addRecipient(recipients, item.user_id, email, name);
+    if (!email && item.user_id) missingEmailUserIds.add(item.user_id);
+    if (recipients.size >= limit) break;
+  }
+
+  for (const userId of missingEmailUserIds) {
+    if (recipients.size >= limit) break;
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+    addRecipient(
+      recipients,
+      userId,
+      authUser.user?.email,
+      authUser.user?.user_metadata?.full_name || authUser.user?.user_metadata?.name || null,
+    );
+  }
+
+  return [...recipients.values()].slice(0, limit);
+}
+
+async function renderEmailCenter(update: TelegramUpdate, admin: Admin) {
+  if (!hasPermission(admin, "send_notifications")) {
+    return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
+  }
+  const [state, queuedResult, sentResult, failedResult] = await Promise.all([
+    getEmailProviderState(),
+    supabase.from("email_logs").select("id", { count: "exact", head: true }).eq("status", "queued"),
+    supabase.from("email_logs").select("id", { count: "exact", head: true }).eq("status", "sent"),
+    supabase.from("email_logs").select("id", { count: "exact", head: true }).eq("status", "failed"),
+  ]);
+  const rows: Json[][] = [
+    [button("ارسال ایمیل مرکزی", "email_compose")],
+    [button("ارسال دوباره ایمیل‌های صف", "email_retry")],
+  ];
+  if (canManageEmailSettings(admin)) {
+    rows.push([
+      button("تنظیم Resend API Key", "email_provider_key"),
+      button("تنظیم فرستنده", "email_from"),
+    ]);
+  }
+  rows.push([button("منوی اصلی", "menu")]);
+  await audit(admin, "email_center_opened");
+  return render(update, [
+    "<b>مرکز ایمیل ACCA</b>",
+    "",
+    `وضعیت ارسال: <b>${state.configured ? "فعال" : "نیازمند تنظیم"}</b>`,
+    `فرستنده: <code>${escapeHtml(state.fromAddress)}</code>`,
+    `Provider: <code>${escapeHtml(state.provider)}</code>`,
+    `منبع کلید: <code>${escapeHtml(state.source)}</code>`,
+    "",
+    `در صف: <b>${queuedResult.count ?? 0}</b>`,
+    `ارسال‌شده: <b>${sentResult.count ?? 0}</b>`,
+    `ناموفق: <b>${failedResult.count ?? 0}</b>`,
+    "",
+    state.configured
+      ? "می‌توانید ایمیل وضعیت یا ایمیل مرکزی/پروموشنی ارسال کنید."
+      : "برای ارسال واقعی ایمیل، ابتدا کلید Resend را تنظیم کنید. تا قبل از آن ایمیل‌ها فقط در صف ثبت می‌شوند.",
+  ].join("\n"), keyboard(rows));
+}
+
+async function renderEmailAudienceMenu(update: TelegramUpdate, admin: Admin) {
+  if (!hasPermission(admin, "send_notifications")) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
+  return render(update, [
+    "<b>ارسال ایمیل مرکزی</b>",
+    "",
+    "مخاطب را انتخاب کنید. بعد از انتخاب، موضوع و متن ایمیل را مرحله‌به‌مرحله می‌فرستید و قبل از ارسال نهایی preview می‌گیرید.",
+  ].join("\n"), keyboard([
+    [button("همه کاربران", "email_audience_all")],
+    [button("کاربران Smart Apply", "email_audience_smart_apply")],
+    [button("کاربران AI Transfer", "email_audience_ai_transfer")],
+    [button("بازگشت به مرکز ایمیل", "email")],
+  ]));
+}
+
+async function renderEmailSubjectPrompt(update: TelegramUpdate, admin: Admin, audience: string) {
+  const chatId = update.callback_query?.message?.chat.id ?? update.message!.chat.id;
+  const user = update.callback_query?.from ?? update.message!.from!;
+  await upsertSession(user, chatId, "awaiting_bulk_email_subject", { audience });
+  return render(update, [
+    "<b>موضوع ایمیل را بفرستید</b>",
+    "",
+    `مخاطب: <b>${escapeHtml(emailAudienceLabel(audience))}</b>`,
+    "موضوع کوتاه، روشن و حرفه‌ای باشد.",
+    "",
+    "برای لغو /cancel را بفرستید.",
+  ].join("\n"), keyboard([[button("لغو", "cancel")], [button("مرکز ایمیل", "email")]]));
+}
+
+async function handleBulkEmailSubjectText(update: TelegramUpdate, admin: Admin, session: Json, text: string) {
+  if (!hasPermission(admin, "send_notifications")) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
+  const subject = text.trim().slice(0, 120);
+  if (subject.length < 4) {
+    return render(update, "موضوع خیلی کوتاه است. لطفاً یک موضوع واضح‌تر بفرستید.", keyboard([[button("لغو", "cancel")]]));
+  }
+  await upsertSession(update.message!.from!, update.message!.chat.id, "awaiting_bulk_email_body", {
+    audience: session.context?.audience ?? "all",
+    subject,
+  });
+  return render(update, [
+    "<b>متن ایمیل را بفرستید</b>",
+    "",
+    `موضوع: <b>${escapeHtml(subject)}</b>`,
+    "متن را همینجا بفرستید. لینک‌ها را هم می‌توانید داخل متن قرار دهید.",
+    "",
+    "برای لغو /cancel را بفرستید.",
+  ].join("\n"), keyboard([[button("لغو", "cancel")], [button("مرکز ایمیل", "email")]]));
+}
+
+async function handleBulkEmailBodyText(update: TelegramUpdate, admin: Admin, session: Json, text: string) {
+  if (!hasPermission(admin, "send_notifications")) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
+  const audience = session.context?.audience ?? "all";
+  const subject = String(session.context?.subject ?? "").slice(0, 120);
+  const body = text.trim().slice(0, 5000);
+  if (!subject || body.length < 10) {
+    return render(update, "متن ایمیل خیلی کوتاه است. لطفاً متن کامل‌تری بفرستید.", keyboard([[button("لغو", "cancel")]]));
+  }
+  const recipients = await listAudienceRecipients(audience);
+  const sendRef = await createRef(admin, update.message!.chat.id, "bulk_email_send", { audience, subject, body });
+  await upsertSession(update.message!.from!, update.message!.chat.id, "idle", {});
+  return render(update, [
+    "<b>پیش‌نمایش ارسال ایمیل</b>",
+    "",
+    `مخاطب: <b>${escapeHtml(emailAudienceLabel(audience))}</b>`,
+    `تعداد ایمیل معتبر: <b>${recipients.length}</b>`,
+    `موضوع: <b>${escapeHtml(subject)}</b>`,
+    "",
+    escapeHtml(body.slice(0, 900)),
+    body.length > 900 ? "\n..." : "",
+    "",
+    "اگر تأیید کنید، ایمیل‌ها همین الان ارسال و در email_logs ثبت می‌شوند.",
+  ].join("\n"), keyboard([
+    [button("تأیید و ارسال", sendRef)],
+    [button("ویرایش از اول", "email_compose")],
+    [button("لغو", "email")],
+  ]));
+}
+
+async function sendBulkEmail(update: TelegramUpdate, admin: Admin, payload: Json) {
+  if (!hasPermission(admin, "send_notifications")) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
+  const state = await getEmailProviderState();
+  if (!state.configured) {
+    return render(update, [
+      "<b>ارسال ایمیل فعال نیست</b>",
+      "",
+      "کلید Resend هنوز تنظیم نشده است. اول از مرکز ایمیل، «تنظیم Resend API Key» را بزنید.",
+    ].join("\n"), keyboard([[button("تنظیم Resend API Key", "email_provider_key")], [button("مرکز ایمیل", "email")]]));
+  }
+  const audience = payload.audience ?? "all";
+  const subject = String(payload.subject ?? "").slice(0, 120);
+  const body = String(payload.body ?? "").slice(0, 5000);
+  const recipients = await listAudienceRecipients(audience);
+  if (!recipients.length) {
+    return render(update, "برای این گروه، ایمیل معتبری پیدا نشد.", keyboard([[button("مرکز ایمیل", "email")]]));
+  }
+  await render(update, `ارسال شروع شد. تعداد گیرنده‌ها: ${recipients.length}`, keyboard([[button("مرکز ایمیل", "email")]]));
+  let sent = 0;
+  let failed = 0;
+  let queued = 0;
+  let skipped = 0;
+  const html = marketingEmailHtml(subject, body);
+  for (const recipient of recipients) {
+    const delivery = await sendStudentEmail({
+      to: recipient.email,
+      subject,
+      text: body,
+      html,
+    });
+    if (delivery.status === "sent") sent += 1;
+    else if (delivery.status === "failed") failed += 1;
+    else if (delivery.status === "queued") queued += 1;
+    else skipped += 1;
+    await supabase.from("email_logs").insert({
+      user_id: recipient.user_id,
+      recipient_email: recipient.email,
+      subject,
+      body_text: body,
+      body_html: html,
+      status: delivery.status,
+      provider: delivery.provider,
+      provider_message_id: delivery.provider_message_id ?? null,
+      failure_reason: delivery.failure_reason ?? null,
+      metadata: {
+        source: "telegram_email_center",
+        audience,
+        bulk_email: true,
+      },
+      created_by_admin_id: admin.id,
+    });
+  }
+  await audit(admin, "bulk_email_sent", {
+    metadata: { audience, recipient_count: recipients.length, sent, failed, queued, skipped },
+  });
+  return render(update, [
+    "<b>ارسال ایمیل مرکزی تمام شد</b>",
+    "",
+    `مخاطب: ${escapeHtml(emailAudienceLabel(audience))}`,
+    `ارسال‌شده: <b>${sent}</b>`,
+    `ناموفق: <b>${failed}</b>`,
+    `در صف: <b>${queued}</b>`,
+    `بدون ایمیل/رد شده: <b>${skipped}</b>`,
+  ].join("\n"), keyboard([[button("مرکز ایمیل", "email")], [button("منوی اصلی", "menu")]]));
+}
+
+async function retryQueuedEmails(update: TelegramUpdate, admin: Admin) {
+  if (!hasPermission(admin, "send_notifications")) return render(update, "دسترسی کافی نیست.", keyboard([[button("منوی اصلی", "menu")]]));
+  const state = await getEmailProviderState();
+  if (!state.configured) {
+    return render(update, [
+      "<b>ارسال مجدد ممکن نیست</b>",
+      "",
+      "کلید Resend هنوز تنظیم نشده است. اول provider را فعال کنید، بعد ایمیل‌های صف را دوباره بفرستید.",
+    ].join("\n"), keyboard([[button("تنظیم Resend API Key", "email_provider_key")], [button("مرکز ایمیل", "email")]]));
+  }
+  const { data: logs, error } = await supabase
+    .from("email_logs")
+    .select("*")
+    .eq("status", "queued")
+    .not("recipient_email", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(25);
+  if (error) throw error;
+  if (!logs?.length) return render(update, "ایمیل در صف وجود ندارد.", keyboard([[button("مرکز ایمیل", "email")]]));
+
+  let sent = 0;
+  let failed = 0;
+  for (const log of logs) {
+    const delivery = await sendStudentEmail({
+      to: log.recipient_email,
+      subject: log.subject,
+      text: log.body_text || "",
+      html: log.body_html || marketingEmailHtml(log.subject, log.body_text || ""),
+    });
+    if (delivery.status === "sent") sent += 1;
+    if (delivery.status === "failed") failed += 1;
+    await supabase.from("email_logs").update({
+      status: delivery.status,
+      provider: delivery.provider,
+      provider_message_id: delivery.provider_message_id ?? null,
+      failure_reason: delivery.failure_reason ?? null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", log.id);
+  }
+  await audit(admin, "queued_emails_retried", { metadata: { attempted: logs.length, sent, failed } });
+  return render(update, [
+    "<b>ارسال دوباره ایمیل‌های صف انجام شد</b>",
+    "",
+    `تعداد بررسی‌شده: <b>${logs.length}</b>`,
+    `ارسال‌شده: <b>${sent}</b>`,
+    `ناموفق: <b>${failed}</b>`,
+  ].join("\n"), keyboard([[button("مرکز ایمیل", "email")], [button("منوی اصلی", "menu")]]));
+}
+
+async function renderEmailProviderKeyPrompt(update: TelegramUpdate, admin: Admin) {
+  if (!canManageEmailSettings(admin)) return render(update, "فقط Super Admin می‌تواند تنظیمات provider ایمیل را تغییر دهد.", keyboard([[button("مرکز ایمیل", "email")]]));
+  const chatId = update.callback_query?.message?.chat.id ?? update.message!.chat.id;
+  const user = update.callback_query?.from ?? update.message!.from!;
+  await upsertSession(user, chatId, "awaiting_email_provider_key", {});
+  return render(update, [
+    "<b>تنظیم Resend API Key</b>",
+    "",
+    "کلید Resend را همینجا بفرستید. مقدار کلید دوباره نمایش داده نمی‌شود و فقط در تنظیمات server-side ذخیره می‌شود.",
+    "",
+    "نمونه فرمت: <code>re_...</code>",
+    "برای لغو /cancel را بفرستید.",
+  ].join("\n"), keyboard([[button("لغو", "cancel")], [button("مرکز ایمیل", "email")]]));
+}
+
+async function handleEmailProviderKeyText(update: TelegramUpdate, admin: Admin, text: string) {
+  if (!canManageEmailSettings(admin)) return render(update, "دسترسی کافی نیست.", keyboard([[button("مرکز ایمیل", "email")]]));
+  const key = text.trim();
+  if (!/^re_[A-Za-z0-9_-]{12,}$/.test(key)) {
+    return render(update, "این شبیه Resend API Key معتبر نیست. لطفاً کلید با فرمت re_... را بفرستید.", keyboard([[button("لغو", "cancel")], [button("مرکز ایمیل", "email")]]));
+  }
+  const settings = await getEmailSettings();
+  const { error } = await supabase.from("email_delivery_settings").upsert({
+    id: true,
+    provider: "resend",
+    resend_api_key: key,
+    from_address: settings?.from_address || DEFAULT_EMAIL_FROM_ADDRESS,
+    enabled: true,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "id" });
+  if (error) throw error;
+  cachedEmailSettings = null;
+  await upsertSession(update.message!.from!, update.message!.chat.id, "idle", {});
+  await audit(admin, "email_provider_key_configured");
+  return render(update, [
+    "<b>Provider ایمیل فعال شد</b>",
+    "",
+    "کلید Resend ذخیره شد. حالا می‌توانید ایمیل‌های صف را دوباره ارسال کنید یا ایمیل مرکزی بفرستید.",
+  ].join("\n"), keyboard([[button("ارسال دوباره ایمیل‌های صف", "email_retry")], [button("مرکز ایمیل", "email")]]));
+}
+
+async function renderEmailFromPrompt(update: TelegramUpdate, admin: Admin) {
+  if (!canManageEmailSettings(admin)) return render(update, "فقط Super Admin می‌تواند فرستنده ایمیل را تغییر دهد.", keyboard([[button("مرکز ایمیل", "email")]]));
+  const chatId = update.callback_query?.message?.chat.id ?? update.message!.chat.id;
+  const user = update.callback_query?.from ?? update.message!.from!;
+  await upsertSession(user, chatId, "awaiting_email_from_address", {});
+  return render(update, [
+    "<b>تنظیم فرستنده ایمیل</b>",
+    "",
+    "فرستنده را بفرستید. پیشنهاد فعلی:",
+    `<code>${escapeHtml(DEFAULT_EMAIL_FROM_ADDRESS)}</code>`,
+    "",
+    "دامنه باید در provider ایمیل شما verified باشد.",
+  ].join("\n"), keyboard([[button("لغو", "cancel")], [button("مرکز ایمیل", "email")]]));
+}
+
+async function handleEmailFromText(update: TelegramUpdate, admin: Admin, text: string) {
+  if (!canManageEmailSettings(admin)) return render(update, "دسترسی کافی نیست.", keyboard([[button("مرکز ایمیل", "email")]]));
+  const fromAddress = text.trim().slice(0, 160);
+  if (!/@[^\s>]+\.[^\s>]+/.test(fromAddress)) {
+    return render(update, "فرستنده باید یک ایمیل معتبر داشته باشد؛ مثل ACCA Admissions <no-reply@accatransfer.com>", keyboard([[button("لغو", "cancel")], [button("مرکز ایمیل", "email")]]));
+  }
+  const settings = await getEmailSettings();
+  const { error } = await supabase.from("email_delivery_settings").upsert({
+    id: true,
+    provider: "resend",
+    resend_api_key: settings?.resend_api_key ?? null,
+    from_address: fromAddress,
+    enabled: true,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "id" });
+  if (error) throw error;
+  cachedEmailSettings = null;
+  await upsertSession(update.message!.from!, update.message!.chat.id, "idle", {});
+  await audit(admin, "email_from_address_updated", { metadata: { from_address: fromAddress } });
+  return render(update, `فرستنده ایمیل ذخیره شد:\n<code>${escapeHtml(fromAddress)}</code>`, keyboard([[button("مرکز ایمیل", "email")]]));
+}
+
 async function renderComingSoon(update: TelegramUpdate, section: string) {
   return render(update, [
     `<b>${escapeHtml(section)}</b>`,
@@ -1421,6 +1853,8 @@ async function handleRef(update: TelegramUpdate, admin: Admin, token: string) {
     case "notify_user_prepare":
       await upsertSession(update.callback_query!.from, chatId, "awaiting_notification", { user_id: payload.user_id });
       return render(update, "متن اعلان پنل را ارسال کنید. عنوان به‌صورت پیش‌فرض «پیام جدید از ACCA» خواهد بود.", keyboard([[button("لغو", "cancel")], [button("منوی اصلی", "menu")]]));
+    case "bulk_email_send":
+      return sendBulkEmail(update, admin, payload);
     default:
       return render(update, "عملیات ناشناخته است.", keyboard([[button("منوی اصلی", "menu")]]));
   }
@@ -1526,8 +1960,15 @@ async function handleCallback(update: TelegramUpdate, admin: Admin) {
   if (data === "stats") return renderStats(update, admin);
   if (data === "search") return renderSearchPrompt(update, admin);
   if (data === "settings") return renderSettings(update, admin);
+  if (data === "email") return renderEmailCenter(update, admin);
+  if (data === "email_compose") return renderEmailAudienceMenu(update, admin);
+  if (data === "email_retry") return retryQueuedEmails(update, admin);
+  if (data === "email_provider_key") return renderEmailProviderKeyPrompt(update, admin);
+  if (data === "email_from") return renderEmailFromPrompt(update, admin);
+  if (data === "email_audience_all") return renderEmailSubjectPrompt(update, admin, "all");
+  if (data === "email_audience_smart_apply") return renderEmailSubjectPrompt(update, admin, "smart_apply");
+  if (data === "email_audience_ai_transfer") return renderEmailSubjectPrompt(update, admin, "ai_transfer");
   if (data === "letters") return renderComingSoon(update, "📄 نامه‌ها و پذیرش‌ها");
-  if (data === "email") return renderComingSoon(update, "📧 ارسال ایمیل");
   if (data === "notifications") return renderComingSoon(update, "🔔 اعلان‌های پنل");
   if (data.startsWith("r:")) return handleRef(update, admin, data.slice(2));
   return render(update, "دستور نامعتبر است.", keyboard([[button("منوی اصلی", "menu")]]));
@@ -1587,6 +2028,18 @@ export async function handleTelegramAdminBot(req: Request) {
     }
     if (session?.state === "awaiting_notification" && text) {
       return handleNotificationText(update, admin, session, text);
+    }
+    if (session?.state === "awaiting_email_provider_key" && text) {
+      return handleEmailProviderKeyText(update, admin, text);
+    }
+    if (session?.state === "awaiting_email_from_address" && text) {
+      return handleEmailFromText(update, admin, text);
+    }
+    if (session?.state === "awaiting_bulk_email_subject" && text) {
+      return handleBulkEmailSubjectText(update, admin, session, text);
+    }
+    if (session?.state === "awaiting_bulk_email_body" && text) {
+      return handleBulkEmailBodyText(update, admin, session, text);
     }
     if (session?.state === "awaiting_status_note" && text) {
       return handleStatusNoteText(update, admin, session, text);
