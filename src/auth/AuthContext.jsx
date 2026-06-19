@@ -138,7 +138,7 @@ export function AuthProvider({ children }) {
     if (!supabase) throw new Error('Authentication is not configured.');
     const redirectTo = typeof window === 'undefined'
       ? undefined
-      : `${window.location.origin}/reset-password`;
+      : `${window.location.origin}/?/reset-password`;
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
     if (error) throw error;
   }, []);

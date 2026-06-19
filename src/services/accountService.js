@@ -113,7 +113,7 @@ export async function requestAccountPasswordReset(email) {
   if (!email) throw new Error('ایمیل حساب مشخص نیست.');
   const redirectTo = typeof window === 'undefined'
     ? undefined
-    : `${window.location.origin}/reset-password`;
+    : `${window.location.origin}/?/reset-password`;
   const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
