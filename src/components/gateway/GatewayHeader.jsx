@@ -73,12 +73,13 @@ export default function GatewayHeader({
         )}
         <a
           href={MAIN_SITE_URL}
-          className="gateway-header-button"
+          className="gateway-header-button gateway-main-site-button"
           target="_blank"
           rel="noreferrer"
+          aria-label={t('باز کردن سایت اصلی آکا', 'Open ACCA main website')}
+          title={t('سایت اصلی آکا', 'ACCA main website')}
         >
           <span className="hidden sm:inline">{t('وب‌سایت آکا', 'ACCA website')}</span>
-          <span className="sm:hidden">ACCA</span>
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
         <button
