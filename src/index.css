@@ -1176,6 +1176,20 @@ textarea {
   transform: translateY(-1px);
 }
 
+/* Primary CTA variant — the direct "enter the account panel" entry. */
+.gateway-header-button.is-primary {
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(145deg, #102f48, #14745f);
+  box-shadow: 0 10px 26px rgba(16, 47, 72, 0.22);
+}
+.gateway-header-button.is-primary svg { color: #f0d79a; }
+.gateway-header-button.is-primary:hover {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(145deg, #14384f, #14806a);
+}
+
 .gateway-main {
   display: flex;
   flex: 1;

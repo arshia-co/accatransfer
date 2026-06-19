@@ -1,7 +1,18 @@
-import { ExternalLink, Grid2X2 } from 'lucide-react';
+import { ExternalLink, Grid2X2, LayoutDashboard, LogIn } from 'lucide-react';
 import { LOGO_SRC, MAIN_SITE_URL } from '../../lib/constants';
+import { useAuth } from '../../auth/AuthContext';
 
 export default function GatewayHeader({ compact = false }) {
+  const { user, openAuth } = useAuth();
+
+  const openPanel = () => {
+    if (user) {
+      window.location.href = '/account';
+      return;
+    }
+    openAuth('smart_apply', { returnTo: '/account' });
+  };
+
   return (
     <header className="gateway-header">
       <a
@@ -44,6 +55,15 @@ export default function GatewayHeader({ compact = false }) {
           <span className="sm:hidden">ACCA</span>
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
+        <button
+          type="button"
+          onClick={openPanel}
+          className="gateway-header-button is-primary"
+          aria-label={user ? 'پنل کاربری من' : 'ورود به پنل کاربری'}
+        >
+          {user ? <LayoutDashboard className="h-3.5 w-3.5" /> : <LogIn className="h-3.5 w-3.5" />}
+          <span>{user ? 'پنل من' : 'ورود به پنل'}</span>
+        </button>
       </nav>
     </header>
   );
