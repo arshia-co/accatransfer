@@ -149,115 +149,82 @@ function DocumentCard({ document, busy, deleting, onConfirm, onReview, onRetry, 
   const decision = getDocumentOcrDecision(document);
   const confidence = decision.confidence;
   const quality = extraction?.quality || document.quality_report;
-  const needsHuman = !decision.canContinue && document.review_status === 'admin_review';
-  const confirmed = document.review_status === 'confirmed';
-  const reviewRecommended = decision.canContinue && decision.humanReviewRecommended && !confirmed;
+  const confirmed = document.review_status === 'confirmed' || document.review_status === 'reviewed';
   const hasDetail = visibleFields.length > 0 || Boolean(extraction?.summary) || (extraction?.courses?.length ?? 0) > 0;
+  const expandable = hasDetail || Boolean(extraction && !decision.canContinue);
+  const state = confirmed
+    ? { cls: 'is-confirmed', label: 'تأیید‌شده', Icon: BadgeCheck }
+    : !extraction
+      ? { cls: 'is-pending', label: 'در حال پردازش', Icon: Clock3 }
+      : decision.canContinue
+        ? { cls: 'is-ready', label: 'آماده', Icon: CheckCircle2 }
+        : { cls: 'is-review', label: 'نیازمند بررسی', Icon: AlertTriangle };
 
   return (
-    <article className="account-document-card">
-      <div className="account-document-main">
-        <span><FileText size={18} /></span>
-        <div>
-          <b>
+    <article className={`account-doc ${state.cls}`}>
+      <div className="account-doc-row">
+        <span className="account-doc-ic"><FileText size={16} /></span>
+        <div className="account-doc-info">
+          <b title={document.original_name}>
             {document.original_name}
             {document.version > 1 && <i className="account-doc-version">v{document.version}</i>}
           </b>
           <small>
             {documentKindLabel(document.document_kind)} · {formatSize(document.size_bytes)} · {formatDate(document.created_at)}
-            {document.security_scan?.safe && <span className="account-doc-scan"><ShieldCheck size={11} /> اسکن امنیتی</span>}
+            {document.security_scan?.safe && <span className="account-doc-scan"><ShieldCheck size={10} /> اسکن</span>}
           </small>
         </div>
-        <StatusPill status={document.status} />
-        {locked ? (
-          <span className="account-doc-lock" title="مدرک قفل‌شده — توسط آکا صادر شده و قابل حذف نیست"><Lock size={14} /></span>
-        ) : (
-          <button
-            type="button"
-            className="account-doc-delete"
-            onClick={() => onDelete?.(document)}
-            disabled={busy || deleting}
-            aria-label="حذف مدرک"
-            title="حذف مدرک"
-          >
-            {deleting ? <LoaderCircle className="account-spin" size={14} /> : <Trash2 size={15} />}
-          </button>
-        )}
-      </div>
-
-      {extraction ? (
-        <div className="account-ocr-panel">
-          <div className="account-ocr-head">
-            <span><ScanText size={15} /> OCR هوشمند</span>
-            <div>
-              {Number.isFinite(Number(confidence)) && <b>{confidence}% اطمینان</b>}
-              <span className={needsHuman ? 'is-review' : confirmed ? 'is-confirmed' : reviewRecommended ? 'is-caution' : ''}>
-                {needsHuman
-                  ? 'فعلاً قابل ادامه نیست'
-                  : confirmed
-                    ? 'تأیید دانشجو'
-                    : reviewRecommended
-                      ? 'قابل ادامه · بررسی توصیه می‌شود'
-                      : 'منتظر تأیید دانشجو'}
-              </span>
-            </div>
-          </div>
-
-          <div className={`account-ocr-gate ${decision.canContinue ? 'is-open' : 'is-closed'}`}>
-            {decision.canContinue ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-            <span>
-              {decision.canContinue
-                ? `اطمینان OCR بیشتر از ${OCR_CONTINUE_THRESHOLD}٪ است؛ این مدرک می‌تواند وارد مرحله بعد شود.`
-                : decision.reason}
-            </span>
-          </div>
-
-          {hasDetail && (
-            <button type="button" className="account-ocr-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-              {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              {open ? 'بستن جزئیات' : 'دیدن کامل OCR'}
+        {Number.isFinite(Number(confidence)) && <span className="account-doc-conf" dir="ltr" title="اطمینان OCR">{confidence}%</span>}
+        <span className={`account-doc-state ${state.cls}`}><state.Icon size={12} />{state.label}</span>
+        <div className="account-doc-act">
+          {decision.canContinue && !confirmed && (
+            <button type="button" className="account-doc-confirm" onClick={() => onConfirm(document)} disabled={busy} title="اطلاعات با مدرک مطابقت دارد">
+              {busy ? <LoaderCircle className="account-spin" size={13} /> : <BadgeCheck size={13} />}
+              تأیید
             </button>
           )}
-
-          {open && (
-            <div className="account-ocr-detail">
-              {visibleFields.length > 0 && (
-                <dl className="account-ocr-fields">
-                  {visibleFields.map(([key, label]) => (
-                    <div key={key}><dt>{label}</dt><dd dir={key === 'student_name' ? 'auto' : 'ltr'}>{fields[key]}</dd></div>
-                  ))}
-                </dl>
-              )}
-              {extraction.summary && <p className="account-ocr-summary">{extraction.summary}</p>}
-              {quality?.student_action && quality.status !== 'good' && (
-                <p className="account-ocr-warning"><AlertTriangle size={14} />{quality.student_action}</p>
-              )}
-              <ExtractedCourses courses={extraction.courses} />
-            </div>
+          {!confirmed && !decision.canContinue && (
+            <button type="button" className="account-doc-icon-btn" onClick={() => onRetry(document)} disabled={busy} title="اجرای دوباره OCR">
+              {busy ? <LoaderCircle className="account-spin" size={13} /> : <RefreshCw size={13} />}
+            </button>
           )}
-
-          {!confirmed && (
-            <div className="account-ocr-actions">
-              <button type="button" onClick={() => onConfirm(document)} disabled={busy || !decision.canContinue}>
-                {busy ? <LoaderCircle className="account-spin" size={14} /> : <BadgeCheck size={14} />}
-                اطلاعات با مدرک مطابقت دارد
-              </button>
-              <button type="button" className="secondary" onClick={() => onReview(document)} disabled={busy}>
-                درخواست بررسی انسانی
-              </button>
-            </div>
+          {expandable && (
+            <button type="button" className="account-doc-icon-btn" onClick={() => setOpen((value) => !value)} aria-expanded={open} title="جزئیات OCR">
+              {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
           )}
-          <small className="account-ocr-disclaimer">
-            خروجی OCR مقدماتی است. نام، شماره مدرک، معدل و نمرات را پیش از استفاده تأیید کنید.
-          </small>
+          {locked ? (
+            <span className="account-doc-lock" title="مدرک قفل‌شده — توسط آکا صادر شده و قابل حذف نیست"><Lock size={13} /></span>
+          ) : (
+            <button type="button" className="account-doc-icon-btn is-danger" onClick={() => onDelete?.(document)} disabled={busy || deleting} aria-label="حذف مدرک" title="حذف مدرک">
+              {deleting ? <LoaderCircle className="account-spin" size={13} /> : <Trash2 size={13} />}
+            </button>
+          )}
         </div>
-      ) : (
-        <div className="account-ocr-pending">
-          <span><AlertTriangle size={15} />هنوز خروجی OCR آماده نیست.</span>
-          <button type="button" onClick={() => onRetry(document)} disabled={busy}>
-            {busy ? <LoaderCircle className="account-spin" size={14} /> : <RefreshCw size={14} />}
-            اجرای دوباره OCR
-          </button>
+      </div>
+
+      {open && expandable && (
+        <div className="account-doc-body">
+          {extraction && !decision.canContinue && decision.reason && (
+            <p className="account-doc-reason"><AlertTriangle size={13} />{decision.reason}</p>
+          )}
+          {visibleFields.length > 0 && (
+            <dl className="account-ocr-fields">
+              {visibleFields.map(([key, label]) => (
+                <div key={key}><dt>{label}</dt><dd dir={key === 'student_name' ? 'auto' : 'ltr'}>{fields[key]}</dd></div>
+              ))}
+            </dl>
+          )}
+          {extraction?.summary && <p className="account-ocr-summary">{extraction.summary}</p>}
+          {quality?.student_action && quality.status !== 'good' && (
+            <p className="account-ocr-warning"><AlertTriangle size={14} />{quality.student_action}</p>
+          )}
+          <ExtractedCourses courses={extraction?.courses} />
+          {!confirmed && extraction && (
+            <button type="button" className="account-doc-human" onClick={() => onReview(document)} disabled={busy}>
+              درخواست بررسی انسانی
+            </button>
+          )}
         </div>
       )}
     </article>
