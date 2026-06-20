@@ -1,10 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
 import { getTurnstileToken } from '../lib/turnstile';
-import { migrateGuestTransferDraft, sendAccountEventEmail, upsertProfile } from '../services/accountService';
+import {
+  migrateGuestTransferDraft,
+  sendAccountAdminAlert,
+  sendAccountEventEmail,
+  upsertProfile,
+} from '../services/accountService';
 import { rememberAccountPreview } from './accountPreview';
 
 const AuthContext = createContext(null);
+
+function isRecentlyCreatedUser(user) {
+  const createdAt = new Date(user?.created_at || 0).getTime();
+  return Number.isFinite(createdAt) && Date.now() - createdAt < 60 * 60 * 1000;
+}
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
@@ -68,6 +78,21 @@ export function AuthProvider({ children }) {
       fullName: data.user.user_metadata?.full_name || data.user.user_metadata?.name,
       avatarUrl: data.user.user_metadata?.avatar_url,
     });
+    if (isRecentlyCreatedUser(data.user)) {
+      await sendAccountAdminAlert('signup', {
+        method: 'email_otp',
+        product,
+        language,
+        source: 'auth_modal',
+        needsEmailConfirmation: false,
+      }).catch(() => null);
+    }
+    await sendAccountAdminAlert('login', {
+      method: 'email_otp',
+      product,
+      language,
+      source: 'auth_modal',
+    }).catch(() => null);
     await sendAccountEventEmail('login', {
       method: 'email_otp',
       product,
@@ -93,6 +118,11 @@ export function AuthProvider({ children }) {
       fullName: data.user.user_metadata?.full_name || data.user.user_metadata?.name,
       avatarUrl: data.user.user_metadata?.avatar_url,
     });
+    await sendAccountAdminAlert('login', {
+      method: 'password',
+      product,
+      source: 'auth_modal',
+    }).catch(() => null);
     await sendAccountEventEmail('login', {
       method: 'password',
       product,
@@ -132,6 +162,19 @@ export function AuthProvider({ children }) {
       },
     });
     if (error) throw error;
+
+    if (data.user) {
+      await sendAccountAdminAlert('signup', {
+        userId: data.user.id,
+        email: data.user.email || email.trim(),
+        fullName: cleanName,
+        method: 'password',
+        product,
+        language,
+        source: 'auth_modal',
+        needsEmailConfirmation: !data.session,
+      }).catch(() => null);
+    }
 
     if (data.session && data.user) {
       await upsertProfile(data.user, product, { fullName: cleanName, language });

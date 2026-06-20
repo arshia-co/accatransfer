@@ -40,6 +40,7 @@ AUTHORIZED_TELEGRAM_ADMIN_IDS=
 TELEGRAM_ADMIN_ALLOW_UNVERIFIED=false
 RESEND_API_KEY=
 EMAIL_FROM_ADDRESS="ACCA Admissions <no-reply@accatransfer.com>"
+ADMIN_ALERT_EMAILS=admin@accatransfer.com,ops@accatransfer.com
 APP_BASE_URL=https://accatransfer.com
 ```
 
@@ -54,6 +55,10 @@ but it cannot fetch uploaded files by `file_id`.
 change still succeeds, the panel notification is created, and an `email_logs`
 row is saved with `status = queued` so the CRM/email provider can be connected
 later without losing the event.
+
+`ADMIN_ALERT_EMAILS` receives internal signup/login alerts. If omitted, the
+admin-alert function defaults to `arshia@accatransfer.com`. Telegram alerts go
+to every active row in `telegram_admins`.
 
 After bootstrap, manage admins in `telegram_admins`:
 

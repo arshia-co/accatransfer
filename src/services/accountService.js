@@ -183,6 +183,18 @@ export async function sendAccountEventEmail(eventType, details = {}) {
   return data;
 }
 
+export async function sendAccountAdminAlert(eventType, details = {}) {
+  const client = requireClient();
+  const body = { eventType, details };
+  if (eventType === 'signup') {
+    body.turnstileToken = await turnstileToken('signup_admin_alert');
+  }
+  const { data, error } = await client.functions.invoke('account-admin-alert', { body });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 export async function migrateGuestTransferDraft(user) {
   if (typeof window === 'undefined') return null;
   const raw = window.localStorage.getItem(GUEST_TRANSFER_KEY);

@@ -32,6 +32,11 @@ verify_jwt = true
 # authenticated user's email address.
 verify_jwt = true
 
+[functions.account-admin-alert]
+# Signup can complete before Supabase returns a user session, so this function
+# does its own JWT/Turnstile/user-id verification before notifying admins.
+verify_jwt = false
+
 [functions.security-verify]
 # Logged-in upload flows call this before storage writes. Guest routes use their
 # own public function validation, so this helper can require the user JWT.
