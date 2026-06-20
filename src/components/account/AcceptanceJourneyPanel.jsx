@@ -82,11 +82,26 @@ const STEPS = [
 export default function AcceptanceJourneyPanel({
   submission,
   acceptanceDoc,
+  companyDocs = [],
   onRequestRegistrationHelp,
   helpBusy,
 }) {
   const [showOcr, setShowOcr] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [openingDocId, setOpeningDocId] = useState(null);
+
+  const openCompanyDoc = async (doc) => {
+    if (!doc?.object_path || openingDocId) return;
+    setOpeningDocId(doc.id);
+    try {
+      const url = await createDocumentSignedUrl(doc.object_path, doc.bucket_id);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // signed-url failure keeps the panel usable
+    } finally {
+      setOpeningDocId(null);
+    }
+  };
   const accepted = Boolean(acceptanceDoc);
   const ocrSummary = acceptanceDoc?.ai_extraction?.summary;
   const offerDetails = acceptanceDoc?.ai_extraction?.offer_details;
@@ -224,6 +239,31 @@ export default function AcceptanceJourneyPanel({
           <div>
             <b>این فایل برای فرایند ویزا قابل استفاده نیست</b>
             <small>این محدودیت در خود نامه دانشگاه ذکر شده است. برای مدرک مناسب ویزا با تیم پذیرش هماهنگ کنید.</small>
+          </div>
+        </div>
+      )}
+
+      {companyDocs.length > 0 && (
+        <div className="acceptance-company-docs">
+          <div className="acceptance-company-head"><ShieldCheck size={14} /> مدارک و نامه‌های دریافتی از آکا</div>
+          <div className="acceptance-company-list">
+            {companyDocs.map((doc) => (
+              <div className="acceptance-company-item" key={doc.id}>
+                <span className="acceptance-company-icon"><FileCheck2 size={15} /></span>
+                <div>
+                  <b>{doc.title || 'نامه رسمی'}</b>
+                  <small>{doc.label} · {formatDate(doc.created_at)}</small>
+                </div>
+                {doc.object_path ? (
+                  <button type="button" onClick={() => openCompanyDoc(doc)} disabled={openingDocId === doc.id}>
+                    {openingDocId === doc.id ? <LoaderCircle className="account-spin" size={13} /> : <Download size={13} />}
+                    دانلود
+                  </button>
+                ) : (
+                  <span className="acceptance-soon">به‌زودی</span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

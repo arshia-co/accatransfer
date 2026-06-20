@@ -6,21 +6,37 @@ import {
 import { uploadStudentDocument } from '../../services/accountService';
 import { humanFileSize, prepareUploadFile } from '../../services/documentSecurity';
 
+// Identity / supporting categories shared by both products.
+const SHARED_EXTRA = [
+  { value: 'identity_document', label: 'مدارک هویتی' },
+  { value: 'national_id', label: 'کارت ملی' },
+  { value: 'birth_certificate', label: 'شناسنامه' },
+  { value: 'bank_statement', label: 'تمکن مالی / گردش حساب' },
+  { value: 'motivation_letter', label: 'انگیزه‌نامه' },
+  { value: 'recommendation_letter', label: 'توصیه‌نامه' },
+  { value: 'cv', label: 'رزومه (CV)' },
+  { value: 'medical_certificate', label: 'گواهی سلامت / واکسن' },
+  { value: 'other_certificate', label: 'سایر مدارک' },
+];
+
 const KINDS = {
   ai_transfer: [
     { value: 'transcript', label: 'ریزنمرات' },
     { value: 'syllabus', label: 'سرفصل دروس' },
     { value: 'student_certificate', label: 'گواهی اشتغال به تحصیل' },
     { value: 'passport', label: 'پاسپورت' },
+    { value: 'diploma', label: 'مدرک تحصیلی' },
+    { value: 'language_certificate', label: 'مدرک زبان' },
+    ...SHARED_EXTRA,
   ],
   smart_apply: [
     { value: 'passport', label: 'پاسپورت' },
     { value: 'transcript', label: 'ریزنمرات' },
     { value: 'diploma', label: 'مدرک تحصیلی' },
     { value: 'language_certificate', label: 'مدرک زبان' },
-    { value: 'photo', label: 'عکس' },
+    { value: 'photo', label: 'عکس پرسنلی' },
     { value: 'award_certificate', label: 'لوح تقدیر و افتخارات' },
-    { value: 'other_certificate', label: 'گواهی دوره و سرتیفیکیت' },
+    ...SHARED_EXTRA,
   ],
 };
 

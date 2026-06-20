@@ -120,10 +120,22 @@ export const APPLICATION_DOCUMENT_REQUIREMENTS = {
   },
 };
 
+// Extra student-uploadable categories (not tied to the readiness checklist).
+export const EXTRA_DOCUMENT_KIND_LABELS = {
+  identity_document: 'مدارک هویتی',
+  national_id: 'کارت ملی',
+  birth_certificate: 'شناسنامه',
+  bank_statement: 'تمکن مالی / گردش حساب',
+  motivation_letter: 'انگیزه‌نامه',
+  recommendation_letter: 'توصیه‌نامه',
+  cv: 'رزومه (CV)',
+  medical_certificate: 'گواهی سلامت / واکسن',
+};
+
 export function documentKindLabel(kind) {
   const all = Object.values(APPLICATION_DOCUMENT_REQUIREMENTS)
     .flatMap((group) => [...group.required, ...group.optional]);
-  return all.find((item) => item.kind === kind)?.label || kind;
+  return all.find((item) => item.kind === kind)?.label || EXTRA_DOCUMENT_KIND_LABELS[kind] || kind;
 }
 
 function bestDocumentForKind(documents, kind) {

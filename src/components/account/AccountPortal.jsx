@@ -135,7 +135,10 @@ function ExtractedCourses({ courses }) {
   );
 }
 
-const COMPANY_DOC_KINDS = new Set(['acceptance_letter', 'conditional_acceptance', 'offer_letter', 'company_letter', 'invitation_letter']);
+// Documents issued by the ACCA team / super-admin (stored in student_documents).
+// These are shown in the After Application panel, never in the student's own
+// upload list, and are not deletable by the student.
+const COMPANY_DOC_KINDS = new Set(['acceptance_letter', 'document_request', 'status_update_attachment', 'rejection_notice']);
 
 function DocumentCard({ document, busy, deleting, onConfirm, onReview, onRetry, onDelete }) {
   const locked = Boolean(document.is_locked) || COMPANY_DOC_KINDS.has(document.document_kind);
@@ -290,56 +293,6 @@ const LETTER_TYPE_LABEL = {
   visa_support: 'پشتیبانی ویزا',
   general: 'نامه رسمی',
 };
-
-// Company-issued documents (user_letters) — locked, read-only, download-only.
-function CompanyLettersList({ letters = [] }) {
-  const [openingId, setOpeningId] = useState(null);
-  if (!letters.length) return null;
-
-  const open = async (letter) => {
-    if (!letter.object_path) return;
-    setOpeningId(letter.id);
-    try {
-      const url = await createDocumentSignedUrl(letter.object_path, letter.bucket_id || 'student-documents');
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch {
-      /* signed-url failure leaves the panel usable */
-    } finally {
-      setOpeningId(null);
-    }
-  };
-
-  return (
-    <section className="account-company-docs">
-      <div className="account-company-docs-head">
-        <span><ShieldCheck size={17} /></span>
-        <div>
-          <b>مدارک صادرشده توسط آکا</b>
-          <small>این مدارک توسط تیم ما برای شما صادر شده‌اند؛ قفل و غیرقابل حذف هستند.</small>
-        </div>
-      </div>
-      <div className="account-company-doc-list">
-        {letters.map((letter) => (
-          <article className="account-company-doc" key={letter.id}>
-            <span className="account-company-doc-icon"><Lock size={15} /></span>
-            <div>
-              <b>{letter.title || letter.original_name || 'نامه رسمی'}</b>
-              <small>{LETTER_TYPE_LABEL[letter.letter_type] || 'نامه رسمی'} · {formatDate(letter.created_at)}</small>
-            </div>
-            {letter.object_path ? (
-              <button type="button" onClick={() => open(letter)} disabled={openingId === letter.id}>
-                {openingId === letter.id ? <LoaderCircle className="account-spin" size={14} /> : <Download size={14} />}
-                دانلود
-              </button>
-            ) : (
-              <span className="account-company-doc-soon">به‌زودی</span>
-            )}
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 function AccountNotifications({ notifications = [], documents = [] }) {
   const [openingId, setOpeningId] = useState(null);
@@ -1054,6 +1007,23 @@ export default function AccountPortal() {
   const acceptanceDoc = data.documents.find((doc) => doc.document_kind === 'acceptance_letter') || null;
   const smartDocuments = data.documents.filter((item) => item.product === 'smart_apply');
   const transferDocuments = data.documents.filter((item) => item.product === 'ai_transfer');
+  // Student-uploaded only (admin/company docs are surfaced in After Application).
+  const smartStudentDocs = smartDocuments.filter((doc) => !COMPANY_DOC_KINDS.has(doc.document_kind));
+  const transferStudentDocs = transferDocuments.filter((doc) => !COMPANY_DOC_KINDS.has(doc.document_kind));
+  const buildCompanyDocs = (productDocs) => [
+    ...productDocs
+      .filter((doc) => COMPANY_DOC_KINDS.has(doc.document_kind) && doc.document_kind !== 'acceptance_letter')
+      .map((doc) => ({
+        id: doc.id, title: doc.original_name, label: documentKindLabel(doc.document_kind),
+        object_path: doc.object_path, bucket_id: doc.bucket_id, created_at: doc.created_at,
+      })),
+    ...(data.letters || []).map((letter) => ({
+      id: letter.id, title: letter.title || letter.original_name, label: LETTER_TYPE_LABEL[letter.letter_type] || 'نامه رسمی',
+      object_path: letter.object_path, bucket_id: letter.bucket_id, created_at: letter.created_at,
+    })),
+  ];
+  const smartCompanyDocs = buildCompanyDocs(smartDocuments);
+  const transferCompanyDocs = buildCompanyDocs(transferDocuments);
   const transferTranscript = transferDocuments.find((item) => item.document_kind === 'transcript');
   const transferOcrDecision = getDocumentOcrDecision(transferTranscript);
   const transferDashboardResult = useMemo(() => buildLiveTransferResult({
@@ -1422,7 +1392,7 @@ export default function AccountPortal() {
           </div>
           <DocumentUploader product="smart_apply" user={user} onUploaded={refresh} />
           <DocumentList
-            documents={smartDocuments}
+            documents={smartStudentDocs}
             busyId={documentBusyId}
             onConfirm={(document) => updateDocumentReview(document, 'confirm')}
             onReview={(document) => updateDocumentReview(document, 'review')}
@@ -1439,10 +1409,11 @@ export default function AccountPortal() {
             busy={submissionBusy}
             onSubmit={submitApplication}
           />
-          {(smartSubmission || acceptanceDoc) && (
+          {(smartSubmission || acceptanceDoc || smartCompanyDocs.length > 0) && (
             <AcceptanceJourneyPanel
               submission={smartSubmission}
               acceptanceDoc={acceptanceDoc}
+              companyDocs={smartCompanyDocs}
               onRequestRegistrationHelp={() => requestRegistrationHelp('smart_apply')}
               helpBusy={helpBusy}
             />
@@ -1517,7 +1488,7 @@ export default function AccountPortal() {
             </p>
           )}
           <DocumentList
-            documents={transferDocuments}
+            documents={transferStudentDocs}
             busyId={documentBusyId}
             onConfirm={(document) => updateDocumentReview(document, 'confirm')}
             onReview={(document) => updateDocumentReview(document, 'review')}
@@ -1534,18 +1505,17 @@ export default function AccountPortal() {
             busy={submissionBusy}
             onSubmit={submitTransferApplication}
           />
-          {(transferSubmission || acceptanceDoc) && (
+          {(transferSubmission || acceptanceDoc || transferCompanyDocs.length > 0) && (
             <AcceptanceJourneyPanel
               submission={transferSubmission}
               acceptanceDoc={acceptanceDoc}
+              companyDocs={transferCompanyDocs}
               onRequestRegistrationHelp={() => requestRegistrationHelp('ai_transfer')}
               helpBusy={helpBusy}
             />
           )}
         </section>
         )}
-
-        <CompanyLettersList letters={data.letters} />
 
         {loading && <div className="account-loading-line"><LoaderCircle className="account-spin" size={18} /> {t('در حال همگام‌سازی حساب...', 'Syncing your account…')}</div>}
 

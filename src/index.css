@@ -489,6 +489,18 @@ textarea {
 .account-company-doc button { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 8px 13px; border: 0; border-radius: 999px; color: #fff; background: #14745f; font-size: 10px; font-weight: 900; cursor: pointer; }
 .account-company-doc button:disabled { opacity: .6; cursor: progress; }
 .account-company-doc-soon { flex: 0 0 auto; padding: 6px 11px; border-radius: 999px; color: rgba(16,47,72,.5); background: rgba(16,47,72,.06); font-size: 9px; font-weight: 800; }
+/* Company/super-admin documents shown inside the After Application panel */
+.acceptance-company-docs { display: grid; gap: 8px; }
+.acceptance-company-head { display: inline-flex; align-items: center; gap: 6px; color: #102f48; font-size: 11px; font-weight: 900; }
+.acceptance-company-head svg { color: #14745f; }
+.acceptance-company-list { display: grid; gap: 7px; }
+.acceptance-company-item { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 11px 12px; border: 1px solid rgba(16,47,72,.08); border-radius: 13px; background: rgba(255,255,255,.85); }
+.acceptance-company-icon { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border-radius: 10px; color: #14745f; background: rgba(20,116,95,.1); }
+.acceptance-company-item > div { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.acceptance-company-item b { overflow: hidden; color: #102f48; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.acceptance-company-item small { color: rgba(16,47,72,.5); font-size: 9px; }
+.acceptance-company-item button { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; padding: 7px 12px; border: 0; border-radius: 999px; color: #fff; background: #14745f; font-size: 10px; font-weight: 900; cursor: pointer; }
+.acceptance-company-item button:disabled { opacity: .6; cursor: progress; }
 .account-central[data-theme="dark"] .account-doc-delete { color: rgba(231,238,251,.55); background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
 .account-central[data-theme="dark"] .account-company-doc { background: rgba(255,255,255,.045); border-color: rgba(255,255,255,.09); }
 .account-central[data-theme="dark"] .account-company-doc b,
@@ -874,8 +886,13 @@ textarea {
 .doc-uploader-progress .account-progress { flex: 1; margin: 0; }
 .doc-uploader-progress > span { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; color: rgba(16,47,72,.55); font-size: 9px; font-weight: 800; }
 @media (max-width: 560px) {
-  .doc-stage { grid-template-columns: auto minmax(0,1fr); }
-  .doc-stage-actions { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+  .doc-stage { grid-template-columns: 50px minmax(0, 1fr); align-items: start; gap: 10px 11px; padding: 12px; }
+  .doc-stage-preview { width: 50px; height: 50px; }
+  .doc-stage-body { grid-column: 2; }
+  .doc-stage-actions { grid-column: 1 / -1; grid-template-columns: 1fr; gap: 7px; }
+  .doc-stage-upload { order: -1; }
+  .doc-stage-kind { flex-direction: column; align-items: stretch; gap: 4px; }
+  .doc-stage-kind span { font-size: 9px; }
 }
 /* Dark theme */
 .account-central[data-theme="dark"] .doc-dropzone { border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.04); }
