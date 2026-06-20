@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, ExternalLink, X, Sparkles, LayoutGrid, LayoutDashboard } from 'lucide-react';
-import { L, dirFor } from '../../lib/lang';
+import { L, dirFor, readStoredLang, subscribeStoredLang } from '../../lib/lang';
 import { UI } from '../../i18n/ui';
 import { BRAND_NAME, PRODUCT_NAME, MAIN_SITE_URL, LOGO_SRC } from '../../lib/constants';
 import { sessionProgress, useSmartApplyStore } from '../../store/smartApplyStore';
@@ -59,6 +59,20 @@ export default function SmartApplyShell() {
   useEffect(() => {
     boot();
   }, [boot]);
+
+  useEffect(() => {
+    const savedLang = readStoredLang({ fallback: null });
+    if (savedLang && savedLang !== useSmartApplyStore.getState().language) {
+      useSmartApplyStore.setState({ language: savedLang });
+    }
+
+    return subscribeStoredLang((nextLang) => {
+      const current = useSmartApplyStore.getState().language;
+      if (nextLang !== current) {
+        useSmartApplyStore.setState({ language: nextLang });
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (deepFitQueryHandled.current || !authInited) return;

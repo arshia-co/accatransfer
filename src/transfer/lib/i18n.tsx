@@ -1,4 +1,9 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  readStoredLang,
+  subscribeStoredLang,
+  writeStoredLang,
+} from "../../lib/lang";
 
 export type Lang = "en" | "fa";
 
@@ -89,21 +94,30 @@ interface Ctx {
 
 const I18nCtx = createContext<Ctx>({ lang: "en", setLang: () => {}, tr: (k) => t[k]?.en ?? String(k), dir: "ltr" });
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>("en");
+const transferLangs: Lang[] = ["en", "fa"];
+const normalizeTransferLang = (value: unknown): Lang => (value === "en" ? "en" : "fa");
 
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const stored = (localStorage.getItem("acca-lang") as Lang | null) ?? "en";
-    setLang(stored);
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>(() => (
+    normalizeTransferLang(readStoredLang({ fallback: "fa", allowed: transferLangs }))
+  ));
+
+  const setLang = useCallback((nextLang: Lang) => {
+    const normalized = normalizeTransferLang(nextLang);
+    setLangState(normalized);
+    writeStoredLang(normalized, { allowed: transferLangs });
   }, []);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
-    localStorage.setItem("acca-lang", lang);
   }, [lang]);
+
+  useEffect(() => subscribeStoredLang((nextLang) => {
+    const normalized = normalizeTransferLang(nextLang);
+    setLangState((current) => (current === normalized ? current : normalized));
+  }, { allowed: transferLangs }), []);
 
   const dir = lang === "fa" ? "rtl" : "ltr";
   const tr = (k: keyof typeof t) => t[k]?.[lang] ?? t[k]?.en ?? String(k);

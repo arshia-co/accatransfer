@@ -33,8 +33,6 @@ function TransferExperience() {
 
     return () => {
       document.body.classList.remove('transfer-route-active');
-      document.documentElement.lang = 'fa';
-      document.documentElement.dir = 'rtl';
     };
   }, []);
 

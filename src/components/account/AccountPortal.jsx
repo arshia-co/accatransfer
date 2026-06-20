@@ -8,6 +8,7 @@ import {
 import { computeCourseMatches, overallMatch, parseGradeRatio } from '../../transfer/lib/course-matching';
 import { useAuth } from '../../auth/AuthContext';
 import { rememberAccountPreview } from '../../auth/accountPreview';
+import { readStoredLang, subscribeStoredLang, writeStoredLang } from '../../lib/lang';
 import {
   confirmDocumentExtraction,
   createTransferAssessment,
@@ -900,14 +901,15 @@ function ResultCard({ result, type }) {
   );
 }
 
-function SignedOut() {
+function SignedOut({ lang = 'fa' }) {
   const { openAuth, isConfigured } = useAuth();
+  const fa = lang !== 'en';
   const returnTo = typeof window === 'undefined'
     ? '/account'
     : `${window.location.pathname}${window.location.search}`;
   const deepLink = readCatalogDeepLink();
   return (
-    <main className="account-page account-central" dir="rtl">
+    <main className="account-page account-central" dir={fa ? 'rtl' : 'ltr'}>
       <div className="account-ambient" />
       <section className="account-signed-out">
         <div className="account-orb"><FolderLock size={32} /></div>
@@ -967,12 +969,25 @@ export default function AccountPortal() {
   });
   const [lang, setLang] = useState(() => {
     if (typeof localStorage === 'undefined') return 'fa';
-    return localStorage.getItem('acca-account-lang') === 'en' ? 'en' : 'fa';
+    return readStoredLang({ fallback: 'fa', allowed: ['fa', 'en'] });
   });
   const fa = lang === 'fa';
   const t = useCallback((faText, enText) => (lang === 'en' ? enText : faText), [lang]);
+  const handleLangChange = useCallback((nextLang) => {
+    const normalized = nextLang === 'en' ? 'en' : 'fa';
+    setLang(normalized);
+    writeStoredLang(normalized, { allowed: ['fa', 'en'] });
+  }, []);
   useEffect(() => { try { localStorage.setItem('acca-account-theme', theme); } catch { /* ignore */ } }, [theme]);
-  useEffect(() => { try { localStorage.setItem('acca-account-lang', lang); } catch { /* ignore */ } }, [lang]);
+  useEffect(() => subscribeStoredLang((nextLang) => {
+    const normalized = nextLang === 'en' ? 'en' : 'fa';
+    setLang((current) => (current === normalized ? current : normalized));
+  }, { allowed: ['fa', 'en'] }), []);
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = fa ? 'rtl' : 'ltr';
+    document.title = t('ACCA Central Account | پنل مرکزی آکا', 'ACCA Central Account | Student panel');
+  }, [fa, lang, t]);
   const [linkedSelectionNotice, setLinkedSelectionNotice] = useState('');
   const linkedSelectionHandled = useRef(false);
   const [catalogPicker, setCatalogPicker] = useState(() => {
@@ -1214,8 +1229,8 @@ export default function AccountPortal() {
     }
   };
 
-  if (authLoading) return <main className="account-page account-loading"><LoaderCircle className="account-spin" /></main>;
-  if (!user) return <SignedOut />;
+  if (authLoading) return <main className="account-page account-loading" dir={fa ? 'rtl' : 'ltr'}><LoaderCircle className="account-spin" /></main>;
+  if (!user) return <SignedOut lang={lang} />;
 
   const accountName = data.profile?.full_name || user.user_metadata?.full_name || 'دانشجوی ACCA';
   const accountAvatar = data.profile?.avatar_url || user.user_metadata?.avatar_url || '';
@@ -1235,8 +1250,8 @@ export default function AccountPortal() {
         </div>
         <div className="account-header-actions">
           <div className="account-seg" role="group" aria-label="Language">
-            <button type="button" className={fa ? 'is-active' : ''} onClick={() => setLang('fa')}>فا</button>
-            <button type="button" className={!fa ? 'is-active' : ''} onClick={() => setLang('en')}>EN</button>
+            <button type="button" className={fa ? 'is-active' : ''} onClick={() => handleLangChange('fa')}>فا</button>
+            <button type="button" className={!fa ? 'is-active' : ''} onClick={() => handleLangChange('en')}>EN</button>
           </div>
           <button
             type="button"

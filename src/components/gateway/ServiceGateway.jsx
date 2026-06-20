@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import GatewayHeader from './GatewayHeader';
 import ServicePreviewArt from './ServicePreviewArt';
+import { readStoredLang, subscribeStoredLang, writeStoredLang } from '../../lib/lang';
 
 const particles = [
   { left: '7%', top: '21%', size: 5, delay: '0s' },
@@ -159,9 +160,15 @@ export default function ServiceGateway() {
   });
   const [lang, setLang] = useState(() => {
     if (typeof localStorage === 'undefined') return 'fa';
-    return localStorage.getItem('acca-gateway-lang') === 'en' ? 'en' : 'fa';
+    return readStoredLang({ fallback: 'fa', allowed: ['fa', 'en'] });
   });
   const fa = lang !== 'en';
+
+  const handleLangChange = useCallback((nextLang) => {
+    const normalized = nextLang === 'en' ? 'en' : 'fa';
+    setLang(normalized);
+    writeStoredLang(normalized, { allowed: ['fa', 'en'] });
+  }, []);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -172,7 +179,10 @@ export default function ServiceGateway() {
   }, [fa, lang]);
 
   useEffect(() => { try { localStorage.setItem('acca-gateway-theme', theme); } catch { /* ignore */ } }, [theme]);
-  useEffect(() => { try { localStorage.setItem('acca-gateway-lang', lang); } catch { /* ignore */ } }, [lang]);
+  useEffect(() => subscribeStoredLang((nextLang) => {
+    const normalized = nextLang === 'en' ? 'en' : 'fa';
+    setLang((current) => (current === normalized ? current : normalized));
+  }, { allowed: ['fa', 'en'] }), []);
 
   return (
     <div dir={fa ? 'rtl' : 'ltr'} className="gateway-page" data-theme={theme}>
@@ -183,7 +193,7 @@ export default function ServiceGateway() {
           lang={lang}
           theme={theme}
           showPreferences
-          onLangChange={setLang}
+          onLangChange={handleLangChange}
           onThemeToggle={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
         />
 

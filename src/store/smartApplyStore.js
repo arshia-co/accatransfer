@@ -6,7 +6,13 @@ import { create } from 'zustand';
 import { INTENTS } from '../ai/intents';
 import { sendIntent, sendText, typingDelayFor, delay } from '../ai/mockAIProvider';
 import { WHATSAPP_URL } from '../lib/constants';
-import { L } from '../lib/lang';
+import {
+  L,
+  normalizeLang,
+  readStoredLang,
+  SUPPORTED_LANGS as SHARED_SUPPORTED_LANGS,
+  writeStoredLang,
+} from '../lib/lang';
 import { UI } from '../i18n/ui';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { getTurnstileToken } from '../lib/turnstile';
@@ -23,26 +29,26 @@ const nextMessageId = () => `msg_${String(++messageSeq).padStart(3, '0')}`;
 const newSessionId = () => `sa_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 // Persist the chosen conversation language so a refresh never resets it.
-const LANG_KEY = 'acca_smart_apply_lang';
 const SESSION_MEMORY_KEY = 'acca_smart_apply_session_v1';
 const MAX_HISTORY_ENTRIES = 60;
-const SUPPORTED_LANGS = new Set(['fa', 'en', 'tr', 'ar']);
+const SUPPORTED_LANGS = new Set(SHARED_SUPPORTED_LANGS);
 let skipNextBrowserWrite = false;
 let persistenceTimer = null;
 
 const loadSavedLanguage = () => {
   if (typeof window === 'undefined') return null;
   try {
-    const v = window.localStorage.getItem(LANG_KEY);
+    const v = readStoredLang({ fallback: null });
     return SUPPORTED_LANGS.has(v) ? v : null;
   } catch {
     return null;
   }
 };
 const saveSavedLanguage = (lang) => {
-  if (typeof window === 'undefined' || !SUPPORTED_LANGS.has(lang)) return;
+  const normalized = normalizeLang(lang, null);
+  if (typeof window === 'undefined' || !normalized || !SUPPORTED_LANGS.has(normalized)) return;
   try {
-    window.localStorage.setItem(LANG_KEY, lang);
+    writeStoredLang(normalized);
   } catch {
     /* private mode / quota — non-fatal */
   }
@@ -77,7 +83,6 @@ const clearBrowserMemory = () => {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.removeItem(SESSION_MEMORY_KEY);
-    window.localStorage.removeItem(LANG_KEY);
   } catch {
     /* private mode / quota — non-fatal */
   }
@@ -512,6 +517,7 @@ export const useSmartApplyStore = create((set, get) => {
         isAssistantSpeaking: false,
         isListening: false,
       }));
+      saveSavedLanguage(previous.language);
       scheduleSignedInPersistence();
     },
 
