@@ -470,6 +470,29 @@ textarea {
 .account-document-main > span:first-child { display: grid; width: 39px; height: 39px; flex: 0 0 auto; place-items: center; border-radius: 12px; background: rgba(198,167,104,.13); }
 .account-document-main > div { display: grid; flex: 1; min-width: 0; }
 .account-document-main .account-status { flex-shrink: 0; margin-inline-start: auto; }
+.account-doc-version { display: inline-flex; margin-inline-start: 6px; padding: 1px 6px; border-radius: 999px; color: #8a6c1f; background: rgba(210,168,72,.16); font-size: 8px; font-weight: 900; font-style: normal; vertical-align: middle; }
+.account-doc-delete { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(16,47,72,.1); border-radius: 10px; color: rgba(16,47,72,.5); background: #fff; cursor: pointer; transition: color .15s ease, border-color .15s ease, background .15s ease; }
+.account-doc-delete:hover:not(:disabled) { color: #a23b2a; border-color: rgba(196,76,52,.4); background: rgba(196,76,52,.06); }
+.account-doc-delete:disabled { opacity: .5; cursor: progress; }
+.account-doc-lock { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border-radius: 10px; color: #8a6c1f; background: rgba(210,168,72,.14); }
+.account-company-docs { margin-top: 18px; padding: 18px; border: 1px solid rgba(198,167,104,.22); border-radius: 20px; background: linear-gradient(140deg, rgba(198,167,104,.06), rgba(20,116,95,.04)); }
+.account-company-docs-head { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
+.account-company-docs-head > span { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border-radius: 12px; color: #fff; background: linear-gradient(145deg, #102f48, #14745f); }
+.account-company-docs-head b { display: block; color: #102f48; font-size: 13px; }
+.account-company-docs-head small { color: rgba(16,47,72,.55); font-size: 10px; line-height: 1.7; }
+.account-company-doc-list { display: grid; gap: 8px; }
+.account-company-doc { display: flex; align-items: center; gap: 11px; padding: 12px; border: 1px solid rgba(16,47,72,.08); border-radius: 14px; background: rgba(255,255,255,.8); }
+.account-company-doc-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 10px; color: #8a6c1f; background: rgba(210,168,72,.14); }
+.account-company-doc > div { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.account-company-doc b { overflow: hidden; color: #102f48; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.account-company-doc small { color: rgba(16,47,72,.5); font-size: 9px; }
+.account-company-doc button { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 8px 13px; border: 0; border-radius: 999px; color: #fff; background: #14745f; font-size: 10px; font-weight: 900; cursor: pointer; }
+.account-company-doc button:disabled { opacity: .6; cursor: progress; }
+.account-company-doc-soon { flex: 0 0 auto; padding: 6px 11px; border-radius: 999px; color: rgba(16,47,72,.5); background: rgba(16,47,72,.06); font-size: 9px; font-weight: 800; }
+.account-central[data-theme="dark"] .account-doc-delete { color: rgba(231,238,251,.55); background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
+.account-central[data-theme="dark"] .account-company-doc { background: rgba(255,255,255,.045); border-color: rgba(255,255,255,.09); }
+.account-central[data-theme="dark"] .account-company-doc b,
+.account-central[data-theme="dark"] .account-company-docs-head b { color: #f3f7ff; }
 .account-ocr-panel { padding: 16px; border-top: 1px solid rgba(16,47,72,.07); background: linear-gradient(135deg, rgba(20,116,95,.045), rgba(198,167,104,.055)); }
 .account-ocr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .account-ocr-head > span { display: inline-flex; align-items: center; gap: 6px; color: #102f48; font-size: 11px; font-weight: 900; }
@@ -819,6 +842,49 @@ textarea {
 .account-product-upload label input { display: none; }
 .account-product-upload .account-progress { width: 120px; margin: 0; }
 .account-product-upload .account-error { display: block; }
+
+/* ── Professional document uploader (drag-drop + pre-upload setup) ────────── */
+.doc-uploader { margin-top: 14px; }
+.doc-dropzone { position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 26px 18px; border: 1.5px dashed rgba(20,116,95,.35); border-radius: 20px; background: linear-gradient(150deg, rgba(20,116,95,.05), rgba(198,167,104,.05)); text-align: center; cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .2s ease; }
+.doc-dropzone:hover { border-color: rgba(20,116,95,.6); background: linear-gradient(150deg, rgba(20,116,95,.08), rgba(198,167,104,.08)); }
+.doc-dropzone.is-drag { border-color: #14745f; background: rgba(20,116,95,.12); transform: scale(1.005); }
+.doc-dropzone-orb { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 15px; color: #fff; background: linear-gradient(145deg, #102f48, #14745f); box-shadow: 0 10px 26px rgba(20,116,95,.22); }
+.doc-dropzone b { color: #102f48; font-size: 13px; }
+.doc-dropzone small { max-width: 460px; color: rgba(16,47,72,.55); font-size: 10px; line-height: 1.8; }
+.doc-stage { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 14px; padding: 14px; border: 1px solid rgba(16,47,72,.1); border-radius: 18px; background: rgba(255,255,255,.85); }
+.doc-stage-preview { display: grid; width: 64px; height: 64px; flex: 0 0 auto; place-items: center; overflow: hidden; border-radius: 13px; color: #14745f; background: rgba(20,116,95,.08); }
+.doc-stage-preview img { width: 100%; height: 100%; object-fit: cover; }
+.doc-stage-body { display: grid; gap: 4px; min-width: 0; }
+.doc-stage-body > b { overflow: hidden; color: #102f48; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.doc-stage-body > small { color: rgba(16,47,72,.5); font-size: 10px; }
+.doc-stage-kind { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.doc-stage-kind span { flex: 0 0 auto; color: rgba(16,47,72,.6); font-size: 10px; font-weight: 800; }
+.doc-stage-kind select { flex: 1; min-width: 0; min-height: 36px; padding: 0 10px; border: 1px solid rgba(16,47,72,.12); border-radius: 11px; color: #102f48; background: #fff; font-size: 11px; }
+.doc-stage-checks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.doc-stage-checks span { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 9px; font-weight: 800; }
+.doc-stage-checks .is-checking { color: #8a6c1f; background: rgba(210,168,72,.14); }
+.doc-stage-checks .is-ok { color: #116d5b; background: rgba(20,128,106,.1); }
+.doc-stage-checks .is-bad { color: #a23b2a; background: rgba(196,76,52,.12); }
+.doc-stage-actions { display: grid; flex: 0 0 auto; gap: 7px; }
+.doc-stage-cancel { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 8px 12px; border: 1px solid rgba(16,47,72,.12); border-radius: 11px; color: rgba(16,47,72,.66); background: #fff; font-size: 10px; font-weight: 800; cursor: pointer; }
+.doc-stage-cancel:hover:not(:disabled) { color: #a23b2a; border-color: rgba(196,76,52,.4); background: rgba(196,76,52,.05); }
+.doc-stage-upload { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; border: 0; border-radius: 11px; color: #fff; background: linear-gradient(145deg, #102f48, #14745f); font-size: 11px; font-weight: 900; cursor: pointer; }
+.doc-stage-upload:disabled { opacity: .55; cursor: not-allowed; }
+.doc-uploader-progress { display: flex; align-items: center; gap: 9px; margin-top: 10px; }
+.doc-uploader-progress .account-progress { flex: 1; margin: 0; }
+.doc-uploader-progress > span { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; color: rgba(16,47,72,.55); font-size: 9px; font-weight: 800; }
+@media (max-width: 560px) {
+  .doc-stage { grid-template-columns: auto minmax(0,1fr); }
+  .doc-stage-actions { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+}
+/* Dark theme */
+.account-central[data-theme="dark"] .doc-dropzone { border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.04); }
+.account-central[data-theme="dark"] .doc-dropzone b { color: #f3f7ff; }
+.account-central[data-theme="dark"] .doc-dropzone small { color: rgba(231,238,251,.55); }
+.account-central[data-theme="dark"] .doc-stage { border-color: rgba(255,255,255,.09); background: rgba(255,255,255,.045); }
+.account-central[data-theme="dark"] .doc-stage-body > b { color: #f3f7ff; }
+.account-central[data-theme="dark"] .doc-stage-kind select,
+.account-central[data-theme="dark"] .doc-stage-cancel { color: #e7eefb; background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
 .account-product-empty { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 14px; padding: 22px; border: 1px dashed rgba(16,47,72,.12); border-radius: 18px; color: rgba(16,47,72,.46); font-size: 11px; }
 .account-transfer-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .account-transfer-tools > button { display: inline-flex; min-height: 42px; align-items: center; gap: 7px; padding: 0 17px; border: 0; border-radius: 12px; color: #102f48; background: #e6c681; font-size: 11px; font-weight: 900; cursor: pointer; }

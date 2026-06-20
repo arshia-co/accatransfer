@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertTriangle, ArrowLeft, BadgeCheck, Bell, BookOpen, BrainCircuit, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CloudUpload, Compass,
-  FileCheck2, FileText, FolderLock, GraduationCap, Layers, LayoutGrid, ListChecks, LoaderCircle, LogOut, Moon, Paperclip, Percent,
-  RefreshCw, ScanText, ShieldCheck, Sparkles, Sun, Target, XCircle,
+  Download, FileCheck2, FileText, FolderLock, GraduationCap, Layers, LayoutGrid, ListChecks, LoaderCircle, Lock, LogOut, Moon, Paperclip, Percent,
+  RefreshCw, ScanText, ShieldCheck, Sparkles, Sun, Target, Trash2, XCircle,
 } from 'lucide-react';
 import { computeCourseMatches, overallMatch, parseGradeRatio } from '../../transfer/lib/course-matching';
 import { useAuth } from '../../auth/AuthContext';
@@ -13,6 +13,7 @@ import {
   confirmDocumentExtraction,
   createTransferAssessment,
   createDocumentSignedUrl,
+  deleteStudentDocument,
   listCentralAccountData,
   migrateGuestTransferDraft,
   requestDocumentOcr,
@@ -31,6 +32,7 @@ import {
   resolveCatalogDeepLink,
 } from '../../services/programCatalogService';
 import { documentKindLabel } from '../../data/applicationDocuments';
+import DocumentUploader from './DocumentUploader';
 import ApplicationReadinessPanel from './ApplicationReadinessPanel';
 import AcceptanceJourneyPanel from './AcceptanceJourneyPanel';
 import ProfileEditor from './ProfileEditor';
@@ -71,82 +73,6 @@ function StatusPill({ status = 'draft' }) {
     verified: 'تأیید شده',
   };
   return <span className="account-status"><CheckCircle2 size={13} />{labels[status] || status}</span>;
-}
-
-function DocumentUpload({ product, user, assessmentId, onUploaded }) {
-  const [kind, setKind] = useState(product === 'ai_transfer' ? 'transcript' : 'passport');
-  const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const upload = async (file) => {
-    if (!file) return;
-    setBusy(true);
-    setError('');
-    setStage('quality');
-    setProgress(5);
-    try {
-      const uploaded = await uploadStudentDocument({
-        user,
-        product,
-        kind,
-        file,
-        assessmentId,
-        onProgress: setProgress,
-        onStage: setStage,
-      });
-      if (uploaded.ocrError) {
-        setError('فایل امن ذخیره شد، اما OCR کامل نشد. می‌توانید دوباره پردازش را اجرا کنید.');
-      }
-      await onUploaded();
-    } catch (err) {
-      setError(err?.message || 'آپلود انجام نشد.');
-    } finally {
-      setBusy(false);
-      setStage('');
-      window.setTimeout(() => setProgress(0), 700);
-    }
-  };
-
-  const stageLabel = {
-    security: 'بررسی امنیتی سریع',
-    quality: 'بررسی کیفیت',
-    upload: 'آپلود امن',
-    ocr: 'خواندن هوشمند مدرک',
-  }[stage];
-
-  return (
-    <div className="account-product-upload">
-      <select value={kind} onChange={(event) => setKind(event.target.value)} disabled={busy}>
-        {product === 'ai_transfer' ? (
-          <>
-            <option value="transcript">ریزنمرات</option>
-            <option value="syllabus">سرفصل دروس</option>
-            <option value="student_certificate">گواهی اشتغال به تحصیل</option>
-            <option value="passport">پاسپورت</option>
-          </>
-        ) : (
-          <>
-            <option value="passport">پاسپورت</option>
-            <option value="transcript">ریزنمرات</option>
-            <option value="diploma">مدرک تحصیلی</option>
-            <option value="language_certificate">مدرک زبان</option>
-            <option value="photo">عکس</option>
-            <option value="award_certificate">لوح تقدیر و افتخارات</option>
-            <option value="other_certificate">گواهی دوره و سرتیفیکیت</option>
-          </>
-        )}
-      </select>
-      <label>
-        {busy ? <LoaderCircle className="account-spin" size={17} /> : <CloudUpload size={17} />}
-        {busy ? `${stageLabel || 'در حال پردازش'} · ${progress}%` : 'آپلود و بررسی مدرک'}
-        <input type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={busy} onChange={(event) => upload(event.target.files?.[0])} />
-      </label>
-      {progress > 0 && <div className="account-progress"><span style={{ width: `${progress}%` }} /></div>}
-      {error && <small className="account-error">{error}</small>}
-    </div>
-  );
 }
 
 const EXTRACTION_FIELDS = [
@@ -209,7 +135,10 @@ function ExtractedCourses({ courses }) {
   );
 }
 
-function DocumentCard({ document, busy, onConfirm, onReview, onRetry }) {
+const COMPANY_DOC_KINDS = new Set(['acceptance_letter', 'conditional_acceptance', 'offer_letter', 'company_letter', 'invitation_letter']);
+
+function DocumentCard({ document, busy, deleting, onConfirm, onReview, onRetry, onDelete }) {
+  const locked = Boolean(document.is_locked) || COMPANY_DOC_KINDS.has(document.document_kind);
   const [open, setOpen] = useState(false);
   const extraction = document.ai_extraction;
   const fields = extraction?.fields || {};
@@ -227,12 +156,29 @@ function DocumentCard({ document, busy, onConfirm, onReview, onRetry }) {
       <div className="account-document-main">
         <span><FileText size={18} /></span>
         <div>
-          <b>{document.original_name}</b>
+          <b>
+            {document.original_name}
+            {document.version > 1 && <i className="account-doc-version">v{document.version}</i>}
+          </b>
           <small>
             {documentKindLabel(document.document_kind)} · {formatSize(document.size_bytes)} · {formatDate(document.created_at)}
           </small>
         </div>
         <StatusPill status={document.status} />
+        {locked ? (
+          <span className="account-doc-lock" title="مدرک قفل‌شده — توسط آکا صادر شده و قابل حذف نیست"><Lock size={14} /></span>
+        ) : (
+          <button
+            type="button"
+            className="account-doc-delete"
+            onClick={() => onDelete?.(document)}
+            disabled={busy || deleting}
+            aria-label="حذف مدرک"
+            title="حذف مدرک"
+          >
+            {deleting ? <LoaderCircle className="account-spin" size={14} /> : <Trash2 size={15} />}
+          </button>
+        )}
       </div>
 
       {extraction ? (
@@ -314,7 +260,7 @@ function DocumentCard({ document, busy, onConfirm, onReview, onRetry }) {
   );
 }
 
-function DocumentList({ documents, busyId, onConfirm, onReview, onRetry }) {
+function DocumentList({ documents, busyId, deletingId, onConfirm, onReview, onRetry, onDelete }) {
   if (!documents.length) {
     return <div className="account-product-empty"><FolderLock size={22} /><span>هنوز مدرکی در این بخش ثبت نشده است.</span></div>;
   }
@@ -325,12 +271,73 @@ function DocumentList({ documents, busyId, onConfirm, onReview, onRetry }) {
           key={document.id}
           document={document}
           busy={busyId === document.id}
+          deleting={deletingId === document.id}
           onConfirm={onConfirm}
           onReview={onReview}
           onRetry={onRetry}
+          onDelete={onDelete}
         />
       ))}
     </div>
+  );
+}
+
+const LETTER_TYPE_LABEL = {
+  acceptance: 'پذیرش',
+  conditional_acceptance: 'پذیرش مشروط',
+  offer: 'پیشنهاد پذیرش',
+  invitation: 'دعوت‌نامه',
+  visa_support: 'پشتیبانی ویزا',
+  general: 'نامه رسمی',
+};
+
+// Company-issued documents (user_letters) — locked, read-only, download-only.
+function CompanyLettersList({ letters = [] }) {
+  const [openingId, setOpeningId] = useState(null);
+  if (!letters.length) return null;
+
+  const open = async (letter) => {
+    if (!letter.object_path) return;
+    setOpeningId(letter.id);
+    try {
+      const url = await createDocumentSignedUrl(letter.object_path, letter.bucket_id || 'student-documents');
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      /* signed-url failure leaves the panel usable */
+    } finally {
+      setOpeningId(null);
+    }
+  };
+
+  return (
+    <section className="account-company-docs">
+      <div className="account-company-docs-head">
+        <span><ShieldCheck size={17} /></span>
+        <div>
+          <b>مدارک صادرشده توسط آکا</b>
+          <small>این مدارک توسط تیم ما برای شما صادر شده‌اند؛ قفل و غیرقابل حذف هستند.</small>
+        </div>
+      </div>
+      <div className="account-company-doc-list">
+        {letters.map((letter) => (
+          <article className="account-company-doc" key={letter.id}>
+            <span className="account-company-doc-icon"><Lock size={15} /></span>
+            <div>
+              <b>{letter.title || letter.original_name || 'نامه رسمی'}</b>
+              <small>{LETTER_TYPE_LABEL[letter.letter_type] || 'نامه رسمی'} · {formatDate(letter.created_at)}</small>
+            </div>
+            {letter.object_path ? (
+              <button type="button" onClick={() => open(letter)} disabled={openingId === letter.id}>
+                {openingId === letter.id ? <LoaderCircle className="account-spin" size={14} /> : <Download size={14} />}
+                دانلود
+              </button>
+            ) : (
+              <span className="account-company-doc-soon">به‌زودی</span>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -958,6 +965,7 @@ export default function AccountPortal() {
   const [error, setError] = useState('');
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [documentBusyId, setDocumentBusyId] = useState(null);
+  const [deletingDocId, setDeletingDocId] = useState(null);
   const [selectionBusy, setSelectionBusy] = useState(false);
   const [submissionBusy, setSubmissionBusy] = useState(false);
   const [helpBusy, setHelpBusy] = useState(false);
@@ -1229,6 +1237,21 @@ export default function AccountPortal() {
     }
   };
 
+  const deleteDocument = async (document) => {
+    if (!document?.id) return;
+    if (typeof window !== 'undefined' && !window.confirm('این مدرک حذف شود؟ این کار قابل بازگشت نیست.')) return;
+    setDeletingDocId(document.id);
+    setError('');
+    try {
+      await deleteStudentDocument(document);
+      await refresh();
+    } catch (err) {
+      setError(err?.message || 'حذف مدرک انجام نشد.');
+    } finally {
+      setDeletingDocId(null);
+    }
+  };
+
   if (authLoading) return <main className="account-page account-loading" dir={fa ? 'rtl' : 'ltr'}><LoaderCircle className="account-spin" /></main>;
   if (!user) return <SignedOut lang={lang} />;
 
@@ -1397,13 +1420,15 @@ export default function AccountPortal() {
             </div>
             <a href="/smart-apply">ادامه مسیر</a>
           </div>
-          <DocumentUpload product="smart_apply" user={user} onUploaded={refresh} />
+          <DocumentUploader product="smart_apply" user={user} onUploaded={refresh} />
           <DocumentList
             documents={smartDocuments}
             busyId={documentBusyId}
             onConfirm={(document) => updateDocumentReview(document, 'confirm')}
             onReview={(document) => updateDocumentReview(document, 'review')}
             onRetry={(document) => updateDocumentReview(document, 'retry')}
+            deletingId={deletingDocId}
+            onDelete={deleteDocument}
           />
           <ApplicationReadinessPanel
             product="smart_apply"
@@ -1458,7 +1483,7 @@ export default function AccountPortal() {
           />
           <TransferAnalysisPanel result={transferDashboardResult} documents={transferDocuments} />
           <div className="account-transfer-tools">
-            <DocumentUpload
+            <DocumentUploader
               product="ai_transfer"
               user={user}
               assessmentId={transferAssessment?.id || null}
@@ -1497,6 +1522,8 @@ export default function AccountPortal() {
             onConfirm={(document) => updateDocumentReview(document, 'confirm')}
             onReview={(document) => updateDocumentReview(document, 'review')}
             onRetry={(document) => updateDocumentReview(document, 'retry')}
+            deletingId={deletingDocId}
+            onDelete={deleteDocument}
           />
           <ApplicationReadinessPanel
             product="ai_transfer"
@@ -1517,6 +1544,8 @@ export default function AccountPortal() {
           )}
         </section>
         )}
+
+        <CompanyLettersList letters={data.letters} />
 
         {loading && <div className="account-loading-line"><LoaderCircle className="account-spin" size={18} /> {t('در حال همگام‌سازی حساب...', 'Syncing your account…')}</div>}
 

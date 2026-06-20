@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import { getTurnstileToken } from '../lib/turnstile';
 import { inspectDocumentQuality } from './documentQualityService';
+import { prepareUploadFile } from './documentSecurity';
 
 const DOCUMENT_BUCKET = 'student-documents';
 const GUEST_TRANSFER_KEY = 'acca-transfer-guest-assessment';
@@ -438,21 +439,58 @@ export async function uploadStudentDocument({
   onProgress,
   onStage,
 }) {
-  validateDocument(file);
   const client = requireClient();
   onStage?.('security');
   onProgress?.(2);
   await verifySecurityGate('document_upload');
+
+  // Real-MIME + per-type size + PDF-threat checks, EXIF strip, sanitised name, hash.
+  onStage?.('prepare');
+  onProgress?.(8);
+  const prepared = await prepareUploadFile(file);
+  onProgress?.(16);
+
+  // Duplicate detection by content hash (per user).
+  if (prepared.hash) {
+    const { data: duplicate } = await client
+      .from('student_documents')
+      .select('id, original_name')
+      .eq('user_id', user.id)
+      .eq('file_hash', prepared.hash)
+      .limit(1)
+      .maybeSingle();
+    if (duplicate) {
+      throw new Error(`این فایل قبلاً آپلود شده است${duplicate.original_name ? ` («${duplicate.original_name}»)` : ''}.`);
+    }
+  }
+
   onStage?.('quality');
-  onProgress?.(6);
-  const qualityReport = await inspectDocumentQuality(file);
-  const objectPath = `${user.id}/${product}/${assessmentId || 'general'}/${crypto.randomUUID()}-${safeFilename(file.name)}`;
+  const qualityReport = await inspectDocumentQuality(prepared.file);
+
+  // Versioning: a fresh upload of the same document kind supersedes the prior one.
+  let version = 1;
+  let replacesId = null;
+  const { data: prior } = await client
+    .from('student_documents')
+    .select('id, version')
+    .eq('user_id', user.id)
+    .eq('product', product)
+    .eq('document_kind', kind)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (prior?.id) {
+    version = (prior.version || 1) + 1;
+    replacesId = prior.id;
+  }
+
+  const objectPath = `${user.id}/${product}/${assessmentId || 'general'}/${crypto.randomUUID()}-${prepared.sanitizedName}`;
   onStage?.('upload');
-  onProgress?.(18);
+  onProgress?.(22);
 
   const { error: uploadError } = await client.storage
     .from(DOCUMENT_BUCKET)
-    .upload(objectPath, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+    .upload(objectPath, prepared.file, { cacheControl: '3600', upsert: false, contentType: prepared.mimeType });
   if (uploadError) throw uploadError;
   onProgress?.(62);
 
@@ -464,9 +502,12 @@ export async function uploadStudentDocument({
       assessment_id: assessmentId,
       document_kind: kind,
       object_path: objectPath,
-      original_name: file.name,
-      mime_type: file.type,
-      size_bytes: file.size,
+      original_name: prepared.originalName,
+      mime_type: prepared.mimeType,
+      size_bytes: prepared.sizeBytes,
+      file_hash: prepared.hash,
+      version,
+      replaces_id: replacesId,
       status: 'uploaded',
       quality_report: qualityReport,
     })
@@ -494,6 +535,21 @@ export async function uploadStudentDocument({
       ocrError: error?.message || 'OCR could not be completed.',
     };
   }
+}
+
+/** Delete a student-uploaded document (storage object + row). Locked documents
+ *  (e.g. submitted/company-bound) are refused; company-issued files live in
+ *  user_letters and cannot be deleted by the client at all (RLS). */
+export async function deleteStudentDocument(document) {
+  const client = requireClient();
+  if (!document?.id) throw new Error('مدرک نامعتبر است.');
+  if (document.is_locked) throw new Error('این مدرک قفل شده و قابل حذف نیست.');
+  if (document.object_path) {
+    await client.storage.from(DOCUMENT_BUCKET).remove([document.object_path]).catch(() => null);
+  }
+  const { error } = await client.from('student_documents').delete().eq('id', document.id);
+  if (error) throw error;
+  return true;
 }
 
 export async function createTransferAssessment(user, fields = {}) {
@@ -572,9 +628,10 @@ export async function requestHumanDocumentReview(documentId) {
   return data;
 }
 
-export async function createDocumentSignedUrl(objectPath) {
+export async function createDocumentSignedUrl(objectPath, bucketId = DOCUMENT_BUCKET) {
   const client = requireClient();
-  const { data, error } = await client.storage.from(DOCUMENT_BUCKET).createSignedUrl(objectPath, 60);
+  // Short-lived (60s) signed URL — covers both student uploads and company letters.
+  const { data, error } = await client.storage.from(bucketId || DOCUMENT_BUCKET).createSignedUrl(objectPath, 60);
   if (error) throw error;
   return data.signedUrl;
 }
