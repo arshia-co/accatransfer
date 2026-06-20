@@ -518,8 +518,21 @@ export async function uploadStudentDocument({
     await client.storage.from(DOCUMENT_BUCKET).remove([objectPath]);
     throw rowError;
   }
+
+  // Server-side re-validation + anti-virus (defense in depth). An unsafe verdict
+  // purges the object + row server-side; a transient scan error fails open since
+  // the client-side checks already passed.
+  onStage?.('scan');
+  onProgress?.(72);
+  try {
+    await scanStudentDocument(data.id);
+  } catch (scanError) {
+    if (scanError?.isUnsafe) throw scanError;
+    console.warn('Server document scan skipped:', scanError?.message || scanError);
+  }
+
   onStage?.('ocr');
-  onProgress?.(76);
+  onProgress?.(82);
 
   try {
     const ocr = await requestDocumentOcr({ documentId: data.id });
@@ -535,6 +548,21 @@ export async function uploadStudentDocument({
       ocrError: error?.message || 'OCR could not be completed.',
     };
   }
+}
+
+/** Server-side security re-validation + anti-virus for an uploaded document.
+ *  Throws err.isUnsafe=true when the server rejected (and purged) the file; a
+ *  transport/availability error is thrown plain so callers can fail open. */
+export async function scanStudentDocument(documentId) {
+  const client = requireClient();
+  const { data, error } = await client.functions.invoke('scan-document', { body: { documentId } });
+  if (error) throw error;
+  if (data?.safe === false) {
+    const unsafe = new Error(data.reason || 'فایل در بررسی امنیتی سرور رد شد.');
+    unsafe.isUnsafe = true;
+    throw unsafe;
+  }
+  return data;
 }
 
 /** Delete a student-uploaded document (storage object + row). Locked documents

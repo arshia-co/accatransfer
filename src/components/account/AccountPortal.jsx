@@ -165,6 +165,7 @@ function DocumentCard({ document, busy, deleting, onConfirm, onReview, onRetry, 
           </b>
           <small>
             {documentKindLabel(document.document_kind)} · {formatSize(document.size_bytes)} · {formatDate(document.created_at)}
+            {document.security_scan?.safe && <span className="account-doc-scan"><ShieldCheck size={11} /> اسکن امنیتی</span>}
           </small>
         </div>
         <StatusPill status={document.status} />

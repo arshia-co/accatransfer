@@ -471,6 +471,8 @@ textarea {
 .account-document-main > div { display: grid; flex: 1; min-width: 0; }
 .account-document-main .account-status { flex-shrink: 0; margin-inline-start: auto; }
 .account-doc-version { display: inline-flex; margin-inline-start: 6px; padding: 1px 6px; border-radius: 999px; color: #8a6c1f; background: rgba(210,168,72,.16); font-size: 8px; font-weight: 900; font-style: normal; vertical-align: middle; }
+.account-doc-scan { display: inline-flex; align-items: center; gap: 3px; margin-inline-start: 7px; padding: 1px 7px; border-radius: 999px; color: #116d5b; background: rgba(20,128,106,.12); font-size: 8px; font-weight: 900; }
+.account-doc-scan svg { color: #14745f; }
 .account-doc-delete { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(16,47,72,.1); border-radius: 10px; color: rgba(16,47,72,.5); background: #fff; cursor: pointer; transition: color .15s ease, border-color .15s ease, background .15s ease; }
 .account-doc-delete:hover:not(:disabled) { color: #a23b2a; border-color: rgba(196,76,52,.4); background: rgba(196,76,52,.06); }
 .account-doc-delete:disabled { opacity: .5; cursor: progress; }
