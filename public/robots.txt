@@ -1,0 +1,15 @@
+# ACCA Smart Apply (accatransfer.com)
+# Public assistant pages are crawlable; the private user panel and auth flows
+# are not. The whole site is kept OUT of the search index by a site-wide meta
+# `noindex` until launch — flip ALLOW_INDEX in src/lib/seo.js to go live.
+# Crawling is intentionally allowed so search engines can SEE that noindex.
+
+User-agent: *
+Allow: /
+Disallow: /account
+Disallow: /smart-apply/account
+Disallow: /ai-transfer/account
+Disallow: /reset-password
+Disallow: /auth/reset-password
+
+Sitemap: https://accatransfer.com/sitemap.xml
