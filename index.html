@@ -6,23 +6,78 @@
 
     <title>ACCA Smart Apply | دستیار هوشمند پذیرش تحصیلی</title>
     <meta name="description" content="ACCA Smart Apply — مسیر پذیرش تحصیلی شما با یک دستیار هوشمند: کشف رشته، انتخاب دانشگاه و شروع درخواست، قدم‌به‌قدم و بدون فرم‌های طولانی." />
-    <!-- Demo build: remove noindex before production launch -->
+    <!-- Demo build: site-wide noindex. Launch = flip ALLOW_INDEX in src/lib/seo.js
+         (it manages robots/canonical per route); also drop this static tag then. -->
     <meta name="robots" content="noindex, nofollow" />
+    <meta name="googlebot" content="noindex, nofollow" />
     <meta name="author" content="ACCA EDU" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+    <!-- Canonical (updated per-route by src/lib/seo.js) -->
+    <link rel="canonical" href="https://accatransfer.com/" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="ACCA EDU" />
+    <meta property="og:locale" content="fa_IR" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:url" content="https://accatransfer.com/" />
     <meta property="og:title" content="ACCA Smart Apply | AI-guided admission journey" />
     <meta property="og:description" content="Discover your major, find matching universities in Turkey, and start your application — guided step by step by one smart assistant." />
+    <meta property="og:image" content="https://accatransfer.com/assets/acca-logo-320.webp" />
+    <meta property="og:image:alt" content="ACCA Smart Apply" />
 
-    <meta name="theme-color" content="#F7F1E8" />
-    <meta name="color-scheme" content="light" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ACCA Smart Apply | AI-guided admission journey" />
+    <meta name="twitter:description" content="Discover your major, find matching universities in Turkey, and start your application — guided step by step by one smart assistant." />
+    <meta name="twitter:image" content="https://accatransfer.com/assets/acca-logo-320.webp" />
+
+    <meta name="theme-color" content="#F7F1E8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#071A3D" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="application-name" content="ACCA Smart Apply" />
     <meta name="format-detection" content="telephone=no" />
 
     <link rel="icon" type="image/webp" href="/assets/acca-logo-320.webp" />
+    <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="/fonts/vazirmatn-arabic.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="/fonts/vazirmatn-latin.woff2" crossorigin />
+
+    <!-- Structured data: organisation + site + the web app itself -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://accatransfer.com/#organization",
+          "name": "ACCA EDU",
+          "url": "https://accatransfer.com",
+          "logo": "https://accatransfer.com/assets/acca-logo-320.webp",
+          "sameAs": ["https://www.accaco.com", "https://www.instagram.com/acca_edu/"]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://accatransfer.com/#website",
+          "url": "https://accatransfer.com",
+          "name": "ACCA Smart Apply",
+          "inLanguage": ["fa", "en"],
+          "publisher": { "@id": "https://accatransfer.com/#organization" }
+        },
+        {
+          "@type": "WebApplication",
+          "name": "ACCA Smart Apply",
+          "url": "https://accatransfer.com",
+          "applicationCategory": "EducationApplication",
+          "operatingSystem": "Web",
+          "inLanguage": ["fa", "en"],
+          "description": "AI-guided admission and university-transfer assistant for studying in Turkey: major discovery, university matching and transcript analysis.",
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+          "publisher": { "@id": "https://accatransfer.com/#organization" }
+        }
+      ]
+    }
+    </script>
     <script>
       (function restoreSpaPath(location) {
         if (location.search.slice(0, 2) !== '?/') return;
