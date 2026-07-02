@@ -1754,13 +1754,17 @@ textarea {
 
 .gateway-service-action:hover {
   background: #0b765e;
-  box-shadow: 0 17px 38px rgba(11, 118, 94, 0.23);
+  box-shadow:
+    0 17px 38px rgba(11, 118, 94, 0.23),
+    0 0 0 1px rgba(198, 167, 104, 0.4);
   transform: translateY(-2px);
 }
 
 .gateway-service-card--transfer .gateway-service-action:hover {
   background: linear-gradient(100deg, #312675, #6554cd);
-  box-shadow: 0 17px 38px rgba(86, 69, 185, 0.28);
+  box-shadow:
+    0 17px 38px rgba(86, 69, 185, 0.28),
+    0 0 0 1px rgba(198, 167, 104, 0.4);
 }
 
 .gateway-service-action > span:first-child {
@@ -1890,6 +1894,33 @@ textarea {
   background: #c6a768;
   box-shadow: 0 0 18px rgba(198, 167, 104, 0.8);
   animation: gateway-drift 7s ease-in-out infinite;
+}
+
+/* Interactive 3D particle constellation (canvas). Sits above the soft orbs but
+   below the content shell, and never intercepts pointer events. */
+.gateway-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.gateway-page[data-theme="dark"] .gateway-particles {
+  /* Additive glow of the cream/gold nodes over the deep navy. */
+  mix-blend-mode: screen;
+}
+
+/* Soft premium vignette — draws focus to the constellation and deepens the
+   navy toward the edges without hiding the content shell above it. */
+.gateway-ambient::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(125% 85% at 50% 40%, transparent 52%, rgba(7, 26, 61, 0.14) 100%);
+}
+.gateway-page[data-theme="dark"] .gateway-ambient::after {
+  background: radial-gradient(125% 85% at 50% 40%, transparent 48%, rgba(2, 7, 16, 0.62) 100%);
 }
 
 /* ---- AI Transfer direction page ---- */
