@@ -11,17 +11,8 @@ import {
 } from 'lucide-react';
 import GatewayHeader from './GatewayHeader';
 import ServicePreviewArt from './ServicePreviewArt';
+import ParticleField from './ParticleField';
 import { readStoredLang, subscribeStoredLang, writeStoredLang } from '../../lib/lang';
-
-const particles = [
-  { left: '7%', top: '21%', size: 5, delay: '0s' },
-  { left: '15%', top: '72%', size: 3, delay: '1.8s' },
-  { left: '30%', top: '10%', size: 4, delay: '3s' },
-  { left: '52%', top: '84%', size: 5, delay: '1.1s' },
-  { left: '73%', top: '15%', size: 3, delay: '2.4s' },
-  { left: '88%', top: '64%', size: 4, delay: '.7s' },
-  { left: '95%', top: '30%', size: 2, delay: '3.5s' },
-];
 
 const services = [
   {
@@ -70,35 +61,19 @@ const services = [
   },
 ];
 
-function AmbientStage() {
+function AmbientStage({ theme, shape }) {
   return (
     <div className="gateway-ambient" aria-hidden="true">
       <div className="gateway-grid" />
       <div className="gateway-orb gateway-orb--gold" />
       <div className="gateway-orb gateway-orb--emerald" />
       <div className="gateway-orb gateway-orb--violet" />
-      <svg className="gateway-constellation" viewBox="0 0 1200 650" preserveAspectRatio="none">
-        <path d="M-80 500C180 430 186 135 468 181s299 340 545 239c119-49 132-202 276-282" />
-        <path d="M-20 260C197 310 296 49 552 109s250 307 521 189c79-34 125-101 177-184" />
-      </svg>
-      {particles.map((particle, index) => (
-        <span
-          key={index}
-          className="gateway-particle"
-          style={{
-            left: particle.left,
-            top: particle.top,
-            width: particle.size,
-            height: particle.size,
-            animationDelay: particle.delay,
-          }}
-        />
-      ))}
+      <ParticleField theme={theme} shape={shape} />
     </div>
   );
 }
 
-function ServiceCard({ service, index, lang }) {
+function ServiceCard({ service, index, lang, onHoverShape }) {
   const Icon = service.icon;
   const fa = lang !== 'en';
 
@@ -108,6 +83,8 @@ function ServiceCard({ service, index, lang }) {
       initial={{ opacity: 0, y: 28 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.65, delay: 0.18 + index * 0.12 }}
+      onPointerEnter={() => onHoverShape(service.id)}
+      onPointerLeave={() => onHoverShape(null)}
     >
       <div className="gateway-card-shine" aria-hidden="true" />
       <div className="gateway-service-topline">
@@ -162,6 +139,8 @@ export default function ServiceGateway() {
     if (typeof localStorage === 'undefined') return 'fa';
     return readStoredLang({ fallback: 'fa', allowed: ['fa', 'en'] });
   });
+  // Which service card is hovered — the particle swarm assembles its icon.
+  const [hoverShape, setHoverShape] = useState(null);
   const fa = lang !== 'en';
 
   const handleLangChange = useCallback((nextLang) => {
@@ -186,7 +165,7 @@ export default function ServiceGateway() {
 
   return (
     <div dir={fa ? 'rtl' : 'ltr'} className="gateway-page" data-theme={theme}>
-      <AmbientStage />
+      <AmbientStage theme={theme} shape={hoverShape} />
 
       <div className="gateway-shell">
         <GatewayHeader
@@ -225,7 +204,13 @@ export default function ServiceGateway() {
 
           <section className="gateway-services" aria-label={fa ? 'انتخاب سرویس آکا' : 'Choose an ACCA service'}>
             {services.map((service, index) => (
-              <ServiceCard key={service.id} service={service} index={index} lang={lang} />
+              <ServiceCard
+                key={service.id}
+                service={service}
+                index={index}
+                lang={lang}
+                onHoverShape={setHoverShape}
+              />
             ))}
           </section>
         </main>

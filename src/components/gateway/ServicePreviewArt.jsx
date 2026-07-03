@@ -91,11 +91,18 @@ function TransferArt() {
         <filter id="transfer-glow" x="-60%" y="-60%" width="220%" height="220%">
           <feGaussianBlur stdDeviation="8" />
         </filter>
+        <clipPath id="transfer-panel-clip">
+          <rect x="25" y="20" width="570" height="320" rx="28" />
+        </clipPath>
       </defs>
 
       <rect x="25" y="20" width="570" height="320" rx="28" fill="url(#transfer-panel)" />
-      <circle cx="510" cy="60" r="80" fill="#806BFF" fillOpacity=".12" filter="url(#transfer-glow)" />
-      <circle cx="104" cy="308" r="90" fill="#C6A768" fillOpacity=".11" filter="url(#transfer-glow)" />
+      {/* Ambient glows clipped to the rounded panel so their blur fades inside
+          the frame instead of getting hard-cut at the SVG edge. */}
+      <g clipPath="url(#transfer-panel-clip)">
+        <circle cx="510" cy="60" r="80" fill="#806BFF" fillOpacity=".12" filter="url(#transfer-glow)" />
+        <circle cx="104" cy="308" r="90" fill="#C6A768" fillOpacity=".11" filter="url(#transfer-glow)" />
+      </g>
       <path d="M86 266C164 238 173 130 268 136s105 117 196 75c45-21 59-69 80-117" fill="none" stroke="url(#transfer-route)" strokeWidth="3" strokeLinecap="round" strokeDasharray="7 10" />
 
       <rect x="52" y="47" width="516" height="48" rx="16" fill="#FFFFFF" fillOpacity=".07" stroke="#FFFFFF" strokeOpacity=".1" />
