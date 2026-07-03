@@ -31,6 +31,7 @@ const THEMES = {
     lineAccent: [206, 174, 108],
     lineAlpha: 0.5,
     nodeAlpha: 0.9,
+    glowAlpha: 0.55, // every dot radiates a small faded halo — starlike at night
   },
   light: {
     node: [14, 34, 68],
@@ -39,6 +40,7 @@ const THEMES = {
     lineAccent: [168, 122, 52],
     lineAlpha: 0.32,
     nodeAlpha: 0.85,
+    glowAlpha: 0.2, // subtler in daylight, just a soft shadow of light
   },
 };
 
@@ -118,7 +120,6 @@ export default function ParticleField({ theme = 'dark', shape = null, className 
     // ── Shape formation ────────────────────────────────────────────────────
     let activeShape = null; // currently assembled icon kind
     let shapeKey = '';      // kind + canvas size the assignment was built for
-    let shapeMix = 0;       // eased 0→1 while assembled: particles grow a bit
     const shapeCandidates = {}; // kind -> normalised [0..1] outline points
 
     function getShapeCandidates(kind) {
@@ -154,10 +155,11 @@ export default function ParticleField({ theme = 'dark', shape = null, className 
     function assignShape(kind) {
       const cand = getShapeCandidates(kind);
       if (!cand.length || !particles.length) return;
-      // Assemble in the open hero area (upper-centre), above the card glass.
-      const box = Math.min(width, height) * 0.42;
+      // Assemble large in the upper-centre; the glass cards let the icon show
+      // through where they overlap, so it can span most of the hero space.
+      const box = Math.min(width, height) * 0.56;
       const ox = width / 2 - box / 2;
-      const oy = height * 0.34 - box / 2;
+      const oy = height * 0.37 - box / 2;
       const stride = Math.max(1, Math.floor(cand.length / particles.length));
       const targets = [];
       for (let i = 0; i < cand.length && targets.length < particles.length; i += stride) {
@@ -245,9 +247,6 @@ export default function ParticleField({ theme = 'dark', shape = null, className 
         else releaseShape();
       }
 
-      // Particles swell slightly while the icon is assembled (eased both ways).
-      shapeMix += ((activeShape ? 1 : 0) - shapeMix) * Math.min(1, 5 * dt);
-
       // Ease the magnet toward the raw pointer for a smooth, weighty pull.
       if (pointer.active) {
         const k = Math.min(1, 6 * dt);
@@ -334,8 +333,31 @@ export default function ParticleField({ theme = 'dark', shape = null, className 
       }
     }
 
+    // Pre-rendered halo sprites (one per theme/colour) — drawing an image per
+    // particle is far cheaper than building a radial gradient every frame.
+    const glowSprites = {};
+    function getGlowSprite(themeName, kind) {
+      const key = `${themeName}:${kind}`;
+      if (glowSprites[key]) return glowSprites[key];
+      const palette = THEMES[themeName] || THEMES.dark;
+      const color = kind === 'accent' ? palette.accent : palette.node;
+      const S = 64;
+      const sprite = document.createElement('canvas');
+      sprite.width = S; sprite.height = S;
+      const sctx = sprite.getContext('2d');
+      const g = sctx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+      g.addColorStop(0, rgba(color, 0.6));
+      g.addColorStop(0.35, rgba(color, 0.16));
+      g.addColorStop(1, rgba(color, 0));
+      sctx.fillStyle = g;
+      sctx.fillRect(0, 0, S, S);
+      glowSprites[key] = sprite;
+      return sprite;
+    }
+
     function renderFrame() {
-      const palette = THEMES[themeRef.current] || THEMES.dark;
+      const themeName = THEMES[themeRef.current] ? themeRef.current : 'dark';
+      const palette = THEMES[themeName];
       ctx.clearRect(0, 0, width, height);
 
       // Connective web.
@@ -365,22 +387,20 @@ export default function ParticleField({ theme = 'dark', shape = null, className 
         }
       }
 
-      // Nodes (gold accents get a soft glow). Shape-forming particles grow up
-      // to ~1.75× so the assembled icon reads brighter and bolder.
+      // Nodes: every electron stays a plain circle but radiates a small faded
+      // halo — starlike against the night navy, a soft light-shadow in day.
+      const glowNode = getGlowSprite(themeName, 'node');
+      const glowAccent = getGlowSprite(themeName, 'accent');
       for (const p of particles) {
         const depth = Math.max(0.35, Math.min(1, (p.z - 0.3) * 0.95));
-        const grow = p.tx != null ? 1 + 0.75 * shapeMix : 1;
-        const r = p.size * (0.55 + p.z * 0.6) * grow;
+        const r = p.size * (0.55 + p.z * 0.6);
         const base = p.accent ? palette.accent : palette.node;
-        if (p.accent) {
-          const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 5);
-          glow.addColorStop(0, rgba(base, 0.32 * depth));
-          glow.addColorStop(1, rgba(base, 0));
-          ctx.fillStyle = glow;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, r * 5, 0, Math.PI * 2);
-          ctx.fill();
-        }
+
+        const glowR = r * (p.accent ? 6 : 4.2);
+        ctx.globalAlpha = Math.min(1, palette.glowAlpha * depth * (p.accent ? 1.4 : 1));
+        ctx.drawImage(p.accent ? glowAccent : glowNode, p.x - glowR, p.y - glowR, glowR * 2, glowR * 2);
+        ctx.globalAlpha = 1;
+
         ctx.fillStyle = rgba(base, palette.nodeAlpha * depth);
         ctx.beginPath();
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
