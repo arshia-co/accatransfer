@@ -155,11 +155,12 @@ export default function ParticleField({ theme = 'dark', shape = null, className 
     function assignShape(kind) {
       const cand = getShapeCandidates(kind);
       if (!cand.length || !particles.length) return;
-      // Assemble large in the upper-centre; the glass cards let the icon show
-      // through where they overlap, so it can span most of the hero space.
-      const box = Math.min(width, height) * 0.56;
+      // Assemble large in the centre; the same electrons spread further apart
+      // over a bigger outline, so the icon reads clearly. The glass cards let
+      // it show through where they overlap.
+      const box = Math.min(width, height) * 0.78;
       const ox = width / 2 - box / 2;
-      const oy = height * 0.37 - box / 2;
+      const oy = height * 0.42 - box / 2;
       const stride = Math.max(1, Math.floor(cand.length / particles.length));
       const targets = [];
       for (let i = 0; i < cand.length && targets.length < particles.length; i += stride) {
