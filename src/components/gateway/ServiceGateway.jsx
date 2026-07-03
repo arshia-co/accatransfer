@@ -61,19 +61,19 @@ const services = [
   },
 ];
 
-function AmbientStage({ theme }) {
+function AmbientStage({ theme, shape }) {
   return (
     <div className="gateway-ambient" aria-hidden="true">
       <div className="gateway-grid" />
       <div className="gateway-orb gateway-orb--gold" />
       <div className="gateway-orb gateway-orb--emerald" />
       <div className="gateway-orb gateway-orb--violet" />
-      <ParticleField theme={theme} />
+      <ParticleField theme={theme} shape={shape} />
     </div>
   );
 }
 
-function ServiceCard({ service, index, lang }) {
+function ServiceCard({ service, index, lang, onHoverShape }) {
   const Icon = service.icon;
   const fa = lang !== 'en';
 
@@ -83,6 +83,8 @@ function ServiceCard({ service, index, lang }) {
       initial={{ opacity: 0, y: 28 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.65, delay: 0.18 + index * 0.12 }}
+      onPointerEnter={() => onHoverShape(service.id)}
+      onPointerLeave={() => onHoverShape(null)}
     >
       <div className="gateway-card-shine" aria-hidden="true" />
       <div className="gateway-service-topline">
@@ -137,6 +139,8 @@ export default function ServiceGateway() {
     if (typeof localStorage === 'undefined') return 'fa';
     return readStoredLang({ fallback: 'fa', allowed: ['fa', 'en'] });
   });
+  // Which service card is hovered — the particle swarm assembles its icon.
+  const [hoverShape, setHoverShape] = useState(null);
   const fa = lang !== 'en';
 
   const handleLangChange = useCallback((nextLang) => {
@@ -161,7 +165,7 @@ export default function ServiceGateway() {
 
   return (
     <div dir={fa ? 'rtl' : 'ltr'} className="gateway-page" data-theme={theme}>
-      <AmbientStage theme={theme} />
+      <AmbientStage theme={theme} shape={hoverShape} />
 
       <div className="gateway-shell">
         <GatewayHeader
@@ -200,7 +204,13 @@ export default function ServiceGateway() {
 
           <section className="gateway-services" aria-label={fa ? 'انتخاب سرویس آکا' : 'Choose an ACCA service'}>
             {services.map((service, index) => (
-              <ServiceCard key={service.id} service={service} index={index} lang={lang} />
+              <ServiceCard
+                key={service.id}
+                service={service}
+                index={index}
+                lang={lang}
+                onHoverShape={setHoverShape}
+              />
             ))}
           </section>
         </main>

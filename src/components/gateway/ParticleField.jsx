@@ -53,14 +53,43 @@ const EDGE_MARGIN = 42;     // soft-wall thickness, px
 const EDGE_PUSH = 5;        // soft-wall spring, s⁻²
 const MAX_SPEED = 150;      // px/s, scaled by depth
 
+// Shape-formation mode (hovering a service card): particles snap onto icon
+// target points with a near-critically-damped spring, then burst free again.
+const SHAPE_K = 42;          // spring stiffness toward target, s⁻²
+const SHAPE_DAMP = 12;       // spring velocity damping, s⁻¹ (≈critical)
+const SHAPE_MAX_SPEED = 950; // px/s while assembling, so it forms fast
+const RELEASE_KICK = 340;    // px/s random impulse when the shape dissolves
+
+// Icon outlines drawn on an offscreen canvas and sampled into target points.
+// Path data mirrors the lucide icons used on the cards (24×24 viewBox):
+// "smart" → bot, "transfer" → route.
+const SHAPE_DEFS = {
+  smart: (octx) => {
+    octx.stroke(new Path2D('M12 8V4H8'));
+    octx.stroke(new Path2D('M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z'));
+    octx.stroke(new Path2D('M2 14h2'));
+    octx.stroke(new Path2D('M20 14h2'));
+    octx.stroke(new Path2D('M15 13v2'));
+    octx.stroke(new Path2D('M9 13v2'));
+  },
+  transfer: (octx) => {
+    octx.stroke(new Path2D('M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15'));
+    octx.beginPath(); octx.arc(6, 19, 3, 0, Math.PI * 2); octx.stroke();
+    octx.beginPath(); octx.arc(18, 5, 3, 0, Math.PI * 2); octx.stroke();
+  },
+};
+
 function rgba([r, g, b], a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-export default function ParticleField({ theme = 'dark', className = '' }) {
+export default function ParticleField({ theme = 'dark', shape = null, className = '' }) {
   const canvasRef = useRef(null);
   const themeRef = useRef(theme);
   themeRef.current = theme;
+  // Which icon (if any) the swarm should currently assemble into.
+  const shapeRef = useRef(shape);
+  shapeRef.current = shape && SHAPE_DEFS[shape] ? shape : null;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -85,6 +114,84 @@ export default function ParticleField({ theme = 'dark', className = '' }) {
     // Raw pointer target (canvas-local) + eased magnet position.
     const pointer = { tx: 0, ty: 0, active: false };
     const magnet = { x: 0, y: 0 };
+
+    // ── Shape formation ────────────────────────────────────────────────────
+    let activeShape = null; // currently assembled icon kind
+    let shapeKey = '';      // kind + canvas size the assignment was built for
+    const shapeCandidates = {}; // kind -> normalised [0..1] outline points
+
+    function getShapeCandidates(kind) {
+      if (shapeCandidates[kind]) return shapeCandidates[kind];
+      const S = 340;
+      const off = document.createElement('canvas');
+      off.width = S; off.height = S;
+      const octx = off.getContext('2d');
+      if (!octx) return (shapeCandidates[kind] = []);
+      octx.strokeStyle = '#fff';
+      octx.lineWidth = 2.1;
+      octx.lineCap = 'round';
+      octx.lineJoin = 'round';
+      octx.setTransform(S / 24, 0, 0, S / 24, 0, 0);
+      SHAPE_DEFS[kind](octx);
+      octx.setTransform(1, 0, 0, 1, 0, 0);
+      const img = octx.getImageData(0, 0, S, S).data;
+      const pts = [];
+      for (let y = 0; y < S; y += 2) {
+        for (let x = 0; x < S; x += 2) {
+          if (img[(y * S + x) * 4 + 3] > 40) pts.push({ x: x / S, y: y / S });
+        }
+      }
+      // Shuffle once so stepping through them samples the outline evenly.
+      for (let i = pts.length - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0;
+        [pts[i], pts[j]] = [pts[j], pts[i]];
+      }
+      shapeCandidates[kind] = pts;
+      return pts;
+    }
+
+    function assignShape(kind) {
+      const cand = getShapeCandidates(kind);
+      if (!cand.length || !particles.length) return;
+      // Assemble in the open hero area (upper-centre), above the card glass.
+      const box = Math.min(width, height) * 0.42;
+      const ox = width / 2 - box / 2;
+      const oy = height * 0.34 - box / 2;
+      const stride = Math.max(1, Math.floor(cand.length / particles.length));
+      const targets = [];
+      for (let i = 0; i < cand.length && targets.length < particles.length; i += stride) {
+        targets.push({ x: ox + cand[i].x * box, y: oy + cand[i].y * box });
+      }
+      // Greedy nearest-particle per target keeps flight paths short.
+      const free = particles.slice();
+      for (const t of targets) {
+        let best = -1;
+        let bestD = Infinity;
+        for (let i = 0; i < free.length; i++) {
+          const p = free[i];
+          const d = (p.x - t.x) * (p.x - t.x) + (p.y - t.y) * (p.y - t.y);
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        const p = free.splice(best, 1)[0];
+        p.tx = t.x; p.ty = t.y;
+      }
+      for (const p of free) { p.tx = null; p.ty = null; }
+      activeShape = kind;
+      shapeKey = `${kind}:${width}x${height}`;
+    }
+
+    function releaseShape() {
+      for (const p of particles) {
+        if (p.tx != null) {
+          // A small burst so the icon visibly dissolves back into free dust.
+          p.vx += (Math.random() - 0.5) * RELEASE_KICK * 2;
+          p.vy += (Math.random() - 0.5) * RELEASE_KICK * 2;
+        }
+        p.tx = null; p.ty = null;
+      }
+      activeShape = null;
+      shapeKey = '';
+    }
 
     function buildParticles() {
       const area = width * height;
@@ -130,6 +237,13 @@ export default function ParticleField({ theme = 'dark', className = '' }) {
     }
 
     function step(dt, t) {
+      // Sync shape mode with the hovered card (and rebuild after resizes).
+      const wantShape = shapeRef.current;
+      if (wantShape !== activeShape || (wantShape && shapeKey !== `${wantShape}:${width}x${height}`)) {
+        if (wantShape) assignShape(wantShape);
+        else releaseShape();
+      }
+
       // Ease the magnet toward the raw pointer for a smooth, weighty pull.
       if (pointer.active) {
         const k = Math.min(1, 6 * dt);
@@ -137,18 +251,27 @@ export default function ParticleField({ theme = 'dark', className = '' }) {
         magnet.y += (pointer.ty - magnet.y) * k;
       }
 
-      // Individual forces: wander + cursor magnet.
+      // Individual forces: spring-to-target while a shape is assembling,
+      // otherwise wander + cursor magnet.
       for (const p of particles) {
-        let ax = Math.sin(t * 0.00033 * p.fA + p.phase) * WANDER;
-        let ay = Math.cos(t * 0.00041 * p.fB + p.phase * 1.9) * WANDER;
+        let ax;
+        let ay;
+        if (activeShape && p.tx != null) {
+          // Near-critically damped spring: fast snap, no endless wobble.
+          ax = (p.tx - p.x) * SHAPE_K - p.vx * SHAPE_DAMP;
+          ay = (p.ty - p.y) * SHAPE_K - p.vy * SHAPE_DAMP;
+        } else {
+          ax = Math.sin(t * 0.00033 * p.fA + p.phase) * WANDER;
+          ay = Math.cos(t * 0.00041 * p.fB + p.phase * 1.9) * WANDER;
 
-        if (pointer.active) {
-          const dx = magnet.x - p.x;
-          const dy = magnet.y - p.y;
-          const d = Math.max(Math.hypot(dx, dy), 26);
-          const f = Math.min((ATTRACT * p.z) / (d + 130), ATTRACT_CAP);
-          ax += (dx / d) * f;
-          ay += (dy / d) * f;
+          if (!activeShape && pointer.active) {
+            const dx = magnet.x - p.x;
+            const dy = magnet.y - p.y;
+            const d = Math.max(Math.hypot(dx, dy), 26);
+            const f = Math.min((ATTRACT * p.z) / (d + 130), ATTRACT_CAP);
+            ax += (dx / d) * f;
+            ay += (dy / d) * f;
+          }
         }
 
         p.vx += ax * dt;
@@ -157,22 +280,25 @@ export default function ParticleField({ theme = 'dark', className = '' }) {
 
       // Pairwise repulsion — same-charge electrons keep their distance, so the
       // swarm forms a halo around the magnet instead of a clump. O(n²) with
-      // n ≤ 104 is well within a 60fps frame budget.
-      const rr = REPEL_RADIUS * REPEL_RADIUS;
-      for (let i = 0; i < particles.length; i++) {
-        const a = particles[i];
-        for (let j = i + 1; j < particles.length; j++) {
-          const b = particles[j];
-          const dx = a.x - b.x;
-          const dy = a.y - b.y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 >= rr || d2 === 0) continue;
-          const d = Math.sqrt(d2);
-          const push = REPEL * (1 - d / REPEL_RADIUS) * dt;
-          const nx = dx / d;
-          const ny = dy / d;
-          a.vx += nx * push; a.vy += ny * push;
-          b.vx -= nx * push; b.vy -= ny * push;
+      // n ≤ 104 is well within a 60fps frame budget. Suspended while an icon is
+      // assembling: its target points sit far closer than the repel radius.
+      if (!activeShape) {
+        const rr = REPEL_RADIUS * REPEL_RADIUS;
+        for (let i = 0; i < particles.length; i++) {
+          const a = particles[i];
+          for (let j = i + 1; j < particles.length; j++) {
+            const b = particles[j];
+            const dx = a.x - b.x;
+            const dy = a.y - b.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= rr || d2 === 0) continue;
+            const d = Math.sqrt(d2);
+            const push = REPEL * (1 - d / REPEL_RADIUS) * dt;
+            const nx = dx / d;
+            const ny = dy / d;
+            a.vx += nx * push; a.vy += ny * push;
+            b.vx -= nx * push; b.vy -= ny * push;
+          }
         }
       }
 
@@ -191,7 +317,9 @@ export default function ParticleField({ theme = 'dark', className = '' }) {
         p.vy *= damp;
 
         const sp = Math.hypot(p.vx, p.vy);
-        const cap = MAX_SPEED * p.z;
+        // While assembling an icon the particles may cross the whole canvas,
+        // so they get a much higher ceiling — that's what makes it feel snappy.
+        const cap = activeShape && p.tx != null ? SHAPE_MAX_SPEED : MAX_SPEED * p.z;
         if (sp > cap) {
           p.vx = (p.vx / sp) * cap;
           p.vy = (p.vy / sp) * cap;
