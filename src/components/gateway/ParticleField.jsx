@@ -118,6 +118,7 @@ export default function ParticleField({ theme = 'dark', shape = null, className 
     // ── Shape formation ────────────────────────────────────────────────────
     let activeShape = null; // currently assembled icon kind
     let shapeKey = '';      // kind + canvas size the assignment was built for
+    let shapeMix = 0;       // eased 0→1 while assembled: particles grow a bit
     const shapeCandidates = {}; // kind -> normalised [0..1] outline points
 
     function getShapeCandidates(kind) {
@@ -244,6 +245,9 @@ export default function ParticleField({ theme = 'dark', shape = null, className 
         else releaseShape();
       }
 
+      // Particles swell slightly while the icon is assembled (eased both ways).
+      shapeMix += ((activeShape ? 1 : 0) - shapeMix) * Math.min(1, 5 * dt);
+
       // Ease the magnet toward the raw pointer for a smooth, weighty pull.
       if (pointer.active) {
         const k = Math.min(1, 6 * dt);
@@ -361,10 +365,12 @@ export default function ParticleField({ theme = 'dark', shape = null, className 
         }
       }
 
-      // Nodes (gold accents get a soft glow).
+      // Nodes (gold accents get a soft glow). Shape-forming particles grow up
+      // to ~1.75× so the assembled icon reads brighter and bolder.
       for (const p of particles) {
         const depth = Math.max(0.35, Math.min(1, (p.z - 0.3) * 0.95));
-        const r = p.size * (0.55 + p.z * 0.6);
+        const grow = p.tx != null ? 1 + 0.75 * shapeMix : 1;
+        const r = p.size * (0.55 + p.z * 0.6) * grow;
         const base = p.accent ? palette.accent : palette.node;
         if (p.accent) {
           const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 5);
