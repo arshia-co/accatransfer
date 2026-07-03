@@ -36,6 +36,29 @@ function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
+// Map raw Supabase auth errors to clear Persian messages (esp. the email rate limit,
+// which is the usual reason a code does not arrive).
+function friendlyAuthError(err) {
+  const message = String(err?.message || err?.error_description || '').toLowerCase();
+  const code = String(err?.code || err?.error_code || err?.status || '').toLowerCase();
+  if (code.includes('over_email_send_rate_limit') || message.includes('rate limit') || message.includes('for security purposes') || message.includes('email rate')) {
+    return 'سرویس ایمیل به سقف ارسال رسیده است؛ کد همین حالا فرستاده نمی‌شود. چند دقیقه صبر کنید و دوباره تلاش کنید. (راه‌حل پایدار: فعال‌کردن SMTP اختصاصی و افزایش محدودیت ایمیل در Supabase.)';
+  }
+  if (code.includes('email_not_confirmed') || message.includes('email not confirmed')) {
+    return 'ایمیل هنوز تأیید نشده است. کدی که به ایمیلتان ارسال شده را در تب «کد ایمیل» وارد کنید تا حساب فعال شود.';
+  }
+  if (message.includes('invalid login credentials')) {
+    return 'ایمیل یا رمز عبور درست نیست.';
+  }
+  if (message.includes('expired') || message.includes('invalid') && message.includes('otp') || message.includes('token')) {
+    return 'کد واردشده نامعتبر یا منقضی شده است؛ «ارسال مجدد» را بزنید و کد تازه را وارد کنید.';
+  }
+  if (message.includes('already registered') || message.includes('already been registered')) {
+    return 'این ایمیل قبلاً ثبت شده است. وارد شوید یا «فراموشی رمز» را بزنید.';
+  }
+  return err?.message || 'خطایی رخ داد. دوباره تلاش کنید.';
+}
+
 export default function AuthModal() {
   const { authRequest } = useAuth();
   const key = authRequest
@@ -54,6 +77,7 @@ function AuthModalPanel({ authRequest }) {
     closeAuth,
     sendCode,
     verifyCode,
+    resendSignupCode,
     signInWithPassword,
     signUpWithPassword,
     resetPassword,
@@ -71,6 +95,7 @@ function AuthModalPanel({ authRequest }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [confirmSignup, setConfirmSignup] = useState(false); // true after signup → entering the email confirmation code
 
   const product = authRequest?.product || 'smart_apply';
   const copy = authRequest?.reason === 'program_selection'
@@ -100,6 +125,7 @@ function AuthModalPanel({ authRequest }) {
     setBusy(false);
     setError('');
     setNotice('');
+    setConfirmSignup(false);
   };
 
   const goToAccount = () => {
@@ -123,6 +149,25 @@ function AuthModalPanel({ authRequest }) {
     setConfirmPassword('');
     setError('');
     setNotice('');
+    setConfirmSignup(false);
+  };
+
+  const resendConfirmCode = async () => {
+    if (!cleanEmail) {
+      setError('ابتدا ایمیل را وارد کنید.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await resendSignupCode({ email: cleanEmail });
+      setNotice('کد تأیید دوباره به ایمیل شما ارسال شد. پوشه اسپم را هم بررسی کنید.');
+    } catch (err) {
+      setError(friendlyAuthError(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const requestPasswordReset = async () => {
@@ -137,7 +182,7 @@ function AuthModalPanel({ authRequest }) {
       await resetPassword({ email: cleanEmail });
       setNotice('لینک امن تغییر رمز به ایمیل شما ارسال شد.');
     } catch (err) {
-      setError(err?.message || 'ارسال لینک تغییر رمز انجام نشد.');
+      setError(friendlyAuthError(err));
     } finally {
       setBusy(false);
     }
@@ -160,11 +205,16 @@ function AuthModalPanel({ authRequest }) {
           product,
         });
         if (result.needsEmailConfirmation) {
-          setNotice('حساب ساخته شد. اگر تأیید ایمیل برای این حساب لازم باشد، لینک تأیید به ایمیل شما ارسال شده است.');
+          // A confirmation CODE was emailed → take the user straight to the email-code step
+          // (not password login, which would fail with "Email not confirmed").
           setFlow('signin');
-          setMethod('password');
+          setMethod('otp');
+          setStage('code');
+          setConfirmSignup(true);
+          setCode('');
           setPassword('');
           setConfirmPassword('');
+          setNotice('حساب ساخته شد ✅ یک کد تأیید به ایمیل شما ارسال شد. همان کد را همین‌جا وارد کنید تا حساب فعال شود.');
           return;
         }
         goToAccount();
@@ -184,10 +234,10 @@ function AuthModalPanel({ authRequest }) {
         return;
       }
 
-      await verifyCode({ email: cleanEmail, token: code, product });
+      await verifyCode({ email: cleanEmail, token: code, product, type: confirmSignup ? 'signup' : 'email' });
       goToAccount();
     } catch (err) {
-      setError(err?.message || 'ورود انجام نشد. دوباره تلاش کنید.');
+      setError(friendlyAuthError(err));
     } finally {
       setBusy(false);
     }
@@ -218,11 +268,13 @@ function AuthModalPanel({ authRequest }) {
 
             <div className="acca-auth-orb"><Sparkles size={26} /></div>
             <p className="acca-auth-eyebrow">{copy.eyebrow}</p>
-            <h2>{flow === 'signup' ? 'ساخت حساب مرکزی ACCA' : copy.title}</h2>
+            <h2>{confirmSignup ? 'ایمیل خود را تأیید کنید' : flow === 'signup' ? 'ساخت حساب مرکزی ACCA' : copy.title}</h2>
             <p className="acca-auth-body">
-              {flow === 'signup'
-                ? 'یک حساب امن بسازید تا Smart Apply و AI Transfer هر دو زیر یک پروفایل مرکزی ادامه پیدا کنند.'
-                : copy.body}
+              {confirmSignup
+                ? 'حساب ساخته شد؛ فقط یک قدم مانده. کدی که به ایمیلت فرستادیم را وارد کن تا حساب فعال شود.'
+                : flow === 'signup'
+                  ? 'یک حساب امن بسازید تا Smart Apply و AI Transfer هر دو زیر یک پروفایل مرکزی ادامه پیدا کنند.'
+                  : copy.body}
             </p>
 
             <div className="acca-auth-switch" role="tablist" aria-label="ورود یا ثبت نام">
@@ -259,7 +311,7 @@ function AuthModalPanel({ authRequest }) {
                   role="tab"
                   aria-selected={method === 'password'}
                   className={method === 'password' ? 'is-active' : ''}
-                  onClick={() => { setMethod('password'); setStage('email'); setCode(''); setError(''); setNotice(''); }}
+                  onClick={() => { setMethod('password'); setStage('email'); setCode(''); setError(''); setNotice(''); setConfirmSignup(false); }}
                 >
                   رمز عبور
                 </button>
@@ -268,7 +320,7 @@ function AuthModalPanel({ authRequest }) {
                   role="tab"
                   aria-selected={method === 'otp'}
                   className={method === 'otp' ? 'is-active' : ''}
-                  onClick={() => { setMethod('otp'); setStage('email'); setPassword(''); setError(''); setNotice(''); }}
+                  onClick={() => { setMethod('otp'); setStage('email'); setPassword(''); setError(''); setNotice(''); setConfirmSignup(false); }}
                 >
                   کد ایمیل
                 </button>
@@ -309,7 +361,11 @@ function AuthModalPanel({ authRequest }) {
 
               {isOtp && stage === 'code' ? (
                 <>
-                  <p className="acca-auth-sent">کد ورود به <b dir="ltr">{cleanEmail}</b> ارسال شد.</p>
+                  <p className="acca-auth-sent">
+                    {confirmSignup
+                      ? <>کد تأیید حساب به <b dir="ltr">{cleanEmail}</b> ارسال شد. برای فعال‌سازی، کد را وارد کنید.</>
+                      : <>کد ورود به <b dir="ltr">{cleanEmail}</b> ارسال شد.</>}
+                  </p>
                   <label>
                     <KeyRound size={17} />
                     <input
@@ -379,16 +435,18 @@ function AuthModalPanel({ authRequest }) {
               {!isConfigured && <p className="acca-auth-error">اتصال احراز هویت هنوز پیکربندی نشده است.</p>}
 
               <button type="submit" disabled={busy || !isConfigured} className="acca-auth-submit">
-                {busy ? <span className="acca-auth-loading" /> : flow === 'signup' ? <UserPlus size={17} /> : <LockKeyhole size={17} />}
+                {busy ? <span className="acca-auth-loading" /> : confirmSignup ? <ShieldCheck size={17} /> : flow === 'signup' ? <UserPlus size={17} /> : <LockKeyhole size={17} />}
                 {busy
                   ? 'در حال بررسی...'
-                  : flow === 'signup'
-                    ? 'ساخت حساب و ادامه'
-                    : method === 'password'
-                      ? 'ورود به پنل مرکزی'
-                      : stage === 'email'
-                        ? 'ارسال کد امن'
-                        : 'ورود و ادامه'}
+                  : confirmSignup
+                    ? 'تأیید و فعال‌سازی حساب'
+                    : flow === 'signup'
+                      ? 'ساخت حساب و ادامه'
+                      : method === 'password'
+                        ? 'ورود به پنل مرکزی'
+                        : stage === 'email'
+                          ? 'ارسال کد امن'
+                          : 'ورود و ادامه'}
               </button>
 
               {flow === 'signin' && method === 'password' && (
@@ -398,18 +456,26 @@ function AuthModalPanel({ authRequest }) {
               )}
 
               {isOtp && stage === 'code' && (
-                <button type="button" className="acca-auth-back" onClick={() => { setStage('email'); setCode(''); setError(''); setNotice(''); }}>
-                  <ArrowLeft size={14} /> تغییر ایمیل
-                </button>
+                confirmSignup ? (
+                  <button type="button" className="acca-auth-back" onClick={resendConfirmCode} disabled={busy}>
+                    <Mail size={14} /> کد را دریافت نکردید؟ ارسال مجدد
+                  </button>
+                ) : (
+                  <button type="button" className="acca-auth-back" onClick={() => { setStage('email'); setCode(''); setError(''); setNotice(''); }}>
+                    <ArrowLeft size={14} /> تغییر ایمیل
+                  </button>
+                )
               )}
             </form>
 
             <small>
-              {flow === 'signup'
-                ? 'بعد از ساخت حساب، همین ایمیل برای ورود با رمز یا کد یک‌بارمصرف استفاده می‌شود.'
-                : method === 'password'
-                  ? 'اگر قبلاً رمز تنظیم کرده‌اید، مستقیم وارد پنل شوید. پیش‌نمایش حساب فقط روی همین دستگاه نمایش داده می‌شود.'
-                  : 'کد یک‌بارمصرف از طریق ایمیل ارسال می‌شود و به رمز عبور نیاز ندارد.'}
+              {confirmSignup
+                ? 'این کد فقط برای فعال‌سازی همین حساب است. بعد از تأیید، دفعه‌ی بعد می‌توانید با رمز عبور یا کد ایمیل وارد شوید. اگر کد نرسید، پوشه‌ی اسپم را ببینید یا «ارسال مجدد» را بزنید.'
+                : flow === 'signup'
+                  ? 'بعد از ساخت حساب، یک کد تأیید به ایمیل شما ارسال می‌شود تا حساب را فعال کنید.'
+                  : method === 'password'
+                    ? 'اگر قبلاً رمز تنظیم کرده‌اید، مستقیم وارد پنل شوید. پیش‌نمایش حساب فقط روی همین دستگاه نمایش داده می‌شود.'
+                    : 'کد یک‌بارمصرف از طریق ایمیل ارسال می‌شود و به رمز عبور نیاز ندارد.'}
             </small>
           </motion.section>
         </motion.div>

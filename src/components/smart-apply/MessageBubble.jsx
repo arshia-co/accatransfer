@@ -11,6 +11,7 @@ import AdmissionTimelinePreview from './AdmissionTimelinePreview';
 import DocumentUploadPlaceholder from './DocumentUploadPlaceholder';
 import JourneyPreview from './JourneyPreview';
 import DeepFitResultPreview from './DeepFitResultPreview';
+import MessageTools from './MessageTools';
 
 const QUESTION_WORD = { fa: 'سؤال', en: 'Question', tr: 'Soru', ar: 'السؤال' };
 
@@ -58,11 +59,14 @@ export default function MessageBubble({
         transition={{ duration: 0.25, ease: 'easeOut' }}
         className="flex justify-end"
       >
-        <div
-          dir={dir}
-          className="max-w-[82%] rounded-[20px] rounded-ee-[6px] bg-navy px-4 py-2.5 text-sm font-bold leading-7 text-cream shadow-[0_10px_28px_rgba(7,26,61,0.28)]"
-        >
-          {message.content}
+        <div className="flex max-w-[82%] flex-col items-end">
+          <div
+            dir={dir}
+            className="rounded-[20px] rounded-ee-[6px] bg-navy px-4 py-2.5 text-sm font-bold leading-7 text-cream shadow-[0_10px_28px_rgba(7,26,61,0.28)]"
+          >
+            {message.content}
+          </div>
+          <MessageTools message={message} lang={message.lang || language} />
         </div>
       </motion.div>
     );
@@ -127,6 +131,8 @@ export default function MessageBubble({
               <RichBlock message={message} language={language} />
             </div>
           )}
+
+          <MessageTools message={message} lang={message.lang || language} />
         </div>
       </div>
 

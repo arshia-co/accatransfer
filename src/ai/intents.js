@@ -33,6 +33,7 @@ export const INTENTS = {
   DEEP_FIT_ANSWER: 'deep_fit_answer',
   DEEP_FIT_RESHOW: 'deep_fit_reshow',
   DEEP_FIT_EXPLAIN: 'deep_fit_explain',
+  DEEP_FIT_FREE_TEXT: 'deep_fit_free_text',
 
   KNOWN_MAJOR_CATEGORY: 'known_major_category',
   KNOWN_MAJOR_PICK: 'known_major_pick',

@@ -397,8 +397,8 @@ export function computeDeepFitResult(answerOptionIds = [], adaptiveQuestionIds =
       en: 'This result describes educational and pathway fit, not guaranteed admission. Final choices must be checked against grades, language, budget, prerequisites, and actual capacity in Turkey and Northern Cyprus.',
     },
     disclaimer: {
-      fa: 'این یک نتیجه مقدماتی راهنمایی آموزشی بر اساس پاسخ‌های شماست؛ نه تشخیص روان‌شناختی، نه آزمون رسمی MBTI و نه تضمین پذیرش.',
-      en: 'This is a preliminary educational guidance result based on your answers, not a psychological diagnosis, an official MBTI test, or a guaranteed admission result.',
+      fa: 'این یک نتیجه مقدماتی راهنمایی آموزشی بر اساس پاسخ‌های شماست؛ نه تشخیص روان‌شناختی، نه آزمون رسمی MBTI/Big Five و نه تضمین پذیرش.',
+      en: 'This is a preliminary educational guidance result based on your answers, not a psychological diagnosis, an official MBTI/Big Five assessment, or a guaranteed admission result.',
     },
   };
 }

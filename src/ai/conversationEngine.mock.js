@@ -60,6 +60,23 @@ const LANGUAGE_HINTS = [
   { lang: 'ar', words: ['العربية', 'عربي', 'arabic', 'arapça'] },
 ];
 
+const QUESTION_REPEAT_PATTERNS = [
+  'سوال بعد', 'سؤال بعد', 'سوال بعدی', 'سؤال بعدی', 'سوال چی شد', 'سؤال چی شد',
+  'سوال رو بگو', 'سؤال رو بگو', 'سوال را بگو', 'سؤال را بگو',
+  'تکرار کن', 'دوباره تکرار', 'دوباره بگو', 'دوباره بخون', 'گزینه ها', 'گزینه‌ها',
+  'گزینه ها رو', 'گزینه‌ها رو', 'نفهمیدم سوال', 'متوجه نشدم سوال',
+  'next question', 'what is next', "what's next", 'repeat the question', 'repeat options',
+  'read the question', 'say the question again',
+];
+
+function asksToRepeatCurrentQuestion(text) {
+  const normalized = String(text || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+  return QUESTION_REPEAT_PATTERNS.some((pattern) => normalized.includes(pattern));
+}
+
 /**
  * Naive demo "NLU" for the free-text composer.
  * Order matters: confirmation → step capture → language → scoped knowledge.
@@ -82,7 +99,17 @@ export function interpretFreeText(text, state) {
   // question, or map their words to an option for confirmation). The flow
   // keeps the current question reachable, so the student never loses progress.
   if (typeof state.currentStep === 'string' && state.currentStep.startsWith('discovery_q_')) {
+    if (asksToRepeatCurrentQuestion(t)) {
+      return { route: { intent: INTENTS.DISCOVERY_RESHOW, value: null } };
+    }
     return { route: { intent: INTENTS.DISCOVERY_FREE_TEXT, value: t } };
+  }
+
+  if (typeof state.currentStep === 'string' && state.currentStep.startsWith('deep_fit_q_')) {
+    if (asksToRepeatCurrentQuestion(t)) {
+      return { route: { intent: INTENTS.DEEP_FIT_RESHOW, value: null } };
+    }
+    return { route: { intent: INTENTS.DEEP_FIT_FREE_TEXT, value: t } };
   }
 
   // 2. Explicit language switch.

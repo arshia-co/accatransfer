@@ -4,13 +4,20 @@ import {
   AlertTriangle,
   BadgeCheck,
   BrainCircuit,
+  BookOpen,
+  BriefcaseBusiness,
   Building2,
   Compass,
   GraduationCap,
+  Globe2,
+  Languages,
   Lightbulb,
   ShieldCheck,
   Sparkles,
   Target,
+  TrendingUp,
+  Users,
+  WalletCards,
 } from 'lucide-react';
 import { L } from '../../lib/lang';
 import { useAccaMajorUrl } from '../../lib/useAccaMajorUrl';
@@ -48,6 +55,128 @@ const IDENTITY_LABELS = {
   Helper: { fa: 'یاری‌گر', en: 'Helper' },
 };
 
+const PROFILE_BRIEF = {
+  title: { fa: 'Educational Fit Profile کامل‌تر', en: 'Fuller Educational Fit Profile' },
+  glossary: { fa: 'واژه‌نامه پروفایل', en: 'Profile glossary' },
+  learning: { fa: 'سبک یادگیری', en: 'Learning style' },
+  work: { fa: 'محیط کاری مناسب', en: 'Preferred work environment' },
+  social: { fa: 'تعامل اجتماعی', en: 'Social interaction' },
+  risk: { fa: 'ریسک‌پذیری', en: 'Risk tolerance' },
+  budget: { fa: 'بودجه و محدودیت مالی', en: 'Budget and financial limits' },
+  language: { fa: 'زبان تحصیل', en: 'Study language' },
+  countries: { fa: 'کشورهای مناسب', en: 'Suitable countries' },
+  confidence: { fa: 'اطمینان سیستم', en: 'System confidence' },
+  counselor: { fa: 'مشاوره انسانی', en: 'Human counseling' },
+};
+
+function pctOf(result, key) {
+  return Number(result?.lifestyleFit?.[key]?.pct || 0);
+}
+
+function averageMatch(result) {
+  const majors = Array.isArray(result?.recommendedMajors) ? result.recommendedMajors.slice(0, 4) : [];
+  if (!majors.length) return null;
+  return Math.round(majors.reduce((sum, item) => sum + Number(item.match || 0), 0) / majors.length);
+}
+
+function deepBriefItems(result, lang) {
+  const fa = lang === 'fa';
+  const highHuman = pctOf(result, 'HumanIntensity') >= 55;
+  const highIndependence = pctOf(result, 'Independence') >= 55;
+  const highRisk = pctOf(result, 'Risk') >= 58;
+  const financeAware = (result.motivationalCore || []).some((item) => ['Income', 'Security', 'Lifestyle'].includes(item.key));
+  const match = averageMatch(result);
+
+  return [
+    {
+      key: 'learning',
+      icon: BookOpen,
+      label: PROFILE_BRIEF.learning,
+      text: fa
+        ? `${result.cognitiveStyle?.mbtiLike?.type || ''}-like · ${result.cognitiveStyle?.topInterestCode || ''}. این یک خلاصه ترجیح مطالعه است، نه نوع شخصیت قطعی.`
+        : `${result.cognitiveStyle?.mbtiLike?.type || ''}-like · ${result.cognitiveStyle?.topInterestCode || ''}. This is a study-preference summary, not a fixed personality type.`,
+    },
+    {
+      key: 'work',
+      icon: BriefcaseBusiness,
+      label: PROFILE_BRIEF.work,
+      text: fa
+        ? highIndependence
+          ? 'فضای پروژه‌ای، مستقل و دارای آزادی تصمیم برای شما مناسب‌تر دیده می‌شود.'
+          : 'فضای ساختارمند، روشن و دارای مسیر مرحله‌ای برای شما امن‌تر دیده می‌شود.'
+        : highIndependence
+          ? 'Project-based, independent environments with room for choice look more suitable.'
+          : 'Structured, clear environments with staged progress look safer.',
+    },
+    {
+      key: 'social',
+      icon: Users,
+      label: PROFILE_BRIEF.social,
+      text: fa
+        ? highHuman
+          ? 'تعامل انسانی بخشی از انرژی مسیر شماست؛ رشته‌های ارتباطی یا انسان‌محور ارزش بررسی دارند.'
+          : 'زمان تمرکز عمیق و کار تحلیلی برای کیفیت تصمیم شما مهم است.'
+        : highHuman
+          ? 'Human interaction appears to energize your path; people-facing fields are worth reviewing.'
+          : 'Deep-focus time and analytical work appear important for your decision quality.',
+    },
+    {
+      key: 'risk',
+      icon: TrendingUp,
+      label: PROFILE_BRIEF.risk,
+      text: fa
+        ? highRisk
+          ? 'با مسیرهای نو و رقابتی راحت‌تر هستید، اما باید هزینه و ظرفیت واقعی دانشگاه چک شود.'
+          : 'مسیرهای قابل‌پیش‌بینی‌تر و کم‌ریسک‌تر احتمالاً تصمیم امن‌تری می‌سازند.'
+        : highRisk
+          ? 'You seem more comfortable with novel or competitive paths, but cost and university capacity must be checked.'
+          : 'More predictable, lower-risk paths are likely safer decisions.',
+    },
+    {
+      key: 'budget',
+      icon: WalletCards,
+      label: PROFILE_BRIEF.budget,
+      text: fa
+        ? financeAware
+          ? 'پاسخ‌ها نشان می‌دهد شهریه، امنیت مالی یا بازگشت سرمایه باید در انتخاب نهایی وزن جدی داشته باشد.'
+          : 'بودجه باید در مرحله پذیرش با شهریه، بورسیه و برنامه پرداخت هر دانشگاه تطبیق داده شود.'
+        : financeAware
+          ? 'Your answers suggest tuition, financial security, or return on investment should carry real weight.'
+          : 'Budget should be matched later against tuition, scholarships, and payment plans for each university.',
+    },
+    {
+      key: 'language',
+      icon: Languages,
+      label: PROFILE_BRIEF.language,
+      text: fa
+        ? 'انگلیسی یا ترکی، بسته به رشته و دانشگاه؛ قبل از ارسال رسمی باید دقیق تأیید شود.'
+        : 'English or Turkish depending on the program and university; confirm before formal submission.',
+    },
+    {
+      key: 'countries',
+      icon: Globe2,
+      label: PROFILE_BRIEF.countries,
+      text: fa ? 'ترکیه و قبرس شمالی؛ محدوده اصلی خدمات پذیرش آکا.' : 'Turkey and Northern Cyprus, the main ACCA admission service scope.',
+    },
+    {
+      key: 'confidence',
+      icon: ShieldCheck,
+      label: PROFILE_BRIEF.confidence,
+      text: match
+        ? (fa ? `میانگین تطابق مسیرهای برتر حدود ${match}٪ است؛ تصمیم نهایی باید انسانی بررسی شود.` : `Top-path average fit is about ${match}%; the final decision still needs human review.`)
+        : (fa ? 'اطمینان سیستم پس از تکمیل گزینه‌های دانشگاه و مدارک دقیق‌تر می‌شود.' : 'System confidence improves after university and document details are confirmed.'),
+    },
+    {
+      key: 'counselor',
+      icon: Target,
+      label: PROFILE_BRIEF.counselor,
+      text: fa
+        ? 'مشاور انسانی باید نتیجه را با معدل، بودجه، زبان، مدارک و ظرفیت واقعی دانشگاه تطبیق دهد.'
+        : 'A human counselor should validate this against grades, budget, language, documents, and real university capacity.',
+    },
+  ];
+}
+
 function Insight({ icon: Icon, title, children, tone = 'emerald' }) {
   const style = tone === 'gold'
     ? 'border-gold/25 bg-gold/[0.07]'
@@ -64,6 +193,49 @@ function Insight({ icon: Icon, title, children, tone = 'emerald' }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function DeepProfileBrief({ result, lang }) {
+  const items = deepBriefItems(result, lang);
+  return (
+    <section className="rounded-[22px] border border-emerald-700/15 bg-gradient-to-br from-emerald-600/[0.06] via-white/78 to-gold/[0.06] p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-navy/45">{L(PROFILE_BRIEF.title, lang)}</p>
+          <p className="mt-1 text-[11px] font-semibold leading-6 text-navy/62">
+            {lang === 'fa'
+              ? 'این خلاصه نشان می‌دهد چرا مسیرهای پیشنهادی به پاسخ‌های شما نزدیک شده‌اند.'
+              : 'This summary shows why the suggested paths moved closer to your answers.'}
+          </p>
+        </div>
+        <a
+          href="/smart-apply/glossary"
+          className="inline-flex items-center gap-1.5 rounded-full border border-navy/10 bg-white px-3 py-1.5 text-[10px] font-black text-navy/65 transition hover:border-gold/45 hover:text-navy"
+        >
+          <BookOpen className="h-3.5 w-3.5 text-gold" />
+          {L(PROFILE_BRIEF.glossary, lang)}
+        </a>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div key={item.key} className="rounded-2xl border border-white/85 bg-white/76 p-3">
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-navy/[0.045] text-emerald-800">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-[10px] font-black text-navy/78">{L(item.label, lang)}</p>
+                  <p className="mt-1 text-[10.5px] font-semibold leading-5 text-navy/57">{item.text}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -116,7 +288,7 @@ export default function DeepFitResultPreview({ result, lang }) {
             <Sparkles className="h-6 w-6" />
           </span>
           <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gold">ACCA Deep Fit</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gold">EDUCATIONAL FIT PROFILE</p>
             <h3 className="mt-1 text-lg font-black leading-7">{L(result.signature?.label, lang)}</h3>
             <p className="mt-1 text-[11px] font-semibold text-white/62">
               {result.questionCount} {lang === 'fa' ? 'پاسخ تحلیل‌شده' : 'answers analyzed'} · {result.cognitiveStyle?.topInterestCode}
@@ -156,6 +328,8 @@ export default function DeepFitResultPreview({ result, lang }) {
           >
             {tab === 'profile' && (
               <>
+                <DeepProfileBrief result={result} lang={lang} />
+
                 <Insight icon={Target} title={lang === 'fa' ? 'الگوی عمیق' : 'Deep pattern'}>
                   {L(result.deepPattern, lang)}
                 </Insight>

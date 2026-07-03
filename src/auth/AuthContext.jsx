@@ -63,15 +63,26 @@ export function AuthProvider({ children }) {
     if (error) throw error;
   }, []);
 
-  const verifyCode = useCallback(async ({ email, token, product, language = 'fa' }) => {
+  const verifyCode = useCallback(async ({ email, token, product, language = 'fa', type = 'email' }) => {
     if (!supabase) throw new Error('Authentication is not configured.');
-    const { data, error } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: token.trim(),
-      type: 'email',
-    });
-    if (error) throw error;
-    if (!data.user) throw new Error('Login could not be completed.');
+    const cleanEmail = email.trim();
+    const cleanToken = token.trim();
+    // A signup-confirmation code and a login OTP use different verifyOtp "type"s.
+    // Try the expected type first, then fall back to the other so the same code works
+    // whether the user is confirming a brand-new account or logging in.
+    const candidateTypes = type === 'signup' ? ['signup', 'email'] : ['email', 'signup'];
+    let data = null;
+    let lastError = null;
+    for (const candidate of candidateTypes) {
+      const result = await supabase.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: candidate });
+      if (!result.error && result.data?.user) {
+        data = result.data;
+        lastError = null;
+        break;
+      }
+      lastError = result.error || new Error('Login could not be completed.');
+    }
+    if (!data || !data.user) throw lastError || new Error('Login could not be completed.');
 
     await upsertProfile(data.user, product, {
       language,
@@ -102,6 +113,12 @@ export function AuthProvider({ children }) {
     const migratedDraft = await migrateGuestTransferDraft(data.user);
     setAuthRequest(null);
     return { user: data.user, migratedDraft };
+  }, []);
+
+  const resendSignupCode = useCallback(async ({ email }) => {
+    if (!supabase) throw new Error('Authentication is not configured.');
+    const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim() });
+    if (error) throw error;
   }, []);
 
   const signInWithPassword = useCallback(async ({ email, password, product = 'smart_apply' }) => {
@@ -215,6 +232,7 @@ export function AuthProvider({ children }) {
     closeAuth,
     sendCode,
     verifyCode,
+    resendSignupCode,
     signInWithPassword,
     signUpWithPassword,
     resetPassword,
@@ -227,6 +245,7 @@ export function AuthProvider({ children }) {
     closeAuth,
     sendCode,
     verifyCode,
+    resendSignupCode,
     signInWithPassword,
     signUpWithPassword,
     resetPassword,

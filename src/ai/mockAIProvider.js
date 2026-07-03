@@ -35,6 +35,7 @@ const STRUCTURED_INTENTS = new Set([
   INTENTS.SET_LANGUAGE,
   INTENTS.DISCOVERY_SET_NAME,
   INTENTS.DISCOVERY_FREE_TEXT,
+  INTENTS.DEEP_FIT_FREE_TEXT,
   INTENTS.GUIDED_CONFIRM_OPTION,
   INTENTS.GUIDED_CANCEL_CONFIRMATION,
 ]);
@@ -52,40 +53,43 @@ export async function sendIntent(intent, value, state) {
  * Sends free text to the AI classifier. It may explain, redirect, or suggest
  * an allowed option, but only the deterministic flow engine can move forward.
  */
-export async function sendText(text, state) {
+export async function sendText(text, state, options = {}) {
   await delay(rand(260, 480));
-  const interpreted = interpretFreeText(text, state);
+  const stateWithInputMode = options?.source
+    ? { ...state, inputMode: options.source }
+    : state;
+  const interpreted = interpretFreeText(text, stateWithInputMode);
 
   if (interpreted?.route && STRUCTURED_INTENTS.has(interpreted.route.intent)) {
-    return runIntent(interpreted.route.intent, interpreted.route.value, state);
+    return runIntent(interpreted.route.intent, interpreted.route.value, stateWithInputMode);
   }
 
   if (interpreted?.result) return interpreted.result;
 
-  const context = buildGuidedContext(state);
+  const context = buildGuidedContext(stateWithInputMode);
   if (!context.allowedOptions.length) {
     if (!interpreted) return { messages: [], patch: {} };
     const { intent, value } = interpreted.route;
-    return runIntent(intent, value, state);
+    return runIntent(intent, value, stateWithInputMode);
   }
 
   let decision = null;
   if (isRealChatConfigured) {
-    decision = await realChat({ state, userText: text, context });
+    decision = await realChat({ state: stateWithInputMode, userText: text, context });
   }
 
   const validatedDecision = validateGuidedDecision(
     decision || localGuidedDecision({ context, studentMessage: text, language: state.language }),
     context,
     text,
-    state.language,
+    stateWithInputMode.language,
   );
-  const guided = guidedDecisionResult({ decision: validatedDecision, context, state });
+  const guided = guidedDecisionResult({ decision: validatedDecision, context, state: stateWithInputMode });
 
   if (guided?.selected) {
-    return runIntent(guided.selected.nextIntent, guided.selected.value, state);
+    return runIntent(guided.selected.nextIntent, guided.selected.value, stateWithInputMode);
   }
   if (guided?.result) return guided.result;
 
-  return runIntent(INTENTS.FREE_TEXT, text, state);
+  return runIntent(INTENTS.FREE_TEXT, text, stateWithInputMode);
 }

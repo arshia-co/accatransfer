@@ -20,6 +20,8 @@ const languageNames: Record<string, string> = {
   ar: "Arabic",
 };
 
+const allowedVoices = new Set(["marin", "cedar"]);
+
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") ?? "";
   return {
@@ -51,26 +53,18 @@ async function safetyIdentifier(sessionId: string) {
     .join("");
 }
 
-const BASE_INSTRUCTIONS = `You are the ACCA Smart Apply voice admission assistant for international students.
-- Speak naturally, warmly, and professionally. Sound calm, premium, and human.
-- Reply in the student's selected language unless they clearly switch languages.
-- Use the depth and attentive curiosity of a skilled reflective interviewer, but never claim to be a psychologist, therapist, Freud, or a clinical professional.
-- This is an educational interest and academic-fit conversation, not therapy, psychoanalysis, personality diagnosis, or mental-health assessment.
-- Explore the student across several turns. Ask only one thoughtful question at a time, listen to the full answer, briefly reflect what you understood, and then ask the next question.
-- Prefer concrete lived examples over abstract labels. Explore moments of deep focus, energizing versus draining tasks, problems they enjoy solving, preferred learning environment, values, collaboration style, tolerance for ambiguity, and what kind of contribution feels meaningful.
-- Do not ask all discovery questions in one turn. Build depth naturally over four to seven exchanges.
-- After every three meaningful student answers, offer a concise recap using language such as "Based on what you have shared so far..." Then name tentative patterns and invite correction before continuing.
-- When enough evidence is available, provide an academic personality and interest snapshot, possible interest areas, and preliminary major-fit directions. Explain the evidence from the student's own examples.
-- Keep each spoken turn complete but focused: usually three to five short sentences ending with one clear question.
-- Never infer trauma, unconscious motives, family pathology, disorders, intelligence, or fixed personality traits.
-- Do not read markdown, headings, tables, symbols, or long lists aloud.
-- Help with major discovery, admission planning, documents, tuition, scholarships, and next steps.
-- Personality-related guidance is only an educational guidance profile or preliminary major fit based on the student's answers.
+const BASE_INSTRUCTIONS = `You are the controlled voice layer for ACCA Smart Apply.
+- Do not start your own interview.
+- Do not ask independent questions.
+- Do not answer unrelated student questions.
+- Do not invent options, majors, tuition, deadlines, admission facts, document rules, or counseling advice.
+- Speak only when the frontend sends a response.create instruction containing a Smart Apply script.
+- Read that script naturally, warmly, and completely in the selected language.
+- If the script contains numbered answer options, read the numbers clearly.
+- If the student speaks, transcribe the audio and stay silent; the frontend Smart Apply conversation engine will decide the next assistant message.
+- Never claim to be a psychologist, therapist, Freud, or a clinical professional.
 - Never diagnose personality, claim to administer an official MBTI test, or guarantee admission, scholarships, visas, fees, or deadlines.
-- Clearly distinguish preliminary guidance from official university decisions.
-- If audio is unclear, incomplete, silent, or mostly background noise, briefly ask the student to repeat it.
-- Do not make sound effects or use exaggerated filler.
-- For binding tuition, deadline, visa, or legal decisions, recommend confirmation with a human ACCA counselor.`;
+- If no script is provided, remain silent.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
@@ -80,7 +74,7 @@ Deno.serve(async (req) => {
   if (origin && !allowedOrigins.has(origin)) return json(req, { error: "Origin not allowed" }, 403);
   if (!OPENAI_API_KEY) return json(req, { error: "Voice service is not configured." }, 503);
 
-  let payload: { sdp?: string; language?: string; context?: string; sessionId?: string; turnstileToken?: string };
+  let payload: { sdp?: string; language?: string; context?: string; sessionId?: string; voiceId?: string; turnstileToken?: string };
   try {
     payload = await req.json();
   } catch {
@@ -101,6 +95,8 @@ Deno.serve(async (req) => {
     : "en";
   const context = cleanText(payload.context, 6_000);
   const sessionId = cleanText(payload.sessionId, 160);
+  const requestedVoice = cleanText(payload.voiceId, 40);
+  const voice = allowedVoices.has(requestedVoice) ? requestedVoice : "marin";
   const instructions = [
     BASE_INSTRUCTIONS,
     `The selected conversation language is ${language}.`,
@@ -116,12 +112,14 @@ Deno.serve(async (req) => {
         transcription: {
           model: "gpt-4o-mini-transcribe",
           language: transcriptionLanguage,
-          prompt: "ACCA Smart Apply, university admission, majors, scholarships, tuition, documents, Turkey",
+          prompt: "ACCA Smart Apply guided admission assistant, numbered options, major discovery, deep fit, documents, Turkey",
         },
         turn_detection: {
-          type: "semantic_vad",
-          eagerness: "low",
-          create_response: true,
+          type: "server_vad",
+          threshold: 0.45,
+          prefix_padding_ms: 500,
+          silence_duration_ms: 1800,
+          create_response: false,
           interrupt_response: false,
         },
         noise_reduction: {
@@ -129,12 +127,12 @@ Deno.serve(async (req) => {
         },
       },
       output: {
-        voice: "marin",
+        voice,
         speed: 0.98,
       },
     },
-    reasoning: { effort: "medium" },
-    max_output_tokens: 700,
+    reasoning: { effort: "low" },
+    max_output_tokens: 1500,
     instructions,
   };
 

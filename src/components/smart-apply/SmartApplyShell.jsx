@@ -3,19 +3,194 @@
 // dashboard preview. One central AI interface — no menus, no long forms.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, ExternalLink, X, Sparkles, LayoutGrid, LayoutDashboard } from 'lucide-react';
+import { Send, ExternalLink, X, Sparkles, LayoutGrid, LayoutDashboard, SlidersHorizontal } from 'lucide-react';
 import { L, dirFor, readStoredLang, subscribeStoredLang } from '../../lib/lang';
 import { UI } from '../../i18n/ui';
 import { BRAND_NAME, PRODUCT_NAME, MAIN_SITE_URL, LOGO_SRC } from '../../lib/constants';
 import { sessionProgress, useSmartApplyStore } from '../../store/smartApplyStore';
+import { readSmartApplySettings } from '../../lib/smartApplySettings';
+import { INTENTS } from '../../ai/intents';
+import { ARCHETYPES, ACCA_CATEGORY_LABELS } from '../../data/majorQuestions';
+import { getMajor } from '../../data/mockPrograms';
 import AIAssistantOrb from './AIAssistantOrb';
 import ConversationPanel from './ConversationPanel';
 import VoiceInputButton from './VoiceInputButton';
 import DictationButton from './DictationButton';
 import VoiceConversationOverlay from './VoiceConversationOverlay';
+import AssistantSettingsModal from './AssistantSettingsModal';
+import SmartApplyConsentGate from './SmartApplyConsentGate';
 import SessionInsightPanel from './SessionInsightPanel';
 import LoginGateModal from './LoginGateModal';
 import SmartApplyProfilePreview from './SmartApplyProfilePreview';
+
+const VOICE_SELECTABLE_INTENTS = new Set([
+  INTENTS.SET_LANGUAGE,
+  INTENTS.SET_GOAL,
+  INTENTS.GUIDED_CONFIRM_OPTION,
+  INTENTS.GUIDED_CANCEL_CONFIRMATION,
+  INTENTS.DISCOVERY_ANSWER,
+  INTENTS.DEEP_FIT_ANSWER,
+  INTENTS.KNOWN_MAJOR_CATEGORY,
+  INTENTS.KNOWN_MAJOR_PICK,
+  INTENTS.APPLY_SET_DEGREE,
+  INTENTS.APPLY_SET_COUNTRY,
+  INTENTS.APPLY_SET_GPA,
+  INTENTS.APPLY_SET_BUDGET,
+]);
+
+const VOICE_OPTION_INTRO = {
+  fa: 'گزینه‌های قابل انتخاب:',
+  en: 'Available options:',
+  tr: 'Seçilebilir seçenekler:',
+  ar: 'الخيارات المتاحة:',
+};
+
+const VOICE_ACTION_FINAL_HINT = {
+  fa: 'حالا برای جلو رفتن، شماره یا متن گزینه‌ای را بگو که می‌خواهی ثبت شود؛ یا دکمه همان گزینه را بزن.',
+  en: 'Now, to continue, say the number or text of the option you want to save, or tap that option.',
+  tr: 'Devam etmek için kaydetmek istediğin seçeneğin numarasını ya da metnini söyle veya o seçeneğe dokun.',
+  ar: 'الآن للمتابعة، قل رقم الخيار أو نصه الذي تريد حفظه، أو اضغط على ذلك الخيار.',
+};
+
+const ASSISTANT_SETTINGS_LABEL = {
+  fa: 'تنظیمات',
+  en: 'Settings',
+  tr: 'Ayarlar',
+  ar: 'الإعدادات',
+};
+
+const RESULT_DISCLAIMER = {
+  fa: 'این نتیجه یک راهنمای مقدماتی آموزشی بر اساس پاسخ‌های شماست؛ تشخیص روان‌شناختی یا تضمین پذیرش نیست.',
+  en: 'This is a preliminary educational guidance result based on your answers, not a psychological diagnosis or guaranteed admission result.',
+  tr: 'Bu sonuç yanıtlarına dayalı ön eğitim rehberliğidir; psikolojik tanı veya kesin kabul garantisi değildir.',
+  ar: 'هذه نتيجة إرشاد تعليمي أولية بناء على إجاباتك، وليست تشخيصا نفسيا أو ضمانا للقبول.',
+};
+
+const VOICE_SCRIPT_LIMIT = 620;
+const VOICE_ACTION_CONTENT_LIMIT = 430;
+const VOICE_SENTENCE_BOUNDARIES = ['.', '\u061F', '?', '!', '\u061B', '\n'];
+const VOICE_SOFT_BOUNDARIES = [',', '\u060C', ':', '\u061B'];
+
+function compactVoiceText(text) {
+  return String(text || '')
+    .replace(/[*_`>#]/g, '')
+    .replace(/[•·]/g, '. ')
+    .replace(/[ \t\f\v]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function trimVoiceScript(script, limit = VOICE_SCRIPT_LIMIT) {
+  const clean = String(script || '').trim();
+  if (clean.length <= limit) return clean;
+  const head = clean.slice(0, limit);
+  const boundary = Math.max(...VOICE_SENTENCE_BOUNDARIES.map((mark) => head.lastIndexOf(mark)));
+  if (boundary > Math.floor(limit * 0.55)) return head.slice(0, boundary + 1).trim();
+  const softBoundary = Math.max(...VOICE_SOFT_BOUNDARIES.map((mark) => head.lastIndexOf(mark)));
+  if (softBoundary > Math.floor(limit * 0.62)) return `${head.slice(0, softBoundary + 1).trim()}…`;
+  const spaceBoundary = head.lastIndexOf(' ');
+  const cut = spaceBoundary > Math.floor(limit * 0.58) ? spaceBoundary : limit;
+  return `${head.slice(0, cut).trim()}…`;
+}
+
+function selectableOptionLines(actions = [], lang) {
+  const seen = new Set();
+  const selectable = actions.filter((item) => VOICE_SELECTABLE_INTENTS.has(item.nextIntent));
+  const lines = [];
+  selectable.forEach((item) => {
+    const label = trimVoiceScript(compactVoiceText(item.label), 92);
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+    lines.push(`${lines.length + 1}. ${label}`);
+  });
+  if (!lines.length) return '';
+  return [
+    L(VOICE_OPTION_INTRO, lang),
+    lines.join(lang === 'en' ? '; ' : '، '),
+    L(VOICE_ACTION_FINAL_HINT, lang),
+  ].join('\n');
+}
+
+function archetypeName(result, lang) {
+  const id = result?.accaArchetype?.primary || result?.archetypeId;
+  const archetype = ARCHETYPES.find((item) => item.id === id);
+  return archetype ? L(archetype.name, lang) : '';
+}
+
+function interestNames(result, lang) {
+  const entries = result?.topInterestAreas || result?.accaTop || result?.interests || [];
+  return entries
+    .slice(0, 3)
+    .map((item) => (typeof item === 'string' ? item : item?.key))
+    .filter(Boolean)
+    .map((key) => L(ACCA_CATEGORY_LABELS[key] || { en: key }, lang))
+    .filter(Boolean);
+}
+
+function discoveryMajorNames(result, lang) {
+  return (result?.recommendedMajors || [])
+    .slice(0, 3)
+    .map((item) => getMajor(item.majorId))
+    .filter(Boolean)
+    .map((major) => L(major.name, lang));
+}
+
+function deepMajorNames(result, lang) {
+  return (result?.recommendedMajors || [])
+    .slice(0, 3)
+    .map((item) => {
+      const name = typeof item?.name === 'string' ? item.name : L(item?.name, lang);
+      return item?.match ? `${name} (${item.match}%)` : name;
+    })
+    .filter(Boolean);
+}
+
+function resultVoiceSummary(message, lang) {
+  const result = message?.payload || {};
+  const isFa = lang === 'fa';
+  const isDeep = message.component === 'deep_fit_result';
+  const title = isDeep
+    ? compactVoiceText(L(result.signature?.label, lang) || archetypeName(result, lang))
+    : compactVoiceText(archetypeName(result, lang));
+  const interests = interestNames(result, lang).join(isFa ? '، ' : ', ');
+  const majors = (isDeep ? deepMajorNames(result, lang) : discoveryMajorNames(result, lang))
+    .join(isFa ? '، ' : ', ');
+
+  if (isFa) {
+    return [
+      isDeep ? 'تحلیل عمیق آماده است.' : 'نتیجه اولیه آماده است.',
+      title ? `عنوان پروفایل آموزشی شما: ${title}.` : '',
+      interests ? `حوزه‌های علاقه اصلی: ${interests}.` : '',
+      majors ? `رشته‌های پیشنهادی: ${majors}.` : '',
+      L(RESULT_DISCLAIMER, lang),
+    ].filter(Boolean).join(' ');
+  }
+
+  return [
+    isDeep ? 'Your deep educational analysis is ready.' : 'Your preliminary result is ready.',
+    title ? `Educational profile: ${title}.` : '',
+    interests ? `Top interest areas: ${interests}.` : '',
+    majors ? `Recommended majors: ${majors}.` : '',
+    L(RESULT_DISCLAIMER, lang),
+  ].filter(Boolean).join(' ');
+}
+
+function voiceScriptForMessage(message, lang) {
+  if (!message || message.role !== 'assistant') return '';
+  if (message.component === 'major_result' || message.component === 'deep_fit_result') {
+    return resultVoiceSummary(message, lang);
+  }
+  const content = compactVoiceText(message.content);
+  const options = selectableOptionLines(message.actions || [], lang);
+  if (options) {
+    return [
+      trimVoiceScript(content, VOICE_ACTION_CONTENT_LIMIT),
+      options,
+    ].filter(Boolean).join('\n\n');
+  }
+  return trimVoiceScript(content);
+}
 
 export default function SmartApplyShell() {
   const language = useSmartApplyStore((s) => s.language);
@@ -30,7 +205,6 @@ export default function SmartApplyShell() {
   const boot = useSmartApplyStore((s) => s.boot);
   const submitFreeText = useSmartApplyStore((s) => s.submitFreeText);
   const setVoiceActivity = useSmartApplyStore((s) => s.setVoiceActivity);
-  const appendVoiceTranscript = useSmartApplyStore((s) => s.appendVoiceTranscript);
   const openDashboard = useSmartApplyStore((s) => s.openDashboard);
   const isAuthenticated = useSmartApplyStore((s) => s.isAuthenticated);
   const authInited = useSmartApplyStore((s) => s.authInited);
@@ -41,6 +215,9 @@ export default function SmartApplyShell() {
   const [insightOpen, setInsightOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceContextSnapshot, setVoiceContextSnapshot] = useState('');
+  const [voiceInitialScript, setVoiceInitialScript] = useState(null);
+  const [assistantSettingsOpen, setAssistantSettingsOpen] = useState(false);
+  const [assistantSettings, setAssistantSettings] = useState(() => readSmartApplySettings());
   const deepFitQueryHandled = useRef(false);
 
   const dir = dirFor(language);
@@ -57,8 +234,9 @@ export default function SmartApplyShell() {
             : L(UI.inputPlaceholder, language);
 
   useEffect(() => {
+    if (!assistantSettings.consent?.accepted) return;
     boot();
-  }, [boot]);
+  }, [boot, assistantSettings.consent?.accepted]);
 
   useEffect(() => {
     const savedLang = readStoredLang({ fallback: null });
@@ -122,9 +300,22 @@ export default function SmartApplyShell() {
     return [profile, recent].filter(Boolean).join('\n\n');
   }, [goal, messages, studentProfile]);
 
-  const handleVoiceTranscript = useCallback((role, text, sourceId) => {
-    appendVoiceTranscript(role, text, sourceId);
-  }, [appendVoiceTranscript]);
+  const voiceScripts = useMemo(() => messages
+    .filter((message) => message.role === 'assistant')
+    .map((message) => {
+      const text = voiceScriptForMessage(message, language);
+      return {
+        id: message.id,
+        text,
+        hasActions: Boolean(message.actions?.length),
+        component: message.component || null,
+      };
+    })
+    .filter((item) => item.text), [messages, language]);
+
+  const handleVoiceSpeech = useCallback((text, sourceId) => {
+    submitFreeText(text, { source: 'voice', sourceId });
+  }, [submitFreeText]);
 
   const handleVoiceActivity = useCallback((activity) => {
     setVoiceActivity(activity);
@@ -132,8 +323,9 @@ export default function SmartApplyShell() {
 
   const handleOpenVoice = useCallback(() => {
     setVoiceContextSnapshot(voiceContext);
+    setVoiceInitialScript(voiceScripts[voiceScripts.length - 1] || null);
     setVoiceOpen(true);
-  }, [voiceContext]);
+  }, [voiceContext, voiceScripts]);
 
   return (
     <div dir={dir} className="relative min-h-screen overflow-hidden bg-cream text-navy">
@@ -248,9 +440,14 @@ export default function SmartApplyShell() {
                     {statusLabel}
                   </p>
                 </div>
-                <span className="hidden rounded-full border border-emerald-700/10 bg-emerald-600/[0.06] px-3 py-1.5 text-[10px] font-black text-emerald-800 sm:block">
-                  {L(UI.sessionStartBadge, language)}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setAssistantSettingsOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-700/10 bg-emerald-600/[0.06] px-2.5 py-1.5 text-[10px] font-black text-emerald-800 transition hover:border-emerald-700/25 hover:bg-emerald-600/[0.10] sm:gap-2 sm:px-3"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  {L(ASSISTANT_SETTINGS_LABEL, language)}
+                </button>
               </div>
 
               <div className="mt-3 flex items-center gap-3 sm:mt-3.5">
@@ -361,12 +558,32 @@ export default function SmartApplyShell() {
       {/* ---- overlays ---- */}
       <LoginGateModal lang={language} />
       <SmartApplyProfilePreview lang={language} />
+      <AssistantSettingsModal
+        open={assistantSettingsOpen}
+        lang={language}
+        settings={assistantSettings}
+        onSave={setAssistantSettings}
+        onClose={() => setAssistantSettingsOpen(false)}
+      />
+      <SmartApplyConsentGate
+        open={!assistantSettings.consent?.accepted}
+        lang={language}
+        settings={assistantSettings}
+        onAccept={setAssistantSettings}
+      />
       <VoiceConversationOverlay
         open={voiceOpen}
         lang={language}
         sessionId={sessionId}
         context={voiceContextSnapshot}
-        onTranscript={handleVoiceTranscript}
+        initialScript={voiceInitialScript}
+        assistantScripts={voiceScripts}
+        assistantBusy={assistantStatus !== 'idle'}
+        voiceId={assistantSettings.voiceId}
+        inputDeviceId={assistantSettings.inputDeviceId}
+        outputDeviceId={assistantSettings.outputDeviceId}
+        autoReadNextStep={assistantSettings.chat.autoReadNextStep}
+        onStudentSpeech={handleVoiceSpeech}
         onActivity={handleVoiceActivity}
         onClose={() => setVoiceOpen(false)}
       />

@@ -1,8 +1,8 @@
 // One recommended major: icon, name, match badge, short "why".
-// `detailed` adds the deep-profile lines: personality fit, academic fit and
+// `detailed` adds the deep-profile lines: preference fit, academic fit and
 // the honest admission-reality note (used inside the discovery result).
 import { motion } from 'framer-motion';
-import { HeartHandshake, GraduationCap, ShieldCheck, Building2 } from 'lucide-react';
+import { HeartHandshake, GraduationCap, ShieldCheck, Building2, BookOpen } from 'lucide-react';
 import { L } from '../../lib/lang';
 import { UI } from '../../i18n/ui';
 import { renderIcon } from '../../lib/icons';
@@ -54,7 +54,13 @@ export default function RecommendedMajorCard({ majorId, match, lang, index = 0, 
             </span>
           </div>
           {!detailed && (
-            <p className="mt-1 text-xs font-semibold leading-6 text-navy/60">{L(major.reason, lang)}</p>
+            <div className="mt-2 rounded-2xl bg-navy/[0.035] px-3 py-2">
+              <p className="mb-1 inline-flex items-center gap-1 text-[10px] font-black text-navy/78">
+                <BookOpen className="h-3.5 w-3.5 text-gold" />
+                {L(UI.whyFitsLabel, lang)}
+              </p>
+              <p className="text-xs font-semibold leading-6 text-navy/60">{L(major.reason, lang)}</p>
+            </div>
           )}
         </div>
       </div>

@@ -108,7 +108,7 @@ export async function renderTurnstile(el, {
   };
 }
 
-// Runs an invisible Turnstile check and resolves with a fresh token. Returns
+// Runs an offscreen Turnstile check and resolves with a fresh token. Returns
 // null when Turnstile is not configured, which keeps local/dev demos usable.
 export async function getTurnstileToken(action = 'acca_security') {
   if (!SITE_KEY) return null;
@@ -146,7 +146,7 @@ export async function getTurnstileToken(action = 'acca_security') {
       widgetId = window.turnstile.render(host, {
         sitekey: SITE_KEY,
         theme: 'auto',
-        size: 'invisible',
+        size: 'compact',
         execution: 'execute',
         action: normalizeAction(action),
         callback: (token) => {

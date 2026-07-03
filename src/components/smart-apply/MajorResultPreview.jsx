@@ -18,6 +18,13 @@ import {
   UserRound,
   Compass,
   Target,
+  BookOpen,
+  BriefcaseBusiness,
+  Globe2,
+  Languages,
+  TrendingUp,
+  Users,
+  WalletCards,
 } from 'lucide-react';
 import { L } from '../../lib/lang';
 import { UI } from '../../i18n/ui';
@@ -43,6 +50,7 @@ import {
   CAUTION_INTRO,
 } from '../../data/discoveryProfile';
 import { getMajor } from '../../data/mockPrograms';
+import { BUDGET_RANGES } from '../../data/mockAdmissionRules';
 import { useSmartApplyStore } from '../../store/smartApplyStore';
 import { INTENTS } from '../../ai/intents';
 import RecommendedMajorCard from './RecommendedMajorCard';
@@ -68,6 +76,141 @@ const TABS = [
 const AXIS_ORDER = ['EI', 'SN', 'TF', 'JP'];
 const TRAIT_ORDER = ['O', 'C', 'E', 'A', 'Em', 'H'];
 
+const PROFILE_NAME = {
+  fa: 'Educational Fit Profile',
+  en: 'Educational Fit Profile',
+  tr: 'Educational Fit Profile',
+  ar: 'Educational Fit Profile',
+};
+
+const BRIEF_LABELS = {
+  interests: { fa: 'علایق تحصیلی', en: 'Academic interests', tr: 'Akademik ilgiler', ar: 'الاهتمامات الأكاديمية' },
+  learning: { fa: 'سبک یادگیری', en: 'Learning style', tr: 'Öğrenme stili', ar: 'أسلوب التعلم' },
+  work: { fa: 'ترجیح محیط کاری', en: 'Work environment preference', tr: 'Çalışma ortamı tercihi', ar: 'تفضيل بيئة العمل' },
+  social: { fa: 'تعامل اجتماعی', en: 'Social interaction', tr: 'Sosyal etkileşim', ar: 'التفاعل الاجتماعي' },
+  risk: { fa: 'ریسک‌پذیری مسیر', en: 'Path risk tolerance', tr: 'Yol risk toleransı', ar: 'تحمل مخاطر المسار' },
+  budget: { fa: 'بودجه و محدودیت مالی', en: 'Budget and financial limits', tr: 'Bütçe ve mali sınırlar', ar: 'الميزانية والقيود المالية' },
+  language: { fa: 'زبان تحصیل', en: 'Study language', tr: 'Eğitim dili', ar: 'لغة الدراسة' },
+  countries: { fa: 'کشورهای مناسب', en: 'Suitable countries', tr: 'Uygun ülkeler', ar: 'الدول المناسبة' },
+  confidence: { fa: 'سطح اطمینان سیستم', en: 'System confidence', tr: 'Sistem güveni', ar: 'مستوى ثقة النظام' },
+  counselor: { fa: 'مشاوره انسانی', en: 'Human counseling', tr: 'İnsan danışmanlığı', ar: 'استشارة بشرية' },
+};
+
+const BRIEF_TEXT = {
+  learningPractice: {
+    fa: 'با مثال واقعی، تمرین عملی و خروجی ملموس سریع‌تر یاد می‌گیرید.',
+    en: 'You learn fastest through real cases, practice, and tangible outputs.',
+  },
+  learningTheory: {
+    fa: 'با مفاهیم، الگوها و دلیل پشت موضوعات بهتر درگیر می‌شوید.',
+    en: 'You engage well with concepts, patterns, and the “why” behind topics.',
+  },
+  structureFixed: {
+    fa: 'برنامه ساختارمند و مرحله‌به‌مرحله برای شما امن‌تر است.',
+    en: 'A structured, step-by-step curriculum is likely safer for you.',
+  },
+  structureFlexible: {
+    fa: 'برنامه منعطف، پروژه و انتخاب واحدهای متنوع به شما انرژی می‌دهد.',
+    en: 'Flexible programs, projects, and varied electives give you energy.',
+  },
+  workPeople: {
+    fa: 'محیط‌های انسان‌محور، تیمی و ارتباطی با شما هم‌خوانی بیشتری دارند.',
+    en: 'People-facing, team-based, communication-rich environments fit you better.',
+  },
+  workAnalytical: {
+    fa: 'محیط‌های تحلیلی، پژوهشی و دارای زمان تمرکز عمیق مناسب‌ترند.',
+    en: 'Analytical or research-heavy environments with deep-focus time suit you better.',
+  },
+  socialHigh: {
+    fa: 'تعامل، بحث و ارائه می‌تواند بخشی از سوخت یادگیری شما باشد.',
+    en: 'Discussion, presentation, and interaction can fuel your learning.',
+  },
+  socialMeasured: {
+    fa: 'تمرکز فردی و زمان آرام برای پردازش، کیفیت تصمیم شما را بالا می‌برد.',
+    en: 'Solo focus and quiet processing time improve your decision quality.',
+  },
+  language: {
+    fa: 'انگلیسی یا ترکی، بسته به رشته و دانشگاه مقصد؛ قبل از اپلای باید تأیید شود.',
+    en: 'English or Turkish, depending on the target program and university; it must be confirmed before applying.',
+  },
+  countries: {
+    fa: 'ترکیه و قبرس شمالی؛ محدوده اصلی خدمات پذیرش آکا.',
+    en: 'Turkey and Northern Cyprus, the main ACCA admission service scope.',
+  },
+  counselor: {
+    fa: 'پیشنهاد AI نقطه شروع است؛ قبل از ارسال رسمی، مشاور آکا آن را با معدل، بودجه، مدارک و ظرفیت دانشگاه چک می‌کند.',
+    en: 'The AI suggestion is a starting point; before submission, an ACCA counselor checks it against grades, budget, documents, and university capacity.',
+  },
+  budgetUnknown: {
+    fa: 'بودجه هنوز ثبت نشده؛ در مرحله بعد شهریه، بورسیه و سقف پرداخت بررسی می‌شود.',
+    en: 'Budget is not set yet; tuition, scholarships, and payment limits are reviewed in the next step.',
+  },
+  budgetScholarship: {
+    fa: 'پاسخ‌ها نشان می‌دهد مسیر باید با نگاه بورسیه و کنترل شهریه بررسی شود.',
+    en: 'Your answers suggest the plan should be reviewed with scholarships and tuition control in mind.',
+  },
+};
+
+const RISK_TEXT = {
+  competitive: {
+    fa: 'آمادگی مسیرهای رقابتی دیده می‌شود، اما معدل و مدارک باید دقیق بررسی شوند.',
+    en: 'You show readiness for competitive paths, but grades and documents need close review.',
+  },
+  scholarship_first: {
+    fa: 'ریسک مالی مهم است؛ گزینه‌های کم‌هزینه‌تر و بورسیه‌محور باید اولویت بگیرند.',
+    en: 'Financial risk matters; lower-cost and scholarship-oriented options should come first.',
+  },
+  foundation_first: {
+    fa: 'مسیر مرحله‌ای امن‌تر است؛ بهتر است گزینه‌های قابل‌دسترس‌تر و مسیرهای تقویتی بررسی شوند.',
+    en: 'A staged route is safer; accessible options and booster paths should be reviewed.',
+  },
+  balanced: {
+    fa: 'ریسک مسیر متعادل است؛ تصمیم نهایی باید با دانشگاه، شهریه و مدارک چک شود.',
+    en: 'Path risk looks balanced; the final decision should be checked against university, tuition, and documents.',
+  },
+};
+
+function localizedList(items, lang) {
+  return items.filter(Boolean).map((item) => L(item, lang)).filter(Boolean).join('، ');
+}
+
+function budgetText(profile, result, lang) {
+  const budget = BUDGET_RANGES.find((item) => item.id === profile?.budget);
+  if (budget) return L(budget.label, lang);
+  if (result?.reality === 'scholarship_first') return L(BRIEF_TEXT.budgetScholarship, lang);
+  return L(BRIEF_TEXT.budgetUnknown, lang);
+}
+
+function buildDecisionBrief(result, profile, lang) {
+  const learning = result.learningEnvironment || {};
+  const interests = localizedList(
+    (result.accaTop || []).slice(0, 3).map((item) => ACCA_CATEGORY_LABELS[item.key]),
+    lang,
+  );
+  const learningParts = [
+    L(learning.theory?.side === 'b' ? BRIEF_TEXT.learningPractice : BRIEF_TEXT.learningTheory, lang),
+    L(learning.structure?.side === 'b' ? BRIEF_TEXT.structureFlexible : BRIEF_TEXT.structureFixed, lang),
+  ];
+  const confidence = result.mbtiLike?.confidence
+    ? (lang === 'fa'
+        ? `حدود ${result.mbtiLike.confidence}٪ برای الگوی ترجیحی؛ نتیجه رشته همچنان نیازمند بررسی انسانی است.`
+        : `About ${result.mbtiLike.confidence}% for the preference pattern; the major decision still needs human review.`)
+    : L(UI.resultExplanation, lang);
+
+  return [
+    { key: 'interests', icon: BookOpen, label: BRIEF_LABELS.interests, text: interests || L(UI.topInterestsLabel, lang) },
+    { key: 'learning', icon: Compass, label: BRIEF_LABELS.learning, text: learningParts.join(' ') },
+    { key: 'work', icon: BriefcaseBusiness, label: BRIEF_LABELS.work, text: L(learning.focus?.side === 'b' ? BRIEF_TEXT.workPeople : BRIEF_TEXT.workAnalytical, lang) },
+    { key: 'social', icon: Users, label: BRIEF_LABELS.social, text: L(learning.social?.side === 'b' ? BRIEF_TEXT.socialHigh : BRIEF_TEXT.socialMeasured, lang) },
+    { key: 'risk', icon: TrendingUp, label: BRIEF_LABELS.risk, text: L(RISK_TEXT[result.reality] || RISK_TEXT.balanced, lang) },
+    { key: 'budget', icon: WalletCards, label: BRIEF_LABELS.budget, text: budgetText(profile, result, lang) },
+    { key: 'language', icon: Languages, label: BRIEF_LABELS.language, text: L(BRIEF_TEXT.language, lang) },
+    { key: 'countries', icon: Globe2, label: BRIEF_LABELS.countries, text: L(BRIEF_TEXT.countries, lang) },
+    { key: 'confidence', icon: ShieldCheck, label: BRIEF_LABELS.confidence, text: confidence },
+    { key: 'counselor', icon: MessageCircle, label: BRIEF_LABELS.counselor, text: L(BRIEF_TEXT.counselor, lang) },
+  ];
+}
+
 function SectionTitle({ children }) {
   return <p className="mb-2.5 text-[10px] font-black uppercase tracking-[0.14em] text-navy/45">{children}</p>;
 }
@@ -75,6 +218,54 @@ function SectionTitle({ children }) {
 function Card({ children, tint = '' }) {
   return (
     <div className={`rounded-[18px] border p-4 ${tint || 'border-white/80 bg-white/65'}`}>{children}</div>
+  );
+}
+
+function DecisionBrief({ items, lang, onCounselor }) {
+  return (
+    <Card tint="border-emerald-700/15 bg-gradient-to-br from-emerald-600/[0.06] via-white/78 to-gold/[0.06]">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <SectionTitle>{L(PROFILE_NAME, lang)}</SectionTitle>
+          <h4 className="text-sm font-black text-navy">
+            {lang === 'fa' ? 'خلاصه تصمیم انتخاب رشته' : 'Major-choice decision brief'}
+          </h4>
+        </div>
+        <a
+          href="/smart-apply/glossary"
+          className="inline-flex items-center gap-1.5 rounded-full border border-navy/10 bg-white px-3 py-1.5 text-[10px] font-black text-navy/65 transition hover:border-gold/45 hover:text-navy"
+        >
+          <BookOpen className="h-3.5 w-3.5 text-gold" />
+          {lang === 'fa' ? 'واژه‌نامه پروفایل' : 'Profile glossary'}
+        </a>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div key={item.key} className="rounded-2xl border border-white/85 bg-white/74 p-3">
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-navy/[0.045] text-emerald-800">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-[10px] font-black text-navy/78">{L(item.label, lang)}</p>
+                  <p className="mt-1 text-[10.5px] font-semibold leading-5 text-navy/57">{item.text}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={onCounselor}
+        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-navy px-4 py-2.5 text-[11px] font-black text-cream transition hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(7,26,61,0.18)]"
+      >
+        <MessageCircle className="h-4 w-4 text-gold" />
+        {lang === 'fa' ? 'مرور نتیجه با مشاور انسانی' : 'Review this result with a human counselor'}
+      </button>
+    </Card>
   );
 }
 
@@ -146,6 +337,7 @@ export default function MajorResultPreview({ result, lang }) {
   const talkToCounselor = useSmartApplyStore((s) => s.talkToCounselor);
   const continueAsGuest = useSmartApplyStore((s) => s.continueAsGuest);
   const isAuthenticated = useSmartApplyStore((s) => s.isAuthenticated);
+  const studentProfile = useSmartApplyStore((s) => s.studentProfile);
 
   if (!result) return null;
 
@@ -155,6 +347,7 @@ export default function MajorResultPreview({ result, lang }) {
   const primary = ARCHETYPES.find((a) => a.id === (isDeep ? result.accaArchetype.primary : result.archetypeId));
   const secondary = isDeep ? ARCHETYPES.find((a) => a.id === result.accaArchetype.secondary) : null;
   const typeLike = (t) => L(UI.typeLikeFormat, lang).replace('{type}', t);
+  const decisionBrief = isDeep ? buildDecisionBrief(result, studentProfile, lang) : [];
 
   const nextSteps = [
     isAuthenticated
@@ -262,6 +455,8 @@ export default function MajorResultPreview({ result, lang }) {
             {/* ════════ OVERVIEW ════════ */}
             {isDeep && tab === 'overview' && (
               <>
+                <DecisionBrief items={decisionBrief} lang={lang} onCounselor={talkToCounselor} />
+
                 <div className="grid gap-2.5 sm:grid-cols-3">
                   <Card>
                     <SectionTitle>{L(UI.mbtiPatternLabel, lang)}</SectionTitle>

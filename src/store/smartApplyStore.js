@@ -223,7 +223,7 @@ export const useSmartApplyStore = create((set, get) => {
   };
 
   /** Core sequencer shared by button taps and free text. */
-  const runExchange = async (produce, { echoLabel, remember = false } = {}) => {
+  const runExchange = async (produce, { echoLabel, echoMeta = null, remember = false } = {}) => {
     if (get().assistantStatus !== 'idle') return;
 
     const previousHistory = get().navigationHistory;
@@ -240,7 +240,12 @@ export const useSmartApplyStore = create((set, get) => {
     });
 
     if (echoLabel) {
-      pushMessage({ role: 'user', content: echoLabel, lang: get().language });
+      pushMessage({
+        role: 'user',
+        content: echoLabel,
+        lang: get().language,
+        ...(echoMeta ? { meta: echoMeta } : {}),
+      });
     }
 
     let result;
@@ -483,10 +488,19 @@ export const useSmartApplyStore = create((set, get) => {
     },
 
     /** Student submits free text from the composer. */
-    submitFreeText: (text) => {
+    submitFreeText: (text, options = {}) => {
       const trimmed = String(text || '').trim();
       if (!trimmed) return;
-      runExchange((state) => sendText(trimmed, state), { echoLabel: trimmed, remember: true });
+      const echoMeta = options.source === 'voice'
+        ? {
+          voice: true,
+          voiceSourceId: options.sourceId || `voice_${Date.now()}`,
+        }
+        : null;
+      runExchange(
+        (state) => sendText(trimmed, state, options),
+        { echoLabel: trimmed, echoMeta, remember: true },
+      );
     },
 
     goBack: () => {

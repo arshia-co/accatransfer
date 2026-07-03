@@ -1534,17 +1534,17 @@ function DeepFitAccountCard({ profile }) {
     >
       <div className="account-deep-fit-orb"><BrainCircuit size={23} /></div>
       <div className="account-deep-fit-main">
-        <span className="account-kicker">ACCA Deep Fit</span>
+        <span className="account-kicker">Educational Fit Profile</span>
         <h3>
           {completed
-            ? localizedFa(result.signature?.label) || 'پروفایل عمیق تحصیلی شما'
+            ? localizedFa(result.signature?.label) || 'پروفایل کامل جهت‌گیری تحصیلی شما'
             : profile
               ? 'تحلیل عمیق شما در حال تکمیل است'
               : 'از نتیجه اولیه به یک مسیر دقیق‌تر برسید'}
         </h3>
         <p>
           {completed
-            ? 'پاسخ‌ها از نظر سبک شناختی، علایق، انگیزه، توان تحصیلی و واقعیت محیط دانشگاهی کنار هم تحلیل شده‌اند.'
+            ? 'پاسخ‌ها از نظر علایق تحصیلی، ترجیح یادگیری، محیط مطلوب، انگیزه، توان تحصیلی و واقعیت مسیر کنار هم تحلیل شده‌اند.'
             : profile
               ? `پاسخ‌ها ذخیره شده‌اند و از سؤال ${answers.length + 1} ادامه خواهید داد.`
               : 'نسخه ورودکرده تست، پاسخ‌های قبلی را حفظ می‌کند و با ۵۲ سؤال اصلی و چند سؤال تطبیقی، رشته‌های دقیق‌تر و بین‌رشته‌ای پیشنهاد می‌دهد.'}
