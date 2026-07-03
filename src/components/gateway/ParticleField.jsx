@@ -1,16 +1,26 @@
 import { useEffect, useRef } from 'react';
 
 /* ============================================================================
- * ParticleField — an original, brand-aligned 3D particle constellation.
+ * ParticleField — free-floating "electron" particles with a magnetic cursor.
  *
- * A rotating point-cloud is projected to 2D on a canvas, linked by a faint
- * "web", and gently follows the pointer (eased) for a premium, futuristic feel.
- * Fully responsive (ResizeObserver + DPR), theme-aware (ACCA navy / cream /
- * gold), cheap enough for mobile (particle count scales down, motion honours
- * prefers-reduced-motion), and non-interactive (pointer-events: none) so it
- * never steals clicks from the gateway.
+ * Physics model (per-second units, dt-normalised so it is frame-rate safe):
+ *   - Free drift: each particle wanders on smooth pseudo-noise, like charged
+ *     dust floating in air.
+ *   - Magnetic cursor: while the pointer is over the page it attracts every
+ *     particle with a force that falls off with distance, so electrons drift
+ *     slowly toward it from anywhere on screen.
+ *   - Mutual repulsion: particles push each other apart (same-charge
+ *     electrons), so they never clump — around the cursor they settle into a
+ *     loose halo, and when the cursor leaves they spread back out.
+ *   - Soft edges + damping + speed cap keep the motion calm and on-screen.
  *
- * This is a from-scratch implementation — not a port of any third-party code.
+ * Presentation: connective web between close particles, gold accent nodes with
+ * a soft glow, depth (z) variation for parallax size/alpha. Theme-aware (ACCA
+ * navy on cream / cream+gold on navy), responsive (ResizeObserver + DPR),
+ * honours prefers-reduced-motion, pauses when the tab is hidden, and is
+ * pointer-events:none so it never steals clicks.
+ *
+ * Original implementation — not a port of any third-party effect.
  * ========================================================================== */
 
 const THEMES = {
@@ -31,6 +41,17 @@ const THEMES = {
     nodeAlpha: 0.85,
   },
 };
+
+// Physics constants (px, seconds).
+const FRICTION = 1.7;       // velocity damping, s⁻¹
+const WANDER = 30;          // free-drift acceleration, px/s²
+const ATTRACT = 16000;      // cursor magnet strength (falls off with distance)
+const ATTRACT_CAP = 140;    // max pull acceleration, px/s²
+const REPEL_RADIUS = 96;    // electrons repel inside this distance, px
+const REPEL = 320;          // repulsion acceleration at zero distance, px/s²
+const EDGE_MARGIN = 42;     // soft-wall thickness, px
+const EDGE_PUSH = 5;        // soft-wall spring, s⁻²
+const MAX_SPEED = 150;      // px/s, scaled by depth
 
 function rgba([r, g, b], a) {
   return `rgba(${r},${g},${b},${a})`;
@@ -59,168 +80,219 @@ export default function ParticleField({ theme = 'dark', className = '' }) {
     let dpr = 1;
     let particles = [];
     let raf = 0;
+    let lastT = 0;
 
-    // Eased rotation + pointer state.
-    const rot = { x: -0.12, y: 0, tx: -0.12, ty: 0 };
-    const pointer = { x: 0, y: 0, active: false };
+    // Raw pointer target (canvas-local) + eased magnet position.
+    const pointer = { tx: 0, ty: 0, active: false };
+    const magnet = { x: 0, y: 0 };
 
     function buildParticles() {
       const area = width * height;
-      // ~1 particle / 12k px², clamped; fewer on small / touch screens.
       let count = Math.round(area / 12000);
       count = Math.max(34, Math.min(coarse ? 60 : 104, count));
-      particles = Array.from({ length: count }, (_, i) => {
-        // Flattened ellipsoid cloud (wider than tall) for a "sculpture" read.
-        const u = Math.random();
-        const v = Math.random();
-        const azim = u * Math.PI * 2;
-        const polar = Math.acos(2 * v - 1);
-        const rad = 0.55 + Math.random() * 0.45; // shell + fill
-        return {
-          x: Math.cos(azim) * Math.sin(polar) * rad * 1.32,
-          y: Math.cos(polar) * rad * 0.72,
-          z: Math.sin(azim) * Math.sin(polar) * rad * 1.05,
-          size: 0.6 + Math.random() * 1.7,
-          phase: Math.random() * Math.PI * 2,
-          drift: 0.4 + Math.random() * 0.8,
-          accent: i % 8 === 0, // ~12% gold accents
-        };
-      });
+      particles = Array.from({ length: count }, (_, i) => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        z: 0.55 + Math.random() * 0.9, // depth: parallax size/alpha/response
+        vx: (Math.random() - 0.5) * 24,
+        vy: (Math.random() - 0.5) * 24,
+        size: 0.7 + Math.random() * 1.7,
+        phase: Math.random() * Math.PI * 2,
+        fA: 0.6 + Math.random() * 0.9, // wander frequencies
+        fB: 0.6 + Math.random() * 0.9,
+        accent: i % 8 === 0, // ~12% gold accents
+      }));
     }
 
     function resize() {
-      // The <canvas> element is sized by CSS (100% of the ambient layer). Read
-      // that computed size back for the backing store instead of writing inline
-      // width/height — writing an early/zero value would otherwise lock the
-      // element's box and CSS could not recover it.
-      width = canvas.clientWidth || parent.clientWidth || window.innerWidth;
-      height = canvas.clientHeight || parent.clientHeight || window.innerHeight;
-      if (width < 2 || height < 2) return;
+      // The <canvas> is sized by CSS (100% of the ambient layer). Read that
+      // computed size back for the backing store instead of writing inline
+      // width/height — an early/zero inline value would lock the element's box.
+      const w = canvas.clientWidth || parent.clientWidth || window.innerWidth;
+      const h = canvas.clientHeight || parent.clientHeight || window.innerHeight;
+      if (w < 2 || h < 2) return;
+      const prevW = width;
+      const prevH = height;
+      width = w;
+      height = h;
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      buildParticles();
-    }
-
-    function projectAll(t) {
-      const cx = width / 2;
-      const cy = height * 0.46;
-      const spread = Math.min(width, height) * 0.46;
-      const focal = 2.35;
-      const cosY = Math.cos(rot.y);
-      const sinY = Math.sin(rot.y);
-      const cosX = Math.cos(rot.x);
-      const sinX = Math.sin(rot.x);
-      const out = [];
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        const bob = reduceMotion ? 0 : Math.sin(t * 0.0006 * p.drift + p.phase) * 0.04;
-        let x = p.x;
-        let y = p.y + bob;
-        let z = p.z;
-        // Rotate around Y then X.
-        let x1 = x * cosY - z * sinY;
-        let z1 = x * sinY + z * cosY;
-        let y1 = y * cosX - z1 * sinX;
-        let z2 = y * sinX + z1 * cosX;
-        const scale = focal / (focal - z2);
-        out.push({
-          sx: cx + x1 * scale * spread,
-          sy: cy + y1 * scale * spread,
-          depth: scale, // ~[0.7 .. 1.4]
-          size: p.size,
-          accent: p.accent,
-        });
+      if (!particles.length) {
+        buildParticles();
+      } else if (prevW > 1 && prevH > 1) {
+        // Keep the swarm continuous across resizes instead of resetting it.
+        const sx = width / prevW;
+        const sy = height / prevH;
+        for (const p of particles) { p.x *= sx; p.y *= sy; }
       }
-      return out;
     }
 
-    function renderFrame(t) {
+    function step(dt, t) {
+      // Ease the magnet toward the raw pointer for a smooth, weighty pull.
+      if (pointer.active) {
+        const k = Math.min(1, 6 * dt);
+        magnet.x += (pointer.tx - magnet.x) * k;
+        magnet.y += (pointer.ty - magnet.y) * k;
+      }
+
+      // Individual forces: wander + cursor magnet.
+      for (const p of particles) {
+        let ax = Math.sin(t * 0.00033 * p.fA + p.phase) * WANDER;
+        let ay = Math.cos(t * 0.00041 * p.fB + p.phase * 1.9) * WANDER;
+
+        if (pointer.active) {
+          const dx = magnet.x - p.x;
+          const dy = magnet.y - p.y;
+          const d = Math.max(Math.hypot(dx, dy), 26);
+          const f = Math.min((ATTRACT * p.z) / (d + 130), ATTRACT_CAP);
+          ax += (dx / d) * f;
+          ay += (dy / d) * f;
+        }
+
+        p.vx += ax * dt;
+        p.vy += ay * dt;
+      }
+
+      // Pairwise repulsion — same-charge electrons keep their distance, so the
+      // swarm forms a halo around the magnet instead of a clump. O(n²) with
+      // n ≤ 104 is well within a 60fps frame budget.
+      const rr = REPEL_RADIUS * REPEL_RADIUS;
+      for (let i = 0; i < particles.length; i++) {
+        const a = particles[i];
+        for (let j = i + 1; j < particles.length; j++) {
+          const b = particles[j];
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= rr || d2 === 0) continue;
+          const d = Math.sqrt(d2);
+          const push = REPEL * (1 - d / REPEL_RADIUS) * dt;
+          const nx = dx / d;
+          const ny = dy / d;
+          a.vx += nx * push; a.vy += ny * push;
+          b.vx -= nx * push; b.vy -= ny * push;
+        }
+      }
+
+      // Soft walls, damping, speed cap, integration. Clamp the wall thickness
+      // to a quarter of the smaller dimension so the two walls can never
+      // overlap on unusually small canvases.
+      const damp = Math.max(0, 1 - FRICTION * dt);
+      const margin = Math.min(EDGE_MARGIN, Math.min(width, height) * 0.25);
+      for (const p of particles) {
+        if (p.x < margin) p.vx += (margin - p.x) * EDGE_PUSH * dt;
+        else if (p.x > width - margin) p.vx -= (p.x - (width - margin)) * EDGE_PUSH * dt;
+        if (p.y < margin) p.vy += (margin - p.y) * EDGE_PUSH * dt;
+        else if (p.y > height - margin) p.vy -= (p.y - (height - margin)) * EDGE_PUSH * dt;
+
+        p.vx *= damp;
+        p.vy *= damp;
+
+        const sp = Math.hypot(p.vx, p.vy);
+        const cap = MAX_SPEED * p.z;
+        if (sp > cap) {
+          p.vx = (p.vx / sp) * cap;
+          p.vy = (p.vy / sp) * cap;
+        }
+
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+      }
+    }
+
+    function renderFrame() {
       const palette = THEMES[themeRef.current] || THEMES.dark;
-
-      // Ease rotation toward auto-spin + pointer target.
-      if (!reduceMotion) rot.ty += 0.0016;
-      const targetY = rot.ty + (pointer.active ? pointer.x * 0.5 : 0);
-      const targetX = -0.12 + (pointer.active ? -pointer.y * 0.32 : 0);
-      rot.y += (targetY - rot.y) * 0.055;
-      rot.x += (targetX - rot.x) * 0.055;
-
-      const pts = projectAll(t);
       ctx.clearRect(0, 0, width, height);
 
       // Connective web.
-      const maxDist = Math.min(width, height) * 0.15;
+      const maxDist = Math.min(width, height) * 0.14;
       const maxDistSq = maxDist * maxDist;
       ctx.lineWidth = 1;
-      for (let i = 0; i < pts.length; i++) {
-        const a = pts[i];
+      for (let i = 0; i < particles.length; i++) {
+        const a = particles[i];
         let links = 0;
-        for (let j = i + 1; j < pts.length && links < 6; j++) {
-          const b = pts[j];
-          const dx = a.sx - b.sx;
-          const dy = a.sy - b.sy;
+        for (let j = i + 1; j < particles.length && links < 5; j++) {
+          const b = particles[j];
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
           const dsq = dx * dx + dy * dy;
           if (dsq > maxDistSq) continue;
           links++;
           const closeness = 1 - Math.sqrt(dsq) / maxDist;
-          const depth = (a.depth + b.depth) * 0.5;
-          const alpha = closeness * palette.lineAlpha * (depth - 0.55);
+          const depth = (a.z + b.z) * 0.5;
+          const alpha = closeness * palette.lineAlpha * Math.max(0.15, depth - 0.35);
           if (alpha <= 0.008) continue;
           const gold = a.accent || b.accent;
           ctx.strokeStyle = rgba(gold ? palette.lineAccent : palette.line, alpha);
           ctx.beginPath();
-          ctx.moveTo(a.sx, a.sy);
-          ctx.lineTo(b.sx, b.sy);
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
           ctx.stroke();
         }
       }
 
-      // Nodes (back-to-front-ish; small glow on accents).
-      for (let i = 0; i < pts.length; i++) {
-        const p = pts[i];
-        const depth = Math.max(0.4, (p.depth - 0.6) * 1.6);
-        const r = p.size * p.depth;
+      // Nodes (gold accents get a soft glow).
+      for (const p of particles) {
+        const depth = Math.max(0.35, Math.min(1, (p.z - 0.3) * 0.95));
+        const r = p.size * (0.55 + p.z * 0.6);
         const base = p.accent ? palette.accent : palette.node;
         if (p.accent) {
-          const glow = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 5);
+          const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 5);
           glow.addColorStop(0, rgba(base, 0.32 * depth));
           glow.addColorStop(1, rgba(base, 0));
           ctx.fillStyle = glow;
           ctx.beginPath();
-          ctx.arc(p.sx, p.sy, r * 5, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, r * 5, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.fillStyle = rgba(base, palette.nodeAlpha * depth);
         ctx.beginPath();
-        ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
     function tick(t) {
-      renderFrame(t);
+      // Clamp dt so background-tab gaps or hitches don't explode the physics.
+      const dt = lastT ? Math.min(Math.max((t - lastT) / 1000, 0.001), 0.05) : 0.016;
+      lastT = t;
+      step(dt, t);
+      renderFrame();
       raf = window.requestAnimationFrame(tick);
     }
 
     function onPointerMove(e) {
-      pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-      pointer.y = (e.clientY / window.innerHeight) * 2 - 1;
+      const rect = canvas.getBoundingClientRect();
+      pointer.tx = e.clientX - rect.left;
+      pointer.ty = e.clientY - rect.top;
+      if (!pointer.active) {
+        // First contact: snap the magnet to the cursor so there is no fly-in
+        // from a stale position.
+        magnet.x = pointer.tx;
+        magnet.y = pointer.ty;
+      }
       pointer.active = true;
     }
-    function onPointerLeave() {
+    function onPointerOut(e) {
+      // relatedTarget === null → the pointer actually left the window.
+      if (!e.relatedTarget) pointer.active = false;
+    }
+    function onBlur() {
       pointer.active = false;
     }
     function onVisibility() {
       if (document.hidden) {
         if (raf) { window.cancelAnimationFrame(raf); raf = 0; }
+        lastT = 0; // avoid a huge dt on resume
       } else if (!raf && !reduceMotion) {
         raf = window.requestAnimationFrame(tick);
       }
     }
 
     const draw = () => {
-      renderFrame(performance.now()); // immediate static frame (works even when throttled)
+      renderFrame(); // immediate static frame (works even when throttled)
       if (!reduceMotion && !document.hidden && !raf) {
         raf = window.requestAnimationFrame(tick);
       }
@@ -228,17 +300,21 @@ export default function ParticleField({ theme = 'dark', className = '' }) {
 
     resize();
     const ro = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => { resize(); renderFrame(performance.now()); })
+      ? new ResizeObserver(() => { resize(); renderFrame(); })
       : null;
     ro?.observe(parent);
     ro?.observe(canvas);
-    window.addEventListener('resize', resize);
+    // Repaint after window resizes too: reassigning canvas.width clears the
+    // bitmap, and under prefers-reduced-motion there is no rAF loop to redraw.
+    const onWindowResize = () => { resize(); renderFrame(); };
+    window.addEventListener('resize', onWindowResize);
     // Re-measure once after first paint in case layout wasn't ready on mount.
     const initRaf = window.requestAnimationFrame(() => { resize(); draw(); });
 
     if (!coarse) {
       window.addEventListener('pointermove', onPointerMove, { passive: true });
-      window.addEventListener('pointerout', onPointerLeave);
+      window.addEventListener('pointerout', onPointerOut);
+      window.addEventListener('blur', onBlur);
     }
     document.addEventListener('visibilitychange', onVisibility);
 
@@ -248,9 +324,10 @@ export default function ParticleField({ theme = 'dark', className = '' }) {
       if (raf) window.cancelAnimationFrame(raf);
       window.cancelAnimationFrame(initRaf);
       ro?.disconnect();
-      window.removeEventListener('resize', resize);
+      window.removeEventListener('resize', onWindowResize);
       window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerout', onPointerLeave);
+      window.removeEventListener('pointerout', onPointerOut);
+      window.removeEventListener('blur', onBlur);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
