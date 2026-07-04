@@ -91,12 +91,14 @@ export function Navbar() {
           scrolled && 'px-3 sm:px-4',
         )}
       >
+        {/* Always-on glass pill, matching the accaco.com navbar language:
+            rounded-full, translucent, blurred, thin warm border. */}
         <div
           className={cn(
-            'flex items-center justify-between gap-4 transition-all duration-500 rounded-2xl',
+            'flex items-center justify-between gap-4 transition-all duration-500 rounded-full border backdrop-blur-xl',
             scrolled
-              ? 'ta-glass-strong px-4 py-2.5 border-b border-white/10 ta-shadow-cinema'
-              : 'px-2 py-1',
+              ? 'border-[color:var(--ta-gold)]/30 bg-white/70 px-4 py-2 ta-shadow-cinema'
+              : 'border-white/60 bg-white/45 px-4 py-2.5 shadow-[0_10px_32px_rgba(18,63,88,0.08)]',
           )}
         >
           <Logo />

@@ -21,7 +21,7 @@ function normalizeProgram(row) {
   if (!ALLOWED_COUNTRIES.has(country)) return null;
   if (clean(row.status).toLowerCase() !== AVAILABLE_STATUS) return null;
 
-  return {
+  const program = {
     id: clean(row.id),
     country,
     city: clean(row.city),
@@ -38,6 +38,12 @@ function normalizeProgram(row) {
     universityLogo: clean(row.universityLogo),
     universityUrl: clean(row.universityUrl),
   };
+  // Precomputed once per catalog load: per-keystroke search used to re-run
+  // toLocaleLowerCase + NFKD over 6 joined fields for every one of ~4k rows.
+  program.searchText = normalizeSearch(
+    [program.program, program.university, program.city, program.degree, program.language, program.faculty].join(' '),
+  );
+  return program;
 }
 
 export function getCountryLabel(country) {
@@ -99,14 +105,16 @@ export function searchCatalogPrograms(programs, {
     .filter((program) => !normalizedLanguage || normalizeSearch(program.language) === normalizedLanguage)
     .filter((program) => {
       if (!normalizedQuery) return true;
-      return normalizeSearch([
-        program.program,
-        program.university,
-        program.city,
-        program.degree,
-        program.language,
-        program.faculty,
-      ].join(' ')).includes(normalizedQuery);
+      const haystack = program.searchText
+        ?? normalizeSearch([
+          program.program,
+          program.university,
+          program.city,
+          program.degree,
+          program.language,
+          program.faculty,
+        ].join(' '));
+      return haystack.includes(normalizedQuery);
     });
 
   return limit > 0 ? results.slice(0, limit) : results;

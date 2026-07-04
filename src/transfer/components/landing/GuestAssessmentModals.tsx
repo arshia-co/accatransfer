@@ -47,7 +47,7 @@ import {
   type GuestAssessmentDraft,
 } from "@/lib/guest-assessment";
 import ProgramCatalogPicker, { SelectedProgramCard } from "../../../components/account/ProgramCatalogPicker";
-import { getCountryLabel } from "../../../services/programCatalogService";
+import { getCountryLabel, loadProgramCatalog } from "../../../services/programCatalogService";
 import { getTurnstileToken, isTurnstileEnabled, renderTurnstile, verifyTurnstileWithWorker } from "../../../lib/turnstile";
 import {
   computeCourseMatches,
@@ -177,6 +177,8 @@ export function GuestAssessmentModal() {
   // start — and the OCR/AI endpoint won't run — until the human check passes.
   const [humanVerified, setHumanVerified] = useState(() => !isTurnstileEnabled());
   const [gateError, setGateError] = useState(false);
+  const [gateReady, setGateReady] = useState(false); // Turnstile widget rendered
+  const [redirecting, setRedirecting] = useState(false);
   const turnstileRef = useRef<{ reset: () => void; remove: () => void } | null>(null);
   const turnstileTokenRef = useRef<string | null>(null);
 
@@ -200,7 +202,10 @@ export function GuestAssessmentModal() {
       onError: () => setGateError(true),
       onExpire: () => { turnstileTokenRef.current = null; },
     })
-      .then((controls) => { if (controls) turnstileRef.current = controls; })
+      .then((controls) => {
+        if (controls) turnstileRef.current = controls;
+        setGateReady(true);
+      })
       .catch(() => setGateError(true));
   }, []);
 
@@ -218,6 +223,9 @@ export function GuestAssessmentModal() {
     else if (stored.document || stored.documentDeferred) setStepIndex(STEPS.indexOf("current"));
     else setStepIndex(0);
     setAnalyzing(false);
+    // Prefetch + parse the (large) program catalog while the student is still
+    // on the early steps, so opening the target picker later doesn't stutter.
+    loadProgramCatalog().catch(() => { /* picker shows its own error state */ });
   }, [open]);
 
   useEffect(() => () => {
@@ -231,6 +239,8 @@ export function GuestAssessmentModal() {
     turnstileTokenRef.current = null;
     setHumanVerified(!isTurnstileEnabled());
     setGateError(false);
+    setGateReady(false);
+    setRedirecting(false);
   }, [open]);
 
   const progress = useMemo(() => Math.round((stepIndex / (STEPS.length - 1)) * 100), [stepIndex]);
@@ -324,14 +334,20 @@ export function GuestAssessmentModal() {
   };
 
   // ── Result computation ─────────────────────────────────────────────────────
+  // Only computed where it is shown (result step): goNext builds its own live
+  // matches when advancing, so earlier steps shouldn't re-run the matching
+  // engine on every keystroke in a course field.
+  const matchesNeeded = step === "result" || analyzing;
   const matches: CourseMatch[] = useMemo(
     () =>
-      computeCourseMatches(courses, {
-        currentProgram: answers.currentProgram,
-        targetProgram: answers.targetProgram,
-        gpaRatio: parseGradeRatio(answers.gpa),
-      }),
-    [courses, answers.currentProgram, answers.targetProgram, answers.gpa],
+      matchesNeeded
+        ? computeCourseMatches(courses, {
+          currentProgram: answers.currentProgram,
+          targetProgram: answers.targetProgram,
+          gpaRatio: parseGradeRatio(answers.gpa),
+        })
+        : [],
+    [matchesNeeded, courses, answers.currentProgram, answers.targetProgram, answers.gpa],
   );
   const overall = useMemo(() => overallMatch(matches), [matches]);
   const credits = creditsToEcts(answers.completedCredits, draft.creditSystem);
@@ -408,6 +424,8 @@ export function GuestAssessmentModal() {
   const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
 
   const saveAndContinue = () => {
+    if (redirecting) return; // guard double-clicks while navigation starts
+    setRedirecting(true);
     persist(draft);
     closeModal();
     // Land directly on the AI Transfer tab in the central panel (not Smart Apply).
@@ -489,6 +507,12 @@ export function GuestAssessmentModal() {
               </>
             )}
             <div ref={turnstileHostCb} className="min-h-[65px]" />
+            {!humanVerified && !gateReady && !gateError && (
+              <span className="inline-flex items-center gap-2 text-[11px] text-muted-foreground">
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+                {fa ? "در حال بارگذاری بررسی امنیتی…" : "Loading the security check…"}
+              </span>
+            )}
             {!humanVerified && gateError && (
               <button
                 type="button"
@@ -871,8 +895,8 @@ export function GuestAssessmentModal() {
                 <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
                 {fa ? "ویرایش دروس" : "Edit courses"}
               </Button>
-              <Button onClick={saveAndContinue} className="rounded-xl bg-[color:var(--ta-navy)] text-white">
-                <LogIn className="h-4 w-4" />
+              <Button onClick={saveAndContinue} disabled={redirecting} className="rounded-xl bg-[color:var(--ta-navy)] text-white">
+                {redirecting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                 {user
                   ? (fa ? "ادامه در پنل مرکزی" : "Continue in account")
                   : (fa ? "ذخیره و ادامه کامل" : "Save & unlock full process")}

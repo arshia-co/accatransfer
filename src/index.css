@@ -2750,3 +2750,31 @@ textarea {
     transition: none !important;
   }
 }
+
+/* Catalog picker perf: off-screen rows skip layout/paint entirely. */
+.catalog-program-list article {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 92px;
+}
+
+.catalog-show-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 46px;
+  margin-top: 6px;
+  border: 1px dashed rgba(7, 26, 61, 0.22);
+  border-radius: 14px;
+  background: rgba(7, 26, 61, 0.03);
+  color: #071a3d;
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.catalog-show-more:hover {
+  background: rgba(7, 26, 61, 0.06);
+  border-color: rgba(7, 26, 61, 0.35);
+}

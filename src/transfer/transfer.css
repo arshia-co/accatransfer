@@ -39,10 +39,25 @@ body.transfer-route-active {
   min-height: 100svh;
   overflow-x: clip;
   background-color: var(--ta-background);
+  /* One continuous canvas: a long vertical cream→gold→navy-tinted flow under
+     every (transparent) section, plus soft radial washes. Sections blend into
+     each other instead of meeting at dry seams. */
   background-image:
     radial-gradient(ellipse 1200px 700px at 12% -10%, rgba(243, 201, 120, 0.2), transparent 60%),
     radial-gradient(ellipse 1000px 600px at 95% 5%, rgba(255, 216, 176, 0.22), transparent 60%),
-    radial-gradient(ellipse 1400px 800px at 50% 110%, rgba(232, 210, 174, 0.18), transparent 60%);
+    radial-gradient(ellipse 900px 620px at 8% 38%, rgba(18, 63, 88, 0.05), transparent 65%),
+    radial-gradient(ellipse 1000px 700px at 94% 62%, rgba(214, 164, 107, 0.12), transparent 65%),
+    radial-gradient(ellipse 1400px 800px at 50% 110%, rgba(232, 210, 174, 0.18), transparent 60%),
+    linear-gradient(
+      180deg,
+      #fdfbf7 0%,
+      #fbf8f1 16%,
+      #f8f2e6 34%,
+      #f9f4ea 50%,
+      #f5eee0 68%,
+      #f1e8d6 84%,
+      #ead9bf 100%
+    );
   color: var(--ta-foreground);
   font-family: "Vazirmatn", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-weight: 500;
@@ -248,9 +263,44 @@ html[dir="rtl"] .transfer-app .keep-tracking {
   animation: ta-float-slow 7s ease-in-out infinite;
 }
 
+/* A transform-animated element with backdrop-filter forces the compositor to
+   re-capture and re-blur its backdrop EVERY frame. On the floating hero cards
+   the glass fill is 92% opaque white, so the blur is invisible anyway — drop
+   it and keep the float. */
+.float-slow.glass,
+.float-slow.glass-strong,
+.ta-float-slow.ta-glass,
+.ta-float-slow.ta-glass-strong {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 .spin-slow,
 .ta-spin-slow {
   animation: ta-spin-slow 40s linear infinite;
+}
+
+/* Compositor-driven replacements for what used to be per-frame JS animations
+   (framer-motion strokeDashoffset / opacity loops in the hero). */
+@keyframes ta-dash-draw {
+  0% { stroke-dashoffset: 240; }
+  62.5% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.ta-dash-line {
+  stroke-dasharray: 240;
+  stroke-dashoffset: 240;
+  animation: ta-dash-draw 3.2s linear infinite;
+}
+
+@keyframes ta-scan-blink {
+  0%, 60%, 100% { opacity: 0; }
+  30% { opacity: 1; }
+}
+
+.ta-scan-line {
+  animation: ta-scan-blink 4s ease-in-out infinite;
 }
 
 .no-scrollbar {
@@ -281,6 +331,9 @@ html[dir="rtl"] .transfer-app .keep-tracking {
   }
 }
 
+/* Cursor perf notes: hover grow/shrink rides the SAME transform the rAF loop
+   writes (translate + scale) so it never touches layout; no backdrop-filter on
+   a moving element (it forces a backdrop re-capture every frame). */
 .acca-cursor-dot,
 .acca-cursor-ring {
   position: fixed;
@@ -288,7 +341,8 @@ html[dir="rtl"] .transfer-app .keep-tracking {
   left: 0;
   border-radius: 9999px;
   pointer-events: none;
-  will-change: transform, width, height, opacity;
+  will-change: transform;
+  contain: layout style;
 }
 
 .acca-cursor-dot {
@@ -304,21 +358,12 @@ html[dir="rtl"] .transfer-app .keep-tracking {
   border: 1px solid rgba(217, 164, 65, 0.55);
   background: radial-gradient(circle, rgba(232, 210, 174, 0.1), transparent 75%);
   box-shadow: 0 0 18px rgba(217, 164, 65, 0.18);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
-  transition: width 260ms ease, height 260ms ease, opacity 260ms ease;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 
 .acca-cursor-ring.acca-cursor--hover {
-  width: 56px;
-  height: 56px;
   border-color: rgba(243, 201, 120, 0.85);
   box-shadow: 0 0 28px rgba(243, 201, 120, 0.35);
-}
-
-.acca-cursor-dot.acca-cursor--hover {
-  width: 5px;
-  height: 5px;
 }
 
 .acca-cursor-ripple {
