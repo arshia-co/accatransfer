@@ -1,9 +1,9 @@
-import { motion, useScroll, useTransform, useMotionValue, animate } from "framer-motion";
+import { motion, useMotionValue, animate } from "framer-motion";
 import {
   ArrowRight, FileText, GraduationCap, Sparkles, CheckCircle2,
   AlertTriangle, TrendingUp, ScanLine, Network, ShieldCheck,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import { useUI } from "@/lib/ui-context";
 import { trackWhatsAppClick } from "@/lib/analytics";
@@ -12,15 +12,15 @@ export function Hero() {
   const { tr, lang } = useI18n();
   const { openModal } = useUI();
   const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const y1 = useTransform(scrollYProgress, [0, 1], [0, -60]);
-  const y2 = useTransform(scrollYProgress, [0, 1], [0, -120]);
 
-  // Animated counter for hero score
+  // Animated counter for hero score — written straight into the DOM node so
+  // the whole Hero doesn't re-render ~130 times during the 2.2s count-up.
   const score = useMotionValue(0);
-  const [scoreText, setScoreText] = useState("0");
+  const scoreRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    const u = score.on("change", (v) => setScoreText(Math.round(v).toString()));
+    const u = score.on("change", (v) => {
+      if (scoreRef.current) scoreRef.current.textContent = Math.round(v).toString();
+    });
     const c = animate(score, 87, { duration: 2.2, delay: 0.6, ease: [0.16, 1, 0.3, 1] });
     return () => { u(); c.stop(); };
   }, [score]);
@@ -30,13 +30,14 @@ export function Hero() {
       {/* Cinematic ACCA brand background — deep navy, warm gold light */}
       <div className="absolute inset-0 bg-grid opacity-40" />
       <div className="absolute inset-0 vignette" />
-      <motion.div
-        style={{ y: y2 }}
-        className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1200px] h-[1200px] rounded-full bg-[radial-gradient(circle_at_center,rgba(18,63,88,0.55),transparent_60%)] blur-3xl"
-      />
+      {/* Static: scroll-transforming a 1200px blurred layer re-composited a
+          huge texture every frame and made the cursor stutter while scrolling. */}
+      <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1200px] h-[1200px] rounded-full bg-[radial-gradient(circle_at_center,rgba(18,63,88,0.55),transparent_60%)] blur-3xl" />
       <div className="absolute top-1/3 right-0 w-[600px] h-[620px] rounded-full bg-[radial-gradient(circle_at_center,rgba(200,150,95,0.22),transparent_70%)] blur-3xl" />
       <div className="absolute -bottom-40 left-1/4 w-[700px] h-[700px] rounded-full bg-[radial-gradient(circle,rgba(214,164,107,0.14),transparent_70%)] blur-3xl" />
-      <div className="absolute inset-0 bg-noise opacity-[0.35] pointer-events-none mix-blend-overlay" />
+      {/* Plain opacity: mix-blend forced the whole hero into an offscreen
+          buffer that re-composited whenever the cursor moved over it. */}
+      <div className="absolute inset-0 bg-noise opacity-[0.16] pointer-events-none" />
 
       {/* ACCA geometric corner accents */}
       <div className="pointer-events-none absolute top-24 left-0 w-40 h-40 bg-acca-pattern-strong opacity-60 [mask-image:linear-gradient(135deg,black,transparent)]" />
@@ -100,7 +101,7 @@ export function Hero() {
               <button
                 type="button"
                 onClick={() => openModal("assessment")}
-                className="group relative inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-[#D6A46B] to-[#C8965F] text-[#0B2F42] text-sm font-medium px-6 py-3.5 ring-1 ring-white/20 shadow-[0_15px_60px_-10px_oklch(0.5_0.22_264_/_0.8)] hover:brightness-110 transition overflow-hidden"
+                className="group relative inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-[#D6A46B] to-[#C8965F] text-[#0B2F42] text-sm font-medium px-6 py-3.5 ring-1 ring-white/20 shadow-[0_15px_60px_-10px_rgba(185,130,69,0.65)] hover:brightness-110 transition overflow-hidden"
               >
                 <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                 <Sparkles className="w-4 h-4 relative" />
@@ -158,7 +159,10 @@ export function Hero() {
 
           {/* CINEMATIC STAGE */}
           <div className="lg:col-span-6 relative h-[360px] sm:h-[440px] lg:h-[620px] ltr-stage" dir="ltr">
-            <motion.div style={{ y: y2 }} className="absolute inset-0">
+            {/* Static container: the stage holds several glass cards, and a
+                scroll-linked transform forced their backdrops to re-capture
+                every scrolled frame. */}
+            <div className="absolute inset-0">
               {/* Connecting energy lines — desktop only, BEHIND core */}
               <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 hidden lg:block" viewBox="0 0 500 600" preserveAspectRatio="xMidYMid meet">
                 <defs>
@@ -179,15 +183,15 @@ export function Hero() {
                   { d: "M 70 540 C 170 470, 200 360, 250 300", g: "lineg", delay: 0.9 },
                 ].map((p, i) => (
                   <g key={i}>
-                    <motion.path
+                    {/* CSS-driven draw loop — framer animated strokeDashoffset
+                        from JS on every frame for all five paths. */}
+                    <path
                       d={p.d}
                       stroke={`url(#${p.g})`}
                       strokeWidth="1"
                       fill="none"
-                      strokeDasharray="240"
-                      initial={{ strokeDashoffset: 240 }}
-                      animate={{ strokeDashoffset: 0 }}
-                      transition={{ duration: 2, delay: 0.8 + p.delay, repeat: Infinity, repeatDelay: 1.2 }}
+                      className="ta-dash-line"
+                      style={{ animationDelay: `${0.8 + p.delay}s` }}
                     />
                   </g>
                 ))}
@@ -205,24 +209,28 @@ export function Hero() {
                   <div className="absolute inset-4 rounded-full border border-gold/15" style={{ animation: "spin-slow 50s linear infinite reverse" }} />
                   <div className="absolute inset-8 rounded-full border border-white/5" />
                   <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(200,150,95,0.35),transparent_70%)] blur-2xl" />
+                  {/* Orbit dots on compositor-driven CSS rotation — framer ran
+                      four infinite JS rotate loops writing styles every frame. */}
                   {[0, 1, 2, 3].map((i) => (
-                    <motion.div
+                    <div
                       key={i}
-                      className="absolute top-1/2 left-1/2 w-full h-full"
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 18 + i * 4, repeat: Infinity, ease: "linear" }}
-                      style={{ transformOrigin: "center", x: "-50%", y: "-50%" }}
+                      className="absolute top-1/2 left-1/2 w-full h-full -translate-x-1/2 -translate-y-1/2"
                     >
-                      <span
-                        className="absolute w-1.5 h-1.5 rounded-full bg-cyan glow-cyan"
-                        style={{ top: `${50 - 50 * Math.cos(i)}%`, left: "100%", transform: "translate(-50%,-50%)" }}
-                      />
-                    </motion.div>
+                      <div
+                        className="w-full h-full"
+                        style={{ animation: `ta-spin-slow ${18 + i * 4}s linear infinite` }}
+                      >
+                        <span
+                          className="absolute w-1.5 h-1.5 rounded-full bg-cyan glow-cyan"
+                          style={{ top: `${50 - 50 * Math.cos(i)}%`, left: "100%", transform: "translate(-50%,-50%)" }}
+                        />
+                      </div>
+                    </div>
                   ))}
                   <div className="absolute inset-12 sm:inset-14 glass-strong rounded-full flex flex-col items-center justify-center ring-1 ring-cyan/20">
                     <div className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">AI Engine</div>
                     <div className="mt-1.5 font-display text-[48px] sm:text-[56px] leading-none text-gradient">
-                      {scoreText}<span className="text-foreground/50 text-2xl">%</span>
+                      <span ref={scoreRef}>0</span><span className="text-foreground/50 text-2xl">%</span>
                     </div>
                     <div className="mt-1 text-[10px] text-muted-foreground">estimated match</div>
                     <div className="mt-2 flex items-center gap-1 text-[9px] text-success">
@@ -230,14 +238,9 @@ export function Hero() {
                       Analyzing 18 courses
                     </div>
                   </div>
-                  <motion.div
-                    className="absolute inset-12 sm:inset-14 rounded-full overflow-hidden pointer-events-none"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: [0, 1, 0] }}
-                    transition={{ duration: 2.4, repeat: Infinity, repeatDelay: 1.6 }}
-                  >
+                  <div className="absolute inset-12 sm:inset-14 rounded-full overflow-hidden pointer-events-none ta-scan-line">
                     <div className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan to-transparent" style={{ top: "50%", boxShadow: "0 0 12px rgba(200,150,95,0.8)" }} />
-                  </motion.div>
+                  </div>
                 </div>
               </motion.div>
 
@@ -282,7 +285,6 @@ export function Hero() {
               </motion.div>
 
               <motion.div
-                style={{ y: y1 }}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 1, delay: 0.7 }}
@@ -345,7 +347,7 @@ export function Hero() {
                   Recommended <span className="text-foreground">Year 2 entry</span> · Istanbul Medipol
                 </div>
               </motion.div>
-            </motion.div>
+            </div>
           </div>
         </div>
 

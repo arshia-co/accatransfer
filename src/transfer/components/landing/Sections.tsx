@@ -131,7 +131,7 @@ export function DashboardPreview() {
 
   return (
     <section id="product" className="relative py-28 px-6">
-      <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-[radial-gradient(circle,oklch(0.5_0.22_264_/_0.12),transparent_70%)] blur-3xl" />
+      <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-[radial-gradient(circle,rgba(18,63,88,0.12),transparent_70%)] blur-3xl" />
       <div className="mx-auto max-w-7xl relative">
         <motion.div {...fadeUp}>
           <SectionHeading
@@ -551,7 +551,7 @@ export function RolesSection() {
                 transition={{ duration: 0.6, delay: (i % 2) * 0.08 }}
                 className="group relative glass-strong rounded-3xl p-7 hover:bg-white/[0.06] transition overflow-hidden"
               >
-                <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-[radial-gradient(circle,oklch(0.5_0.22_264_/_0.18),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity blur-3xl" />
+                <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-[radial-gradient(circle,rgba(214,164,107,0.22),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity blur-3xl" />
                 <div className="relative">
                   <div className="flex items-center justify-between">
                     <div className="w-12 h-12 rounded-2xl glass flex items-center justify-center">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowUpLeft, BookOpen, Building2, Check, ExternalLink, GraduationCap,
@@ -69,6 +69,7 @@ const UI = {
     inList: (n) => `${n} گزینه در فهرست`, current: 'انتخاب فعلی', notSelected: 'هنوز انتخاب نشده',
     saving: 'در حال ذخیره...',
     uniInfo: 'اطلاعات دانشگاه', add: 'افزودن به فهرست', remove: 'حذف از فهرست',
+    showMore: (n) => `نمایش ${n} گزینه دیگر`,
   },
   en: {
     searchPlaceholder: 'Program, university, city or language…',
@@ -82,6 +83,7 @@ const UI = {
     inList: (n) => `${n} in shortlist`, current: 'Current selection', notSelected: 'Nothing selected yet',
     saving: 'Saving…',
     uniInfo: 'University info', add: 'Add to shortlist', remove: 'Remove from shortlist',
+    showMore: (n) => `Show ${n} more`,
   },
 };
 
@@ -118,6 +120,38 @@ function ProgramLogo({ program }) {
     </span>
   );
 }
+
+// Render at most a page of rows at a time: the unfiltered catalog is ~4k
+// programs and mounting them all in one commit froze the modal open animation.
+const PAGE_SIZE = 90;
+
+// Memoized row — a keystroke or a selection toggle re-renders only the rows
+// whose props actually changed, not thousands of them.
+const ProgramRow = memo(function ProgramRow({ program, isSelected, lang, t, onToggle }) {
+  return (
+    <article className={isSelected ? 'is-selected' : ''}>
+      <ProgramLogo program={program} />
+      <button type="button" className="catalog-program-main" onClick={() => onToggle(program)}>
+        <span><MapPin size={12} />{countryLabel(program.country, lang)} · {program.city}</span>
+        <h3>{program.program}</h3>
+        <p>{program.university}</p>
+        <div>
+          {program.degree && <small>{program.degree}</small>}
+          {program.language && <small>{program.language}</small>}
+          {program.tuitionFee && <small>{program.tuitionFee}</small>}
+        </div>
+      </button>
+      <div className="catalog-program-actions">
+        <a href={buildAccaUniversityUrl(program.university)} target="_blank" rel="noreferrer" title={t.uniInfo}>
+          <ExternalLink size={15} />
+        </a>
+        <button type="button" onClick={() => onToggle(program)} aria-label={isSelected ? t.remove : t.add}>
+          {isSelected ? <Check size={16} /> : <ArrowUpLeft size={16} />}
+        </button>
+      </div>
+    </article>
+  );
+});
 
 export function SelectedProgramCard({ selection, product, onChange, lang = 'fa' }) {
   const t = CARD_UI[lang] || CARD_UI.fa;
@@ -245,13 +279,13 @@ export default function ProgramCatalogPicker({
     };
   }, [initialProgramId, initialUniversity, initialSelection, open]);
 
-  const toggleProgram = (program) => {
+  const toggleProgram = useCallback((program) => {
     setSelectedList((list) => (
       list.some((item) => item.id === program.id)
         ? list.filter((item) => item.id !== program.id)
         : [...list, program]
     ));
-  };
+  }, []);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -293,13 +327,27 @@ export default function ProgramCatalogPicker({
     return [...new Set(langs)].sort((a, b) => a.localeCompare(b));
   }, [country, degree, programs, university]);
 
+  // Deferred query: typing updates the input immediately while the (possibly
+  // thousands-strong) filtered list catches up in a lower-priority render.
+  const deferredQuery = useDeferredValue(query);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
   const visiblePrograms = useMemo(() => searchCatalogPrograms(programs, {
-    query,
+    query: deferredQuery,
     country,
     university,
     degree,
     language,
-  }), [country, degree, programs, query, university, language]);
+  }), [country, degree, programs, deferredQuery, university, language]);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [deferredQuery, country, university, degree, language]);
+
+  const shownPrograms = useMemo(
+    () => visiblePrograms.slice(0, visibleCount),
+    [visiblePrograms, visibleCount],
+  );
 
   return (
     <AnimatePresence>
@@ -393,32 +441,27 @@ export default function ProgramCatalogPicker({
               ) : error ? (
                 <div className="catalog-picker-state is-error">{error}</div>
               ) : visiblePrograms.length ? (
-                visiblePrograms.map((program) => {
-                  const isSelected = selectedList.some((item) => item.id === program.id);
-                  return (
-                    <article key={program.id} className={isSelected ? 'is-selected' : ''}>
-                      <ProgramLogo program={program} />
-                      <button type="button" className="catalog-program-main" onClick={() => toggleProgram(program)}>
-                        <span><MapPin size={12} />{countryLabel(program.country, lang)} · {program.city}</span>
-                        <h3>{program.program}</h3>
-                        <p>{program.university}</p>
-                        <div>
-                          {program.degree && <small>{program.degree}</small>}
-                          {program.language && <small>{program.language}</small>}
-                          {program.tuitionFee && <small>{program.tuitionFee}</small>}
-                        </div>
-                      </button>
-                      <div className="catalog-program-actions">
-                        <a href={buildAccaUniversityUrl(program.university)} target="_blank" rel="noreferrer" title={t.uniInfo}>
-                          <ExternalLink size={15} />
-                        </a>
-                        <button type="button" onClick={() => toggleProgram(program)} aria-label={isSelected ? t.remove : t.add}>
-                          {isSelected ? <Check size={16} /> : <ArrowUpLeft size={16} />}
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })
+                <>
+                  {shownPrograms.map((program) => (
+                    <ProgramRow
+                      key={program.id}
+                      program={program}
+                      isSelected={selectedList.some((item) => item.id === program.id)}
+                      lang={lang}
+                      t={t}
+                      onToggle={toggleProgram}
+                    />
+                  ))}
+                  {visiblePrograms.length > shownPrograms.length && (
+                    <button
+                      type="button"
+                      className="catalog-show-more"
+                      onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+                    >
+                      {t.showMore(visiblePrograms.length - shownPrograms.length)}
+                    </button>
+                  )}
+                </>
               ) : (
                 <div className="catalog-picker-state">{t.empty}</div>
               )}

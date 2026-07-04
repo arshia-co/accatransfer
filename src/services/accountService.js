@@ -685,6 +685,39 @@ function fileToDataUrl(file) {
   });
 }
 
+const GUEST_OCR_MAX_BYTES = 10 * 1024 * 1024;
+const GUEST_OCR_MAX_EDGE = 1600; // px — OCR doesn't need full phone-camera res
+
+/**
+ * Downscale large images off the sync path before base64-encoding: a 10MB
+ * phone photo became a ~14MB base64 string whose allocation + JSON stringify
+ * froze the OCR spinner. createImageBitmap + toBlob are async (decode happens
+ * off the main thread); the JPEG re-encode also shrinks the payload ~10x.
+ */
+async function shrinkImageForOcr(file) {
+  if (!file.type?.startsWith('image/')) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = GUEST_OCR_MAX_EDGE / Math.max(bitmap.width, bitmap.height);
+    if (scale >= 1 && file.size < 2 * 1024 * 1024) {
+      bitmap.close?.();
+      return file; // already small — keep the original bytes
+    }
+    const w = Math.round(bitmap.width * Math.min(1, scale));
+    const h = Math.round(bitmap.height * Math.min(1, scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+  } catch {
+    return file; // any decode failure → send the original, server validates
+  }
+}
+
 /**
  * Guest (no-login) transcript OCR. Sends the image directly to the public
  * `guest-transcript-ocr` Edge Function and returns the extracted courses/GPA for
@@ -692,9 +725,13 @@ function fileToDataUrl(file) {
  */
 export async function guestTranscriptOcr(file, turnstileToken = null) {
   const client = requireClient();
-  const imageBase64 = await fileToDataUrl(file);
+  if (file.size > GUEST_OCR_MAX_BYTES) {
+    throw new Error('حجم فایل بیشتر از ۱۰ مگابایت است؛ لطفاً نسخه کم‌حجم‌تری آپلود کنید.');
+  }
+  const payloadFile = await shrinkImageForOcr(file);
+  const imageBase64 = await fileToDataUrl(payloadFile);
   const { data, error } = await client.functions.invoke('guest-transcript-ocr', {
-    body: { imageBase64, mimeType: file.type || 'image/jpeg', fileName: file.name, turnstileToken },
+    body: { imageBase64, mimeType: payloadFile.type || 'image/jpeg', fileName: payloadFile.name, turnstileToken },
   });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);

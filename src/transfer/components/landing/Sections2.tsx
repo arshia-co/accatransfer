@@ -55,7 +55,7 @@ export function MatchingSection() {
 
             <div className="hidden lg:flex flex-col items-center justify-center">
               <div className="relative w-28 h-28">
-                <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle,oklch(0.5_0.22_264_/_0.5),transparent_60%)] blur-xl" />
+                <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(18,63,88,0.45),transparent_60%)] blur-xl" />
                 <div className="absolute inset-2 rounded-full border border-cyan/30 spin-slow" />
                 <div className="absolute inset-5 glass-strong rounded-full flex flex-col items-center justify-center">
                   <Sparkles className="w-5 h-5 text-cyan" />
@@ -349,7 +349,7 @@ export function FinalCTA() {
           className="relative overflow-hidden rounded-[2rem] p-10 sm:p-16 text-center glass-strong shadow-cinema ring-glow"
         >
           <div className="absolute inset-0 bg-grid opacity-30" />
-          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-[radial-gradient(circle,oklch(0.5_0.22_264_/_0.3),transparent_60%)] blur-3xl" />
+          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-[radial-gradient(circle,rgba(18,63,88,0.3),transparent_60%)] blur-3xl" />
           <div className="relative">
             <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl text-gradient leading-tight">
               {tr("finalTitle")}
@@ -359,7 +359,7 @@ export function FinalCTA() {
               <button
                 type="button"
                 onClick={() => openModal("assessment")}
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-[#D6A46B] to-[#C8965F] text-[#0B2F42] text-sm font-medium px-6 py-3 ring-1 ring-white/15 shadow-[0_15px_50px_-10px_oklch(0.5_0.22_264_/_0.7)] hover:brightness-110 transition"
+                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-[#D6A46B] to-[#C8965F] text-[#0B2F42] text-sm font-medium px-6 py-3 ring-1 ring-white/15 shadow-[0_15px_50px_-10px_rgba(185,130,69,0.6)] hover:brightness-110 transition"
               >
                 <Sparkles className="w-4 h-4" /> {lang === "fa" ? "بررسی شانس انتقالی" : "Check My Transfer Eligibility"}
               </button>
@@ -412,8 +412,11 @@ export function Footer() {
     },
   ];
   return (
-    <footer className="relative pt-20 pb-10 px-6 bg-[#0B2F42] overflow-hidden">
-      <div className="absolute top-0 inset-x-0 divider-gold" />
+    <footer className="relative pt-32 pb-10 px-6 bg-[#0B2F42] overflow-hidden">
+      {/* Soft gradient hand-off from the cream page into the navy footer —
+          replaces the old hard seam; the gold divider now sits inside it. */}
+      <div className="absolute -top-px inset-x-0 h-28 bg-gradient-to-b from-[#fcfaf4] via-[#fcfaf4]/45 to-transparent pointer-events-none" />
+      <div className="absolute top-24 inset-x-0 divider-gold opacity-70" />
       <div className="absolute inset-x-0 top-0 h-24 bg-acca-pattern opacity-50 pointer-events-none" />
       <div className="absolute inset-x-0 bottom-0 h-16 bg-acca-pattern opacity-30 pointer-events-none" />
 
