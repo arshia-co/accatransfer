@@ -95,7 +95,7 @@ export function Navbar() {
             rounded-full, translucent, blurred, thin warm border. */}
         <div
           className={cn(
-            'flex items-center justify-between gap-4 transition-all duration-500 rounded-full border backdrop-blur-xl',
+            'flex items-center justify-between gap-4 transition-all duration-500 rounded-full border backdrop-blur-md',
             scrolled
               ? 'border-[color:var(--ta-gold)]/30 bg-white/70 px-4 py-2 ta-shadow-cinema'
               : 'border-white/60 bg-white/45 px-4 py-2.5 shadow-[0_10px_32px_rgba(18,63,88,0.08)]',

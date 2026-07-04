@@ -171,6 +171,18 @@ html[dir="rtl"] .transfer-app .keep-tracking {
   backdrop-filter: blur(30px) saturate(200%);
 }
 
+/* Solid dialog surface: at 92%+ opacity the backdrop blur was invisible, but
+   animating a backdrop-filtered surface (modal zoom-in/out) re-captured the
+   backdrop every frame and stuttered the whole page. */
+.ta-panel-solid {
+  border: 1px solid rgba(18, 63, 88, 0.1);
+  background: rgba(255, 252, 246, 0.985);
+  box-shadow:
+    0 1px 3px rgba(18, 63, 88, 0.05),
+    0 20px 50px -22px rgba(18, 63, 88, 0.18),
+    0 8px 24px -16px rgba(18, 63, 88, 0.1);
+}
+
 .theme-dark .glass,
 .theme-dark .ta-glass {
   border-color: rgba(255, 255, 255, 0.09);
@@ -312,29 +324,11 @@ html[dir="rtl"] .transfer-app .keep-tracking {
   display: none;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  html.acca-cursor-active,
-  html.acca-cursor-active body {
-    cursor: none;
-  }
-
-  html.acca-cursor-active a,
-  html.acca-cursor-active button,
-  html.acca-cursor-active [role="button"] {
-    cursor: none;
-  }
-
-  html.acca-cursor-active input,
-  html.acca-cursor-active textarea,
-  html.acca-cursor-active select {
-    cursor: auto;
-  }
-}
-
-/* Cursor perf notes: hover grow/shrink rides the SAME transform the rAF loop
-   writes (translate + scale) so it never touches layout; no backdrop-filter on
-   a moving element (it forces a backdrop re-capture every frame). */
-.acca-cursor-dot,
+/* Cursor design note: the NATIVE cursor stays visible — it is drawn by the OS
+   compositor and therefore can never lag, no matter what the main thread is
+   doing. The gold ring is pure decoration trailing behind it. Hover grow rides
+   the same composited transform (translate + scale); no layout, no
+   backdrop-filter. */
 .acca-cursor-ring {
   position: fixed;
   top: 0;
@@ -343,16 +337,6 @@ html[dir="rtl"] .transfer-app .keep-tracking {
   pointer-events: none;
   will-change: transform;
   contain: layout style;
-}
-
-.acca-cursor-dot {
-  width: 9px;
-  height: 9px;
-  background: radial-gradient(circle at 30% 30%, #f3c978 0%, #d9a441 65%, #b98245 100%);
-  box-shadow: 0 0 10px rgba(217, 164, 65, 0.55);
-}
-
-.acca-cursor-ring {
   width: 38px;
   height: 38px;
   border: 1px solid rgba(217, 164, 65, 0.55);
@@ -385,10 +369,5 @@ html[dir="rtl"] .transfer-app .keep-tracking {
 @media (prefers-reduced-motion: reduce), (hover: none), (pointer: coarse) {
   .acca-cursor-layer {
     display: none !important;
-  }
-
-  html.acca-cursor-active,
-  html.acca-cursor-active body {
-    cursor: auto;
   }
 }

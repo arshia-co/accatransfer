@@ -454,7 +454,7 @@ export function GuestAssessmentModal() {
   return (
     <Dialog open={open} onOpenChange={(value) => !value && closeModal()} modal={!pickerOpen}>
       <DialogContent
-        className="sm:max-w-xl ta-glass-strong max-h-[90vh] overflow-y-auto"
+        className="sm:max-w-xl ta-panel-solid max-h-[90vh] overflow-y-auto"
         onPointerDownOutside={(e) => { if (pickerOpen) e.preventDefault(); }}
         onInteractOutside={(e) => { if (pickerOpen) e.preventDefault(); }}
         onEscapeKeyDown={(e) => { if (pickerOpen) { e.preventDefault(); setPickerOpen(false); } }}
@@ -971,7 +971,7 @@ export function FormMemoryModal() {
 
   return (
     <Dialog open={open} onOpenChange={(value) => !value && closeModal()}>
-      <DialogContent className="sm:max-w-2xl ta-glass-strong max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl ta-panel-solid max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <span className="mb-2 inline-flex w-fit items-center gap-2 rounded-full bg-[color:var(--ta-gold)]/10 px-3 py-1.5 text-[11px] font-semibold text-[color:var(--ta-gold-deep)]">
             <Database className="h-3.5 w-3.5" />
