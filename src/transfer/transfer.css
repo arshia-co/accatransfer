@@ -39,24 +39,23 @@ body.transfer-route-active {
   min-height: 100svh;
   overflow-x: clip;
   background-color: var(--ta-background);
-  /* One continuous canvas: a long vertical cream→gold→navy-tinted flow under
-     every (transparent) section, plus soft radial washes. Sections blend into
-     each other instead of meeting at dry seams. */
+  /* One continuous canvas under every (transparent) section. Direction per
+     design feedback: the DEEPER cream sits at the top so the hero hands off to
+     the next section with zero visible colour break, then the page gradually
+     brightens toward the bottom for readability. */
   background-image:
     radial-gradient(ellipse 1200px 700px at 12% -10%, rgba(243, 201, 120, 0.2), transparent 60%),
     radial-gradient(ellipse 1000px 600px at 95% 5%, rgba(255, 216, 176, 0.22), transparent 60%),
     radial-gradient(ellipse 900px 620px at 8% 38%, rgba(18, 63, 88, 0.05), transparent 65%),
-    radial-gradient(ellipse 1000px 700px at 94% 62%, rgba(214, 164, 107, 0.12), transparent 65%),
-    radial-gradient(ellipse 1400px 800px at 50% 110%, rgba(232, 210, 174, 0.18), transparent 60%),
+    radial-gradient(ellipse 1000px 700px at 94% 62%, rgba(214, 164, 107, 0.1), transparent 65%),
     linear-gradient(
       180deg,
-      #fdfbf7 0%,
-      #fbf8f1 16%,
-      #f8f2e6 34%,
-      #f9f4ea 50%,
-      #f5eee0 68%,
-      #f1e8d6 84%,
-      #ead9bf 100%
+      #f4ecda 0%,
+      #efe5d0 12%,
+      #f1e8d6 30%,
+      #f5eee1 52%,
+      #f9f4ea 76%,
+      #fcfaf4 100%
     );
   color: var(--ta-foreground);
   font-family: "Vazirmatn", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -324,32 +323,8 @@ html[dir="rtl"] .transfer-app .keep-tracking {
   display: none;
 }
 
-/* Cursor design note: the NATIVE cursor stays visible — it is drawn by the OS
-   compositor and therefore can never lag, no matter what the main thread is
-   doing. The gold ring is pure decoration trailing behind it. Hover grow rides
-   the same composited transform (translate + scale); no layout, no
-   backdrop-filter. */
-.acca-cursor-ring {
-  position: fixed;
-  top: 0;
-  left: 0;
-  border-radius: 9999px;
-  pointer-events: none;
-  will-change: transform;
-  contain: layout style;
-  width: 38px;
-  height: 38px;
-  border: 1px solid rgba(217, 164, 65, 0.55);
-  background: radial-gradient(circle, rgba(232, 210, 174, 0.1), transparent 75%);
-  box-shadow: 0 0 18px rgba(217, 164, 65, 0.18);
-  transition: border-color 200ms ease, box-shadow 200ms ease;
-}
-
-.acca-cursor-ring.acca-cursor--hover {
-  border-color: rgba(243, 201, 120, 0.85);
-  box-shadow: 0 0 28px rgba(243, 201, 120, 0.35);
-}
-
+/* Cursor design note: the NATIVE cursor is the pointer (OS-composited, can
+   never lag). No ring trails it any more — only the short click ripple. */
 .acca-cursor-ripple {
   position: fixed;
   width: 14px;

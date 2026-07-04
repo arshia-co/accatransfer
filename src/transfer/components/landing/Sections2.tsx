@@ -415,7 +415,7 @@ export function Footer() {
     <footer className="relative pt-32 pb-10 px-6 bg-[#0B2F42] overflow-hidden">
       {/* Soft gradient hand-off from the cream page into the navy footer —
           replaces the old hard seam; the gold divider now sits inside it. */}
-      <div className="absolute -top-px inset-x-0 h-28 bg-gradient-to-b from-[#ead9bf] via-[#ead9bf]/45 to-transparent pointer-events-none" />
+      <div className="absolute -top-px inset-x-0 h-28 bg-gradient-to-b from-[#fcfaf4] via-[#fcfaf4]/45 to-transparent pointer-events-none" />
       <div className="absolute top-24 inset-x-0 divider-gold opacity-70" />
       <div className="absolute inset-x-0 top-0 h-24 bg-acca-pattern opacity-50 pointer-events-none" />
       <div className="absolute inset-x-0 bottom-0 h-16 bg-acca-pattern opacity-30 pointer-events-none" />
