@@ -2812,3 +2812,559 @@ textarea {
   background: rgba(7, 26, 61, 0.06);
   border-color: rgba(7, 26, 61, 0.35);
 }
+
+/* Account night mode: high-contrast glass over the shared ACCA star field. */
+.account-central[data-theme="dark"] {
+  --account-night-text: #f5f8ff;
+  --account-night-muted: #b9c8dc;
+  --account-night-soft: #91a7c0;
+  --account-night-gold: #f1d18a;
+  --account-night-green: #72e1c0;
+  --account-night-red: #ff9f8f;
+  --account-night-glass: rgba(12, 29, 50, 0.62);
+  --account-night-glass-strong: rgba(9, 24, 43, 0.8);
+  --account-night-inner: rgba(237, 245, 255, 0.065);
+  --account-night-border: rgba(218, 232, 255, 0.15);
+  --account-night-border-soft: rgba(218, 232, 255, 0.1);
+  isolation: isolate;
+  color: var(--account-night-text);
+  background:
+    radial-gradient(80% 52% at 82% 4%, rgba(34, 109, 126, 0.24), transparent 68%),
+    radial-gradient(68% 45% at 8% 10%, rgba(184, 146, 76, 0.18), transparent 70%),
+    linear-gradient(145deg, #071426 0%, #0a1e34 48%, #04101f 100%);
+}
+
+.account-central[data-theme="dark"] .account-ambient {
+  z-index: 0;
+  overflow: hidden;
+  opacity: 1;
+  background:
+    radial-gradient(circle at 10% 7%, rgba(222, 185, 108, 0.18), transparent 30%),
+    radial-gradient(circle at 88% 16%, rgba(42, 191, 159, 0.14), transparent 31%),
+    radial-gradient(circle at 51% 93%, rgba(91, 124, 193, 0.14), transparent 38%);
+}
+
+.account-central[data-theme="dark"] .account-ambient::before,
+.account-central[data-theme="dark"] .account-ambient::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+}
+
+.account-central[data-theme="dark"] .account-ambient::before {
+  z-index: 0;
+  opacity: 0.28;
+  background-image:
+    linear-gradient(rgba(210, 226, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(210, 226, 255, 0.045) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse at center, #000 18%, transparent 78%);
+}
+
+.account-central[data-theme="dark"] .account-ambient::after {
+  z-index: 2;
+  background: radial-gradient(120% 82% at 50% 40%, transparent 45%, rgba(2, 8, 18, 0.68) 100%);
+}
+
+.account-central[data-theme="dark"] .account-star-field {
+  z-index: 1;
+  opacity: 0.76;
+  mix-blend-mode: screen;
+  filter: saturate(112%);
+}
+
+.account-central[data-theme="dark"] .account-header {
+  border-color: rgba(230, 239, 255, 0.16);
+  background:
+    linear-gradient(135deg, rgba(35, 58, 84, 0.76), rgba(10, 27, 48, 0.61)),
+    rgba(8, 22, 39, 0.56);
+  box-shadow:
+    0 22px 64px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.13);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+.account-central[data-theme="dark"] :is(
+  .account-identity,
+  .account-profile-editor,
+  .account-card,
+  .account-notifications,
+  .account-product-tabs,
+  .account-product-space,
+  .application-readiness,
+  .acceptance-journey,
+  .account-transfer-history,
+  .account-result-section,
+  .doc-dropzone,
+  .doc-stage
+) {
+  color: var(--account-night-text);
+  border-color: var(--account-night-border);
+  background:
+    linear-gradient(145deg, rgba(194, 216, 249, 0.075), rgba(194, 216, 249, 0.025) 58%, rgba(204, 169, 99, 0.035)),
+    var(--account-night-glass);
+  box-shadow:
+    0 22px 68px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+}
+
+.account-central[data-theme="dark"] :is(h1, h2, h3, h4),
+.account-central[data-theme="dark"] :is(
+  .account-identity b,
+  .account-card strong,
+  .account-card-head b,
+  .account-profile-summary-copy h2,
+  .account-profile-summary-grid b,
+  .account-notifications-head b,
+  .account-notification-list b,
+  .account-product-head h2,
+  .account-product-summary b,
+  .account-journey-step b,
+  .account-next-action b,
+  .account-result-section li b,
+  .account-transfer-command b,
+  .account-transfer-stats b,
+  .account-university-grid b,
+  .account-university-grid strong,
+  .account-equiv-pair b,
+  .application-program-check b,
+  .application-guidance-note b,
+  .application-requirement-title,
+  .application-requirement b,
+  .acceptance-record b,
+  .acceptance-doc b,
+  .acceptance-facts b,
+  .acceptance-company-head,
+  .acceptance-company-item b,
+  .acceptance-steps b,
+  .acceptance-visa b
+) {
+  color: var(--account-night-text);
+}
+
+.account-central[data-theme="dark"] :is(
+  .account-header-meta,
+  .account-hero p,
+  .account-identity small,
+  .account-profile-summary-copy p,
+  .account-profile-summary-grid small,
+  .account-card p,
+  .account-notifications-head small,
+  .account-notification-list small,
+  .account-notification-list p,
+  .account-product-head p,
+  .account-product-summary small,
+  .account-journey-step,
+  .account-next-action span,
+  .account-result-section li span,
+  .account-transfer-command small,
+  .account-transfer-command span,
+  .account-transfer-stats small,
+  .account-university-grid small,
+  .account-university-grid em,
+  .account-equiv-pair span,
+  .account-equiv-pair b em,
+  .account-equiv-note,
+  .application-readiness-head p,
+  .application-program-check small,
+  .application-guidance-note small,
+  .application-requirement small,
+  .application-consent,
+  .acceptance-head p,
+  .acceptance-record small,
+  .acceptance-doc small,
+  .acceptance-facts small,
+  .acceptance-company-item small,
+  .acceptance-steps small,
+  .acceptance-visa small,
+  .acceptance-help-note,
+  .account-footer-note
+) {
+  color: var(--account-night-muted);
+}
+
+.account-central[data-theme="dark"] .account-kicker {
+  color: var(--account-night-gold);
+  text-shadow: 0 0 20px rgba(241, 209, 138, 0.22);
+}
+
+.account-central[data-theme="dark"] .account-identity {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035));
+}
+
+.account-central[data-theme="dark"] .account-identity > span,
+.account-central[data-theme="dark"] .account-profile-avatar {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, #163a5b, #0f7b70);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28), 0 0 28px rgba(66, 207, 177, 0.08);
+}
+
+.account-central[data-theme="dark"] .account-identity > svg,
+.account-central[data-theme="dark"] .account-header-chip svg {
+  color: var(--account-night-green);
+  filter: drop-shadow(0 0 7px rgba(114, 225, 192, 0.25));
+}
+
+.account-central[data-theme="dark"] .account-profile-state > span,
+.account-central[data-theme="dark"] .account-status {
+  color: var(--account-night-green);
+  border: 1px solid rgba(114, 225, 192, 0.16);
+  background: rgba(36, 184, 148, 0.12);
+}
+
+.account-central[data-theme="dark"] .account-profile-summary-grid div,
+.account-central[data-theme="dark"] .account-notification-list article,
+.account-central[data-theme="dark"] .account-product-summary > div,
+.account-central[data-theme="dark"] .account-transfer-command,
+.account-central[data-theme="dark"] .account-transfer-command > div,
+.account-central[data-theme="dark"] .account-transfer-stats > div,
+.account-central[data-theme="dark"] .account-university-grid article,
+.account-central[data-theme="dark"] .account-equiv-row,
+.account-central[data-theme="dark"] .account-result-section li,
+.account-central[data-theme="dark"] .application-program-check,
+.account-central[data-theme="dark"] .application-guidance-note,
+.account-central[data-theme="dark"] .application-requirement-groups > section,
+.account-central[data-theme="dark"] .application-consent,
+.account-central[data-theme="dark"] .acceptance-record > div,
+.account-central[data-theme="dark"] .acceptance-doc,
+.account-central[data-theme="dark"] .acceptance-facts > div,
+.account-central[data-theme="dark"] .acceptance-company-item,
+.account-central[data-theme="dark"] .acceptance-steps li,
+.account-central[data-theme="dark"] .acceptance-visa {
+  border-color: var(--account-night-border-soft);
+  background: var(--account-night-inner);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.account-central[data-theme="dark"] .account-card-head > span:first-child,
+.account-central[data-theme="dark"] .account-card-head button,
+.account-central[data-theme="dark"] .account-notifications-head > span,
+.account-central[data-theme="dark"] .application-requirement-icon,
+.account-central[data-theme="dark"] .acceptance-step-icon,
+.account-central[data-theme="dark"] .acceptance-company-icon {
+  color: var(--account-night-gold);
+  border: 1px solid rgba(241, 209, 138, 0.12);
+  background: rgba(241, 209, 138, 0.1);
+}
+
+.account-central[data-theme="dark"] .account-card-head button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.account-central[data-theme="dark"] .account-notification-list article.is-unread {
+  border-color: rgba(114, 225, 192, 0.23);
+  background: linear-gradient(135deg, rgba(31, 150, 122, 0.15), rgba(32, 88, 108, 0.08));
+}
+
+.account-central[data-theme="dark"] .account-notification-list button,
+.account-central[data-theme="dark"] .account-product-actions a,
+.account-central[data-theme="dark"] .account-transfer-history button,
+.account-central[data-theme="dark"] .application-guidance-note a,
+.account-central[data-theme="dark"] .application-submit-actions button.secondary,
+.account-central[data-theme="dark"] .account-ocr-toggle {
+  color: var(--account-night-text);
+  border-color: var(--account-night-border);
+  background: rgba(255, 255, 255, 0.085);
+}
+
+.account-central[data-theme="dark"] .account-notification-list button:hover:not(:disabled),
+.account-central[data-theme="dark"] .account-product-actions a:hover {
+  border-color: rgba(114, 225, 192, 0.28);
+  background: rgba(114, 225, 192, 0.12);
+}
+
+.account-central[data-theme="dark"] .account-product-tabs button {
+  color: var(--account-night-muted);
+}
+
+.account-central[data-theme="dark"] .account-product-tabs button.is-active {
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: linear-gradient(135deg, rgba(80, 108, 145, 0.42), rgba(33, 60, 91, 0.48));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.account-central[data-theme="dark"] .account-journey {
+  border-color: var(--account-night-border-soft);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.account-central[data-theme="dark"] .account-journey-step > span {
+  color: var(--account-night-soft);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.account-central[data-theme="dark"] .account-journey-step.is-current {
+  color: var(--account-night-text);
+  background: rgba(255, 255, 255, 0.11);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+}
+
+.account-central[data-theme="dark"] .account-journey-step.is-complete {
+  color: var(--account-night-green);
+}
+
+.account-central[data-theme="dark"] .account-progress,
+.account-central[data-theme="dark"] .application-readiness-progress,
+.account-central[data-theme="dark"] .account-university-grid article > span,
+.account-central[data-theme="dark"] .account-equiv-bar {
+  background: rgba(225, 237, 255, 0.13);
+}
+
+.account-central[data-theme="dark"] .account-transfer-command > span {
+  color: var(--account-night-gold);
+  background: rgba(241, 209, 138, 0.13);
+}
+
+.account-central[data-theme="dark"] .account-transfer-command strong.is-live,
+.account-central[data-theme="dark"] .account-transfer-legend .is-review,
+.account-central[data-theme="dark"] .account-equiv-score.is-review,
+.account-central[data-theme="dark"] .account-equiv-badge.is-review,
+.account-central[data-theme="dark"] .account-doc-checklist .is-pending {
+  color: var(--account-night-gold);
+  background: rgba(218, 170, 76, 0.14);
+}
+
+.account-central[data-theme="dark"] .account-transfer-command strong.is-official,
+.account-central[data-theme="dark"] .account-transfer-legend .is-likely,
+.account-central[data-theme="dark"] .account-equiv-score.is-likely,
+.account-central[data-theme="dark"] .account-equiv-badge.is-likely,
+.account-central[data-theme="dark"] .account-doc-checklist .is-ok {
+  color: var(--account-night-green);
+  background: rgba(36, 184, 148, 0.13);
+}
+
+.account-central[data-theme="dark"] .account-transfer-legend .is-unlikely,
+.account-central[data-theme="dark"] .account-equiv-score.is-unlikely,
+.account-central[data-theme="dark"] .account-equiv-badge.is-unlikely,
+.account-central[data-theme="dark"] .account-doc-checklist .is-missing,
+.account-central[data-theme="dark"] .application-block-note {
+  color: var(--account-night-red);
+  background: rgba(214, 89, 72, 0.12);
+}
+
+.account-central[data-theme="dark"] .account-doc-checklist .is-present {
+  color: #b9d8f0;
+  background: rgba(102, 157, 196, 0.14);
+}
+
+.account-central[data-theme="dark"] .account-doc-checklist em {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.account-central[data-theme="dark"] .account-transfer-live-note,
+.account-central[data-theme="dark"] .account-result-reality,
+.account-central[data-theme="dark"] .acceptance-pending-note {
+  color: var(--account-night-muted);
+  border-color: rgba(241, 209, 138, 0.15);
+  background: rgba(241, 209, 138, 0.075);
+}
+
+.account-central[data-theme="dark"] .account-transfer-guest-file,
+.account-central[data-theme="dark"] .account-selection-notice,
+.account-central[data-theme="dark"] .application-program-check.is-ready,
+.account-central[data-theme="dark"] .application-submitted {
+  color: var(--account-night-green);
+  border-color: rgba(114, 225, 192, 0.2);
+  background: rgba(36, 184, 148, 0.1);
+}
+
+.account-central[data-theme="dark"] .account-transfer-guest-file b,
+.account-central[data-theme="dark"] .account-transfer-guest-file span {
+  color: var(--account-night-text);
+}
+
+.account-central[data-theme="dark"] .account-course-table th {
+  color: var(--account-night-muted);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.account-central[data-theme="dark"] .account-course-table td {
+  color: var(--account-night-text);
+  border-color: var(--account-night-border-soft);
+}
+
+.account-central[data-theme="dark"] .account-doc,
+.account-central[data-theme="dark"] .account-company-doc,
+.account-central[data-theme="dark"] .account-ocr-panel,
+.account-central[data-theme="dark"] .account-ocr-detail,
+.account-central[data-theme="dark"] .account-course-extraction {
+  border-color: var(--account-night-border-soft);
+  color: var(--account-night-text);
+  background: var(--account-night-inner);
+}
+
+.account-central[data-theme="dark"] :is(
+  .account-doc-info b,
+  .account-company-doc b,
+  .account-company-docs-head b,
+  .account-ocr-summary b,
+  .account-ocr-fields b,
+  .doc-stage-body > b
+) {
+  color: var(--account-night-text);
+}
+
+.account-central[data-theme="dark"] :is(
+  .account-doc-info small,
+  .account-company-doc small,
+  .account-ocr-summary p,
+  .account-ocr-fields small,
+  .account-ocr-disclaimer,
+  .doc-stage-body small,
+  .doc-dropzone small
+) {
+  color: var(--account-night-muted);
+}
+
+.account-central[data-theme="dark"] .account-doc-conf,
+.account-central[data-theme="dark"] .account-doc-icon-btn,
+.account-central[data-theme="dark"] .account-doc-human,
+.account-central[data-theme="dark"] .account-doc-delete,
+.account-central[data-theme="dark"] .doc-stage-kind select,
+.account-central[data-theme="dark"] .doc-stage-cancel,
+.account-central[data-theme="dark"] .account-product-upload select {
+  color: var(--account-night-text);
+  border-color: var(--account-night-border);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.account-central[data-theme="dark"] .doc-dropzone b {
+  color: var(--account-night-text);
+}
+
+.account-central[data-theme="dark"] .application-requirement-title {
+  border-color: var(--account-night-border-soft);
+}
+
+.account-central[data-theme="dark"] .application-requirement-title b {
+  color: var(--account-night-soft);
+}
+
+.account-central[data-theme="dark"] .application-requirement {
+  border-color: rgba(218, 232, 255, 0.075);
+}
+
+.account-central[data-theme="dark"] .application-requirement-state strong {
+  color: var(--account-night-gold);
+}
+
+.account-central[data-theme="dark"] .application-requirement.is-ready .application-requirement-state strong,
+.account-central[data-theme="dark"] .application-requirement.is-ready .application-requirement-icon {
+  color: var(--account-night-green);
+}
+
+.account-central[data-theme="dark"] .acceptance-record {
+  background: var(--account-night-border-soft);
+}
+
+.account-central[data-theme="dark"] .acceptance-status.is-pending,
+.account-central[data-theme="dark"] .acceptance-status.is-conditional {
+  color: var(--account-night-gold);
+  background: rgba(218, 170, 76, 0.15);
+}
+
+.account-central[data-theme="dark"] .acceptance-status.is-accepted {
+  color: var(--account-night-green);
+  background: rgba(36, 184, 148, 0.14);
+}
+
+.account-central[data-theme="dark"] .acceptance-ocr-text {
+  color: var(--account-night-muted);
+}
+
+.account-central[data-theme="dark"] .acceptance-offer-warning {
+  color: #ffd29a;
+  border-color: rgba(255, 178, 91, 0.24);
+  background: rgba(211, 125, 43, 0.12);
+}
+
+.account-central[data-theme="dark"] .acceptance-offer-warning b,
+.account-central[data-theme="dark"] .acceptance-offer-warning small {
+  color: inherit;
+}
+
+.account-central[data-theme="dark"] .account-profile-modal {
+  color: var(--account-night-text);
+  border-color: rgba(230, 239, 255, 0.17);
+  background:
+    radial-gradient(circle at 82% -12%, rgba(36, 184, 148, 0.18), transparent 42%),
+    var(--account-night-glass-strong);
+  box-shadow: 0 38px 120px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.account-central[data-theme="dark"] .account-profile-modal-grid,
+.account-central[data-theme="dark"] .account-profile-security {
+  color: var(--account-night-text);
+  border-color: var(--account-night-border-soft);
+  background: var(--account-night-inner);
+}
+
+.account-central[data-theme="dark"] :is(
+  .account-profile-modal-head p,
+  .account-profile-photo-block,
+  .account-profile-fields label,
+  .account-profile-security small
+) {
+  color: var(--account-night-muted);
+}
+
+.account-central[data-theme="dark"] .account-profile-input,
+.account-central[data-theme="dark"] .account-profile-pass input {
+  color: var(--account-night-text);
+  border-color: var(--account-night-border);
+  background: rgba(255, 255, 255, 0.075);
+}
+
+.account-central[data-theme="dark"] .account-profile-input::placeholder,
+.account-central[data-theme="dark"] .account-profile-pass input::placeholder {
+  color: var(--account-night-soft);
+}
+
+.account-central[data-theme="dark"] .account-profile-modal-close,
+.account-central[data-theme="dark"] .account-profile-pass-toggle,
+.account-central[data-theme="dark"] .account-profile-reset-link {
+  color: var(--account-night-text);
+  border-color: var(--account-night-border);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.account-central[data-theme="dark"] .account-empty,
+.account-central[data-theme="dark"] .account-loading-line {
+  color: var(--account-night-muted);
+}
+
+.account-central[data-theme="dark"] .account-error-banner,
+.account-central[data-theme="dark"] .account-profile-error {
+  color: #ffb1a4;
+  border-color: rgba(255, 122, 103, 0.24);
+  background: rgba(170, 47, 35, 0.16);
+}
+
+.account-central[data-theme="dark"] :is(button, a, input, select):focus-visible {
+  outline: 2px solid var(--account-night-green);
+  outline-offset: 3px;
+}
+
+@media (max-width: 560px) {
+  .account-central[data-theme="dark"] .account-star-field {
+    opacity: 0.62;
+  }
+
+  .account-central[data-theme="dark"] :is(
+    .account-profile-editor,
+    .account-card,
+    .account-notifications,
+    .account-product-space,
+    .application-readiness,
+    .acceptance-journey
+  ) {
+    -webkit-backdrop-filter: blur(13px) saturate(145%);
+    backdrop-filter: blur(13px) saturate(145%);
+  }
+}

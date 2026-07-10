@@ -35,6 +35,7 @@ import DocumentUploader from './DocumentUploader';
 import ApplicationReadinessPanel from './ApplicationReadinessPanel';
 import AcceptanceJourneyPanel from './AcceptanceJourneyPanel';
 import ProfileEditor from './ProfileEditor';
+import ParticleField from '../gateway/ParticleField';
 
 const EMPTY_DATA = {
   profile: null,
@@ -1301,7 +1302,9 @@ export default function AccountPortal() {
 
   return (
     <main className="account-page account-central" data-theme={theme} dir={fa ? 'rtl' : 'ltr'}>
-      <div className="account-ambient" />
+      <div className="account-ambient" aria-hidden="true">
+        {theme === 'dark' && <ParticleField theme="dark" className="account-star-field" />}
+      </div>
       <header className="account-header">
         <a href="/" className="account-brand"><LayoutGrid size={17} /> ACCA AI Services</a>
         <div className="account-header-meta">
