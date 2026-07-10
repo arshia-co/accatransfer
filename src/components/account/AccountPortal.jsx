@@ -1068,9 +1068,11 @@ export default function AccountPortal() {
   const transferSelection = data.selections.find((item) => item.product === 'ai_transfer') || null;
   const smartSubmission = data.submissions.find((item) => item.product === 'smart_apply') || null;
   const transferSubmission = data.submissions.find((item) => item.product === 'ai_transfer') || null;
-  const acceptanceDoc = data.documents.find((doc) => doc.document_kind === 'acceptance_letter') || null;
   const smartDocuments = data.documents.filter((item) => item.product === 'smart_apply');
   const transferDocuments = data.documents.filter((item) => item.product === 'ai_transfer');
+  const legacyAcceptanceDoc = data.documents.find((doc) => doc.document_kind === 'acceptance_letter' && !doc.product) || null;
+  const smartAcceptanceDoc = smartDocuments.find((doc) => doc.document_kind === 'acceptance_letter') || legacyAcceptanceDoc;
+  const transferAcceptanceDoc = transferDocuments.find((doc) => doc.document_kind === 'acceptance_letter') || legacyAcceptanceDoc;
   // Student-uploaded only (admin/company docs are surfaced in After Application).
   const smartStudentDocs = smartDocuments.filter((doc) => !COMPANY_DOC_KINDS.has(doc.document_kind));
   const transferStudentDocs = transferDocuments.filter((doc) => !COMPANY_DOC_KINDS.has(doc.document_kind));
@@ -1483,10 +1485,10 @@ export default function AccountPortal() {
             busy={submissionBusy}
             onSubmit={submitApplication}
           />
-          {(smartSubmission || acceptanceDoc || smartCompanyDocs.length > 0) && (
+          {(smartSubmission || smartAcceptanceDoc || smartCompanyDocs.length > 0) && (
             <AcceptanceJourneyPanel
               submission={smartSubmission}
-              acceptanceDoc={acceptanceDoc}
+              acceptanceDoc={smartAcceptanceDoc}
               companyDocs={smartCompanyDocs}
               onRequestRegistrationHelp={() => requestRegistrationHelp('smart_apply')}
               helpBusy={helpBusy}
@@ -1585,10 +1587,10 @@ export default function AccountPortal() {
             busy={submissionBusy}
             onSubmit={submitTransferApplication}
           />
-          {(transferSubmission || acceptanceDoc || transferCompanyDocs.length > 0) && (
+          {(transferSubmission || transferAcceptanceDoc || transferCompanyDocs.length > 0) && (
             <AcceptanceJourneyPanel
               submission={transferSubmission}
-              acceptanceDoc={acceptanceDoc}
+              acceptanceDoc={transferAcceptanceDoc}
               companyDocs={transferCompanyDocs}
               onRequestRegistrationHelp={() => requestRegistrationHelp('ai_transfer')}
               helpBusy={helpBusy}

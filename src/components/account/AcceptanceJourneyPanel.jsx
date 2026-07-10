@@ -106,15 +106,21 @@ export default function AcceptanceJourneyPanel({
   const ocrSummary = acceptanceDoc?.ai_extraction?.summary;
   const offerDetails = acceptanceDoc?.ai_extraction?.offer_details;
   const offerStatus = offerDetails?.status;
-  const isConditional = offerStatus === 'conditional_offer' || offerStatus === 'provisional_acceptance';
-  const isFinal = offerStatus === 'final_acceptance';
-  const needsReview = accepted && acceptanceDoc?.review_status === 'admin_review';
+  // The admin-controlled application status is authoritative. OCR describes
+  // the letter, but its document review flag must not downgrade an issued offer.
+  const adminStatus = submission?.admin_status || acceptanceDoc?.quality_report?.admin_status;
+  const hasAdminAcceptanceStatus = adminStatus === 'conditional_acceptance' || adminStatus === 'final_acceptance';
+  const isFinal = adminStatus === 'final_acceptance'
+    || (!hasAdminAcceptanceStatus && offerStatus === 'final_acceptance');
+  const isConditional = adminStatus === 'conditional_acceptance'
+    || (!hasAdminAcceptanceStatus && (offerStatus === 'conditional_offer' || offerStatus === 'provisional_acceptance'));
+  const needsReview = accepted && !isConditional && !isFinal && acceptanceDoc?.review_status === 'admin_review';
   const acceptanceTitle = !accepted
     ? 'درخواست شما ثبت شد — مراحل بعدی'
     : isFinal
       ? 'پذیرش نهایی شما صادر شد 🎉'
       : isConditional
-        ? 'پذیرش مشروط شما صادر شد'
+        ? 'پذیرش اولیه شما صادر شد'
         : needsReview
           ? 'نامه دانشگاه دریافت شد و نیازمند بررسی است'
           : 'نامه پذیرش شما دریافت شد';
@@ -123,7 +129,7 @@ export default function AcceptanceJourneyPanel({
     : isFinal
       ? 'پذیرش نهایی آماده است؛ فایل را دانلود کنید و مراحل ثبت‌نام را ادامه دهید.'
       : isConditional
-        ? 'این نامه شامل شرط‌هایی است که باید پیش از صدور پذیرش نهایی تکمیل شوند.'
+        ? 'پذیرش اولیه شما صادر شده است؛ شرط‌های داخل نامه را بررسی و برای صدور پذیرش نهایی تکمیل کنید.'
         : needsReview
           ? 'فایل در حساب شما ذخیره شده است؛ نتیجه OCR یا نوع نامه باید توسط تیم پذیرش بررسی شود.'
           : 'فایل دانشگاه آماده است؛ آن را دانلود کنید و توضیح هوشمند را با متن اصلی تطبیق دهید.';
@@ -132,7 +138,7 @@ export default function AcceptanceJourneyPanel({
     : isFinal
       ? 'پذیرش نهایی'
       : isConditional
-        ? 'پذیرش مشروط'
+        ? 'پذیرش اولیه صادر شد'
         : needsReview
           ? 'نیازمند بررسی'
           : 'نامه دریافت شد';
