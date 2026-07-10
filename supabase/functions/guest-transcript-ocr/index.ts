@@ -66,9 +66,10 @@ function transcriptSchema() {
           properties: {
             title: { type: "string" },
             grade: nullableString,
+            credits: nullableString,
             is_core: { type: "boolean" },
           },
-          required: ["title", "grade", "is_core"],
+          required: ["title", "grade", "credits", "is_core"],
         },
       },
       confidence: { type: "integer", minimum: 0, maximum: 100 },
@@ -82,8 +83,10 @@ const PROMPT = `Read this student academic transcript and extract its courses an
 Rules:
 - Text may be Persian, English, Turkish, Arabic, or mixed.
 - Extract every clearly readable course with its grade exactly as written. Never invent a value; use null for an unreadable grade.
+- Extract each course credit/ECTS/AKTS value if present; use null when not clearly tied to that course.
 - Set is_core=true for the main/specialised courses of the student's major; set is_core=false for general courses (e.g. history, physical education, general electives).
 - Extract the overall GPA and its scale if present.
+- If the transcript contains a grading legend, use it to understand the scale, but keep course grades exactly as printed (for example AA, BA, BB, CB, CC, DC, DD, FF).
 - If the image is not a transcript, set is_transcript=false and return an empty courses array.
 - This is a preliminary educational estimate, not official verification or a guaranteed result.`;
 

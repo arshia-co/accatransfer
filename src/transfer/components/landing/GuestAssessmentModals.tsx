@@ -296,10 +296,12 @@ export function GuestAssessmentModal() {
       turnstileRef.current?.reset();
       const extracted: CoreCourse[] = (Array.isArray(result?.courses) ? result.courses : [])
         .filter((c: { title?: string }) => Boolean(c?.title && c.title.trim()))
-        .map((c: { title: string; grade?: string | null }) => ({
+        .map((c: { title: string; grade?: string | null; credits?: string | number | null; is_core?: boolean | null }) => ({
           ...newCoreCourse(),
           name: c.title.trim(),
           grade: (c.grade ?? "").trim(),
+          credits: c.credits ?? null,
+          isCore: c.is_core ?? null,
         }));
       if (!result?.is_transcript || !extracted.length) {
         setOcr({ status: "empty" });
@@ -344,6 +346,7 @@ export function GuestAssessmentModal() {
         ? computeCourseMatches(courses, {
           currentProgram: answers.currentProgram,
           targetProgram: answers.targetProgram,
+          targetUniversity: answers.targetUniversity,
           gpaRatio: parseGradeRatio(answers.gpa),
         })
         : [],
@@ -389,6 +392,7 @@ export function GuestAssessmentModal() {
       const liveMatches = computeCourseMatches(cleanCourses, {
         currentProgram: answers.currentProgram,
         targetProgram: answers.targetProgram,
+        targetUniversity: answers.targetUniversity,
         gpaRatio: parseGradeRatio(answers.gpa),
       });
       const liveOverall = overallMatch(liveMatches);

@@ -217,6 +217,7 @@ export async function migrateGuestTransferDraft(user) {
       current_university: draft.answers?.currentUniversity || null,
       current_program: draft.answers?.currentProgram || null,
       target_country: draft.answers?.targetCountry || null,
+      target_university: draft.answers?.targetUniversity || null,
       target_program: draft.answers?.targetProgram || null,
       status: guestResult ? 'preliminary_result' : 'draft',
       ai_result: guestResult ? {

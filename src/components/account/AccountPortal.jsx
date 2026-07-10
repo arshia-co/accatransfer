@@ -495,7 +495,7 @@ function buildLiveTransferResult({ assessment, selection, transcript, documents 
   const gpaScale = firstNonEmpty(fields.gpa_scale, saved?.detected_gpa_scale, savedAnswers.gpaScale);
   const completedCredits = firstNonEmpty(fields.total_credits, saved?.detected_completed_credits, savedAnswers.completedCredits);
   const gpaRatio = parseGradeRatio(gpaScale && gpa && !String(gpa).includes('/') ? `${gpa}/${gpaScale}` : gpa);
-  const matches = computeCourseMatches(courses, { currentProgram, targetProgram, gpaRatio });
+  const matches = computeCourseMatches(courses, { currentProgram, targetProgram, targetUniversity, gpaRatio });
   const overall = overallMatch(matches);
   const existingScore = saved?.estimated_transfer_match ?? saved?.analysis_summary?.estimated_transfer_match;
   const baseScore = overall.total
@@ -619,6 +619,7 @@ function TransferAnalysisPanel({ result, documents = [] }) {
     return computeCourseMatches(guestCourses, {
       currentProgram: answers.currentProgram || '',
       targetProgram: answers.targetProgram || '',
+      targetUniversity: answers.targetUniversity || result.target_university || '',
       gpaRatio: parseGradeRatio(answers.gpa || ''),
     }).map((m) => ({
       name: m.name,
