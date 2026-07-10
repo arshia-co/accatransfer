@@ -1,8 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
 import { getTurnstileToken } from '../lib/turnstile';
 import {
-  migrateGuestTransferDraft,
+  migrateGuestTransferDraftV2 as migrateGuestTransferDraft,
   sendAccountAdminAlert,
   sendAccountEventEmail,
   upsertProfile,
@@ -20,6 +20,8 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(Boolean(supabase));
   const [authRequest, setAuthRequest] = useState(null);
+  const sessionMigrationRef = useRef('');
+  const sessionUser = session?.user || null;
 
   useEffect(() => {
     if (!supabase) {
@@ -42,6 +44,16 @@ export function AuthProvider({ children }) {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!sessionUser?.id) return;
+    const key = `${sessionUser.id}:${sessionUser.email || ''}`;
+    if (sessionMigrationRef.current === key) return;
+    sessionMigrationRef.current = key;
+    migrateGuestTransferDraft(sessionUser).catch(() => {
+      sessionMigrationRef.current = '';
+    });
+  }, [sessionUser]);
 
   const openAuth = useCallback((product = 'smart_apply', options = {}) => {
     setAuthRequest({ product, ...options });

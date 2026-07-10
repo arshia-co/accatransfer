@@ -327,11 +327,15 @@ export function GuestAssessmentModal() {
 
   const onFile = (file: File | undefined) => {
     if (!file) return;
-    setDraft((d) => ({
-      ...d,
-      document: { name: file.name, size: file.size, type: file.type || "document" },
-      documentDeferred: false,
-    }));
+    setDraft((d) => {
+      const next = {
+        ...d,
+        document: { name: file.name, size: file.size, type: file.type || "document" },
+        documentDeferred: false,
+      };
+      saveGuestAssessment(next);
+      return next;
+    });
     runGuestOcr(file);
   };
 

@@ -8,7 +8,9 @@ import {
 import type { CoreCourse } from "./course-matching";
 
 export const GUEST_ASSESSMENT_KEY = "acca-transfer-guest-assessment";
+export const GUEST_ASSESSMENT_HISTORY_KEY = "acca-transfer-guest-assessment-history-v1";
 export const GUEST_ASSESSMENT_EVENT = "acca-transfer-guest-assessment-change";
+const GUEST_ASSESSMENT_HISTORY_LIMIT = 12;
 
 export type GuestDocument = {
   name: string;
@@ -131,18 +133,65 @@ export function readGuestAssessment(): GuestAssessmentDraft | null {
   try {
     const stored = window.localStorage.getItem(GUEST_ASSESSMENT_KEY);
     if (!stored) return null;
-    const parsed = JSON.parse(stored) as GuestAssessmentDraft;
-    return {
-      ...createGuestAssessmentDraft(),
-      ...parsed,
-      answers: { ...emptyAnswers(), ...parsed.answers },
-      creditSystem: parsed.creditSystem ?? 'ects',
-      targetSelection: Array.isArray(parsed.targetSelection) ? parsed.targetSelection : [],
-      courses: Array.isArray(parsed.courses) ? parsed.courses : [],
-      preliminaryResult: parsed.preliminaryResult ?? null,
-    };
+    return normalizeGuestAssessmentDraft(JSON.parse(stored) as Partial<GuestAssessmentDraft>);
   } catch {
     return null;
+  }
+}
+
+function normalizeGuestAssessmentDraft(parsed: Partial<GuestAssessmentDraft>): GuestAssessmentDraft {
+  return {
+    ...createGuestAssessmentDraft(),
+    ...parsed,
+    answers: { ...emptyAnswers(), ...parsed.answers },
+    creditSystem: parsed.creditSystem ?? 'ects',
+    targetSelection: Array.isArray(parsed.targetSelection) ? parsed.targetSelection : [],
+    courses: Array.isArray(parsed.courses) ? parsed.courses : [],
+    preliminaryResult: parsed.preliminaryResult ?? null,
+  };
+}
+
+function hasMeaningfulGuestAssessment(draft: GuestAssessmentDraft | null) {
+  if (!draft) return false;
+  return Boolean(
+    draft.document
+    || draft.preliminaryResult
+    || draft.completed
+    || draft.targetSelection.length
+    || draft.courses.some((course) => course.name?.trim() || course.grade?.trim())
+    || Object.values(draft.answers || {}).some(Boolean)
+  );
+}
+
+export function readGuestAssessmentHistory(): GuestAssessmentDraft[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(GUEST_ASSESSMENT_HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => normalizeGuestAssessmentDraft(item as Partial<GuestAssessmentDraft>))
+      .filter(hasMeaningfulGuestAssessment)
+      .sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt))
+      .slice(0, GUEST_ASSESSMENT_HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+export function archiveGuestAssessment(draft: GuestAssessmentDraft | null) {
+  if (typeof window === "undefined" || !hasMeaningfulGuestAssessment(draft)) return;
+  const normalized = normalizeGuestAssessmentDraft(draft);
+  const merged = [
+    normalized,
+    ...readGuestAssessmentHistory().filter((item) => item.id !== normalized.id),
+  ]
+    .sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt))
+    .slice(0, GUEST_ASSESSMENT_HISTORY_LIMIT);
+  try {
+    window.localStorage.setItem(GUEST_ASSESSMENT_HISTORY_KEY, JSON.stringify(merged));
+  } catch {
+    // Private mode / quota failure should never block the transfer flow.
   }
 }
 
@@ -150,12 +199,14 @@ export function saveGuestAssessment(draft: GuestAssessmentDraft) {
   if (typeof window === "undefined") return;
   const next = { ...draft, updatedAt: new Date().toISOString() };
   window.localStorage.setItem(GUEST_ASSESSMENT_KEY, JSON.stringify(next));
+  archiveGuestAssessment(next);
   window.dispatchEvent(new CustomEvent(GUEST_ASSESSMENT_EVENT, { detail: next }));
   return next;
 }
 
 export function clearGuestAssessment() {
   if (typeof window === "undefined") return;
+  archiveGuestAssessment(readGuestAssessment());
   window.localStorage.removeItem(GUEST_ASSESSMENT_KEY);
   window.dispatchEvent(new CustomEvent(GUEST_ASSESSMENT_EVENT, { detail: null }));
 }

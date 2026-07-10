@@ -15,13 +15,12 @@ import {
   createDocumentSignedUrl,
   deleteStudentDocument,
   listCentralAccountData,
-  migrateGuestTransferDraft,
+  migrateGuestTransferDraftV2 as migrateGuestTransferDraft,
   requestDocumentOcr,
   requestHumanDocumentReview,
   requestApplicationSubmission,
   requestTransferAnalysis,
   upsertProgramSelection,
-  uploadStudentDocument,
 } from '../../services/accountService';
 import { getDocumentOcrDecision, OCR_CONTINUE_THRESHOLD } from '../../services/documentReviewPolicy';
 import ProgramCatalogPicker, { SelectedProgramCard } from './ProgramCatalogPicker';
@@ -659,6 +658,7 @@ function TransferAnalysisPanel({ result, documents = [] }) {
   ];
   const missingDocuments = Array.isArray(result.missing_documents) ? result.missing_documents : [];
   const risks = Array.isArray(result.risk_factors) ? result.risk_factors : [];
+  const guestDocument = result.guest_document || null;
   return (
     <motion.div className="account-transfer-result" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
       <div className="account-transfer-hero">
@@ -710,6 +710,20 @@ function TransferAnalysisPanel({ result, documents = [] }) {
           <span><b>{requiredMissing}</b> مدرک اجباری ناقص</span>
         </div>
       ) : null}
+
+      {guestDocument?.uploaded_before_login && (
+        <div className="account-transfer-guest-file">
+          <Paperclip size={15} />
+          <div>
+            <b>حافظه فایل قبل از ورود وصل شد</b>
+            <span>
+              {guestDocument.name || 'ریز‌نمرات انتخاب‌شده قبل از ورود'} در نتیجه شما ذخیره شده است؛
+              برای ادامه رسمی، همین فایل را در آپلود امن پنل دوباره انتخاب کنید تا به Storage حساب شما منتقل و OCR کامل‌تر اجرا شود.
+            </span>
+          </div>
+          {guestDocument.size ? <strong>{formatSize(guestDocument.size)}</strong> : null}
+        </div>
+      )}
 
       {result.is_live_preview && (
         <div className="account-transfer-live-note">
@@ -767,7 +781,6 @@ function TransferAnalysisPanel({ result, documents = [] }) {
           <div className="account-result-section-title"><FileCheck2 size={17} /><h4>چک‌لیست مدارک انتقالی</h4><small>{verifiedDocs}/{checklist.length}</small></div>
           <div className="account-doc-checklist">
             {checklist.map((item) => {
-              const ok = item.verified || item.present;
               return (
                 <span key={item.kind} className={item.verified ? 'is-ok' : item.present ? 'is-present' : item.mandatory ? 'is-missing' : 'is-pending'}>
                   {item.verified ? <CheckCircle2 size={13} /> : item.present ? <Clock3 size={13} /> : item.mandatory ? <AlertTriangle size={13} /> : <FileText size={13} />}
@@ -813,6 +826,43 @@ function TransferAnalysisPanel({ result, documents = [] }) {
   );
 }
 
+function TransferHistoryPanel({ assessments = [], activeId, onSelect }) {
+  if (!Array.isArray(assessments) || assessments.length <= 1) return null;
+  return (
+    <section className="account-transfer-history">
+      <div className="account-result-section-title">
+        <Clock3 size={17} />
+        <h4>تاریخچه ارزیابی های AI Transfer</h4>
+        <small>{assessments.length} نسخه ذخیره شده</small>
+      </div>
+      <div className="account-transfer-history-list">
+        {assessments.slice(0, 8).map((assessment, index) => {
+          const result = assessment.ai_result || {};
+          const score = result.estimated_transfer_match ?? result.analysis_summary?.estimated_transfer_match;
+          const target = firstNonEmpty(assessment.target_program, result.target_program, result.guest_answers?.targetProgram);
+          const university = firstNonEmpty(assessment.target_university, result.target_university, result.guest_answers?.targetUniversity);
+          const sourceFile = result.guest_document?.name;
+          const active = assessment.id === activeId;
+          return (
+            <article key={assessment.id} className={active ? 'is-active' : ''}>
+              <div>
+                <b>{index === 0 ? 'آخرین ارزیابی' : `ارزیابی قبلی ${index}`}</b>
+                <small>{target || 'رشته مقصد نامشخص'}{university ? ` · ${university}` : ''}</small>
+                {sourceFile && <em><Paperclip size={11} /> {sourceFile}</em>}
+              </div>
+              <strong dir="ltr">{score == null ? 'Draft' : `${Math.round(Number(score))}%`}</strong>
+              <span>{formatDate(assessment.updated_at || assessment.created_at)}</span>
+              <button type="button" disabled={active} onClick={() => onSelect(assessment.id)}>
+                {active ? 'در حال نمایش' : 'نمایش این نسخه'}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function ResultCard({ result, type }) {
   if (!result) return null;
   const title = result.headline || result.summary || (type === 'smart' ? 'نتیجه راهنمایی تحصیلی شما' : 'نتیجه اولیه انتقالی شما');
@@ -827,6 +877,43 @@ function ResultCard({ result, type }) {
         <ul>{steps.slice(0, 4).map((item) => <li key={String(item)}><CheckCircle2 size={14} />{String(item)}</li>)}</ul>
       )}
     </motion.div>
+  );
+}
+
+function SmartApplyHistoryPanel({ sessions = [], activeId, onSelect }) {
+  if (!Array.isArray(sessions) || sessions.length <= 1) return null;
+  return (
+    <section className="account-transfer-history account-session-history">
+      <div className="account-result-section-title">
+        <Clock3 size={17} />
+        <h4>تاریخچه Smart Apply</h4>
+        <small>{sessions.length} جلسه ذخیره شده</small>
+      </div>
+      <div className="account-transfer-history-list">
+        {sessions.slice(0, 8).map((session, index) => {
+          const active = session.id === activeId;
+          const resultTitle = session.result?.profileTitle
+            || session.result?.headline
+            || session.result?.academicArchetype
+            || session.goal
+            || 'جلسه راهنمای پذیرش';
+          return (
+            <article key={session.id} className={active ? 'is-active' : ''}>
+              <div>
+                <b>{index === 0 ? 'آخرین جلسه' : `جلسه قبلی ${index}`}</b>
+                <small>{resultTitle}</small>
+                <em><Sparkles size={11} /> {session.status || 'in_progress'}</em>
+              </div>
+              <strong>{session.result ? 'Result' : 'Draft'}</strong>
+              <span>{formatDate(session.updated_at || session.created_at)}</span>
+              <button type="button" disabled={active} onClick={() => onSelect(session.id)}>
+                {active ? 'در حال نمایش' : 'نمایش این جلسه'}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -939,6 +1026,8 @@ export default function AccountPortal() {
     }
     return 'smart_apply';
   });
+  const [selectedTransferId, setSelectedTransferId] = useState(null);
+  const [selectedSmartSessionId, setSelectedSmartSessionId] = useState(null);
 
   const refresh = useCallback(async () => {
     if (!user) return;
@@ -967,8 +1056,14 @@ export default function AccountPortal() {
     rememberAccountPreview(user, data.profile || {});
   }, [user, loading, data.profile]);
 
-  const smartSession = data.smartApply[0] || null;
-  const transferAssessment = data.transfer[0] || null;
+  const activeSmartSessionId = selectedSmartSessionId && data.smartApply.some((item) => item.id === selectedSmartSessionId)
+    ? selectedSmartSessionId
+    : data.smartApply[0]?.id || null;
+  const activeTransferId = selectedTransferId && data.transfer.some((item) => item.id === selectedTransferId)
+    ? selectedTransferId
+    : data.transfer[0]?.id || null;
+  const smartSession = data.smartApply.find((item) => item.id === activeSmartSessionId) || null;
+  const transferAssessment = data.transfer.find((item) => item.id === activeTransferId) || null;
   const smartSelection = data.selections.find((item) => item.product === 'smart_apply') || null;
   const transferSelection = data.selections.find((item) => item.product === 'ai_transfer') || null;
   const smartSubmission = data.submissions.find((item) => item.product === 'smart_apply') || null;
@@ -994,6 +1089,10 @@ export default function AccountPortal() {
   const smartCompanyDocs = buildCompanyDocs(smartDocuments);
   const transferCompanyDocs = buildCompanyDocs(transferDocuments);
   const transferTranscript = transferDocuments.find((item) => item.document_kind === 'transcript');
+  const transferGuestMemory = transferAssessment?.ai_result?.guest_document
+    || (Array.isArray(transferAssessment?.ai_result?.guest_courses) && transferAssessment.ai_result.guest_courses.length
+      ? { name: 'Guest OCR course memory', uploaded_before_login: true }
+      : null);
   const transferOcrDecision = getDocumentOcrDecision(transferTranscript);
   const transferDashboardResult = useMemo(() => buildLiveTransferResult({
     assessment: transferAssessment,
@@ -1012,13 +1111,13 @@ export default function AccountPortal() {
         : 4;
   const transferJourneyStep = !transferAssessment
     ? 0
-    : !transferTranscript
+    : !transferTranscript && !transferGuestMemory
       ? 1
-    : !transferOcrDecision.canContinue
+    : transferTranscript && !transferOcrDecision.canContinue
       ? 2
-      : !transferSelection || !transferDashboardResult
-        ? 3
-        : 4;
+    : !transferSelection || !transferDashboardResult
+      ? 3
+      : 4;
   const usedProducts = Number(Boolean(smartSession || smartDocuments.length || smartSelection)) +
     Number(Boolean(transferAssessment || transferDocuments.length || transferSelection));
 
@@ -1334,6 +1433,12 @@ export default function AccountPortal() {
             <div><small>مدارک</small><b>{smartDocuments.length}</b></div>
           </div>
 
+          <SmartApplyHistoryPanel
+            sessions={data.smartApply}
+            activeId={smartSession?.id}
+            onSelect={setSelectedSmartSessionId}
+          />
+
           <SelectedProgramCard
             selection={smartSelection}
             product="smart_apply"
@@ -1415,6 +1520,12 @@ export default function AccountPortal() {
             <div><small>رشته مقصد</small><b>{transferAssessment?.target_program || 'تکمیل نشده'}</b></div>
             <div><small>مدارک</small><b>{transferDocuments.length}</b></div>
           </div>
+
+          <TransferHistoryPanel
+            assessments={data.transfer}
+            activeId={transferAssessment?.id}
+            onSelect={setSelectedTransferId}
+          />
 
           <SelectedProgramCard
             selection={transferSelection}

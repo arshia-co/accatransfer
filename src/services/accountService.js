@@ -5,6 +5,7 @@ import { prepareUploadFile } from './documentSecurity';
 
 const DOCUMENT_BUCKET = 'student-documents';
 const GUEST_TRANSFER_KEY = 'acca-transfer-guest-assessment';
+const GUEST_TRANSFER_HISTORY_KEY = 'acca-transfer-guest-assessment-history-v1';
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 
@@ -17,7 +18,7 @@ async function turnstileToken(action) {
   try {
     return await getTurnstileToken(action);
   } catch (error) {
-    throw new Error(error?.message || 'Security check failed. Please refresh and try again.');
+    throw new Error(error?.message || 'Security check failed. Please refresh and try again.', { cause: error });
   }
 }
 
@@ -31,17 +32,6 @@ async function verifySecurityGate(action) {
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
   return data;
-}
-
-function safeFilename(name) {
-  const extension = name.includes('.') ? `.${name.split('.').pop().toLowerCase()}` : '';
-  const base = name
-    .replace(/\.[^.]+$/, '')
-    .normalize('NFKD')
-    .replace(/[^\w-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 70) || 'document';
-  return `${base}${extension}`;
 }
 
 export function validateDocument(file) {
@@ -262,6 +252,163 @@ export async function migrateGuestTransferDraft(user) {
   return { assessment: data, documentMetadata: draft.document || null };
 }
 
+export async function migrateGuestTransferDraftV2(user) {
+  if (typeof window === 'undefined') return null;
+  const drafts = readGuestTransferDraftsForMigration();
+  if (!drafts.length) return null;
+
+  const client = requireClient();
+  const migrated = [];
+  const orderedDrafts = [...drafts].sort((a, b) => (
+    Date.parse(a.updatedAt || a.createdAt || 0) - Date.parse(b.updatedAt || b.createdAt || 0)
+  ));
+
+  for (const draft of orderedDrafts) {
+    const aiResult = buildMigratedTransferResult(draft, draft.preliminaryResult || null);
+    const { data, error } = await client
+      .from('transfer_assessments')
+      .upsert({
+        user_id: user.id,
+        guest_draft_id: draft.id,
+        current_university: draft.answers?.currentUniversity || null,
+        current_program: draft.answers?.currentProgram || null,
+        target_country: draft.answers?.targetCountry || null,
+        target_university: draft.answers?.targetUniversity || null,
+        target_program: draft.answers?.targetProgram || null,
+        status: aiResult ? 'preliminary_result' : 'draft',
+        ai_result: aiResult,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,guest_draft_id' })
+      .select()
+      .single();
+
+    if (error) throw error;
+    migrated.push({ assessment: data, draft });
+  }
+
+  const activeDraft = [...orderedDrafts].reverse().find((item) => (
+    Array.isArray(item.targetSelection) && item.targetSelection.length
+  ));
+  if (activeDraft) {
+    try {
+      await upsertProgramSelection(user, 'ai_transfer', activeDraft.targetSelection);
+    } catch {
+      // Non-fatal: the assessment is already saved; selection can be redone in-panel.
+    }
+  }
+
+  window.localStorage.removeItem(GUEST_TRANSFER_KEY);
+  window.localStorage.removeItem(GUEST_TRANSFER_HISTORY_KEY);
+  window.dispatchEvent(new CustomEvent('acca-transfer-guest-assessment-change', { detail: null }));
+  const latest = migrated[migrated.length - 1] || null;
+  return {
+    assessment: latest?.assessment || null,
+    migratedCount: migrated.length,
+    documentMetadata: latest?.draft?.document || null,
+  };
+}
+
+function readGuestTransferDraftsForMigration() {
+  const parse = (raw) => {
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  };
+  const active = parse(window.localStorage.getItem(GUEST_TRANSFER_KEY));
+  const historyRaw = parse(window.localStorage.getItem(GUEST_TRANSFER_HISTORY_KEY));
+  const history = Array.isArray(historyRaw) ? historyRaw : [];
+  const byId = new Map();
+  [active, ...history].filter(Boolean).forEach((draft) => {
+    const normalized = normalizeGuestTransferDraft(draft);
+    if (isMeaningfulGuestTransferDraft(normalized)) byId.set(normalized.id, normalized);
+  });
+  return [...byId.values()];
+}
+
+function normalizeGuestTransferDraft(draft = {}) {
+  return {
+    ...draft,
+    id: draft.id || `guest-${Date.now()}`,
+    answers: draft.answers || {},
+    targetSelection: Array.isArray(draft.targetSelection) ? draft.targetSelection : [],
+    courses: Array.isArray(draft.courses) ? draft.courses : [],
+    document: draft.document || null,
+    preliminaryResult: draft.preliminaryResult || null,
+  };
+}
+
+function isMeaningfulGuestTransferDraft(draft) {
+  return Boolean(
+    draft?.document
+    || draft?.preliminaryResult
+    || draft?.completed
+    || draft?.targetSelection?.length
+    || draft?.courses?.some((course) => course?.name || course?.grade)
+    || Object.values(draft?.answers || {}).some(Boolean)
+  );
+}
+
+function buildMigratedTransferResult(draft, guestResult) {
+  const hasCourses = Array.isArray(draft.courses) && draft.courses.length;
+  const hasAnswers = Object.values(draft.answers || {}).some(Boolean);
+  if (!guestResult && !hasCourses && !hasAnswers && !draft.document) return null;
+
+  const answers = draft.answers || {};
+  const base = guestResult ? {
+    headline: 'نتیجه مقدماتی انتقالی شما',
+    overview: guestResult.overview,
+    estimated_transfer_match: guestResult.estimatedTransferMatch,
+    estimated_entry_level: guestResult.estimatedEntryLevel,
+    likely_recognized_courses: guestResult.likelyRecognizedCourses,
+    missing_documents_count: guestResult.missingDocumentsCount,
+    ai_confidence: guestResult.aiConfidence,
+    risk_level: guestResult.riskLevel,
+    preliminary_transfer_fit: guestResult.classification,
+    next_steps: guestResult.nextSteps,
+    admission_reality_note: guestResult.disclaimer,
+    source_boundaries: {
+      provided_by_student: guestResult.providedFacts,
+      estimated_by_ai: guestResult.estimatedFacts,
+      requires_university_decision: guestResult.universityDecision,
+    },
+  } : {
+    headline: 'پیش نویس انتقالی ذخیره شده از مسیر رایگان',
+    overview: 'این پیش نویس از اطلاعاتی ساخته شده که قبل از ورود در AI Transfer وارد کرده بودید. برای ادامه رسمی، فایل ریزنمرات را در آپلود امن پنل انتخاب کنید.',
+    estimated_transfer_match: null,
+    estimated_entry_level: null,
+    likely_recognized_courses: hasCourses ? `${draft.courses.length} درس خوانده شده` : 'نیازمند ریزنمرات',
+    missing_documents_count: 3,
+    ai_confidence: 'Low',
+    risk_level: 'Medium',
+    preliminary_transfer_fit: 'Saved Guest Draft',
+    next_steps: [
+      'ریز نمرات را در پنل امن دوباره آپلود کنید تا فایل واقعی به حساب شما متصل شود.',
+      'درس ها و نمره های خوانده شده را بررسی کنید.',
+      'دانشگاه و رشته مقصد را تایید کنید.',
+    ],
+    admission_reality_note: 'این فقط حافظه مسیر رایگان است و جایگزین آپلود امن فایل، بررسی انسانی یا تصمیم نهایی دانشگاه نمی شود.',
+  };
+
+  return {
+    ...base,
+    guest_answers: answers,
+    guest_courses: draft.courses || [],
+    guest_document: draft.document ? {
+      name: draft.document.name,
+      size: draft.document.size,
+      type: draft.document.type,
+      uploaded_before_login: true,
+    } : null,
+    guest_draft_id: draft.id,
+    guest_draft_created_at: draft.createdAt || null,
+    guest_draft_updated_at: draft.updatedAt || null,
+    current_university: answers.currentUniversity || null,
+    current_program: answers.currentProgram || null,
+    target_country: answers.targetCountry || null,
+    target_university: answers.targetUniversity || null,
+    target_program: answers.targetProgram || null,
+  };
+}
+
 export async function saveSmartApplySession(user, state) {
   const client = requireClient();
   const payload = {
@@ -396,8 +543,6 @@ export async function upsertProgramSelection(user, product, selection) {
     const transferResult = latest?.id
       ? await client.from('transfer_assessments').update({
           ...transferTarget,
-          status: 'draft',
-          ai_result: null,
         }).eq('id', latest.id)
       : await client.from('transfer_assessments').insert({
           user_id: user.id,
