@@ -129,7 +129,7 @@ function buildEmail(eventType: string, details: Json, profile: Json | null, emai
         `روش تغییر: ${details.method === "reset_link" ? "لینک امن ایمیل" : "داخل پنل کاربری"}`,
         `زمان: ${occurredAt}`,
       ].join("\n"),
-      action: "اگر شما این تغییر را انجام نداده‌اید، با تیم ACCA تماس بگیرید.",
+      action: "اگر خودتان این تغییر را انجام نداده‌اید، حساب شما ممکن است در معرض خطر باشد؛ فوراً از گزینهٔ «فراموشی رمز» رمز را بازنشانی کنید و با تیم ACCA تماس بگیرید.",
     },
     profile_updated: {
       subject: "مشخصات حساب شما به‌روزرسانی شد",

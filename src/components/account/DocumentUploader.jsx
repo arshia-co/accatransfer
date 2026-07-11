@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, Check, CloudUpload, FileText, Image as ImageIcon,
+  AlertTriangle, Check, ChevronDown, CloudUpload, FileText, Image as ImageIcon,
   LoaderCircle, ScanText, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { uploadStudentDocument } from '../../services/accountService';
@@ -48,6 +48,61 @@ const STAGE_LABEL = {
   scan: 'اسکن امنیتی سرور',
   ocr: 'خواندن هوشمند مدرک',
 };
+
+// Apple-style document-type picker: a styled trigger + custom popover list,
+// replacing the native <select> (whose closed state and label had poor
+// contrast in dark mode and could not be themed).
+function KindPicker({ kinds, value, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const current = kinds.find((k) => k.value === value) || kinds[0];
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (event) => { if (ref.current && !ref.current.contains(event.target)) setOpen(false); };
+    const onKey = (event) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className={`doc-kind-picker ${open ? 'is-open' : ''}`} ref={ref}>
+      <button
+        type="button"
+        className="doc-kind-trigger"
+        onClick={() => { if (!disabled) setOpen((o) => !o); }}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span>{current?.label}</span>
+        <ChevronDown size={16} aria-hidden="true" />
+      </button>
+      {open && (
+        <ul className="doc-kind-menu" role="listbox">
+          {kinds.map((item) => (
+            <li key={item.value}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={item.value === value}
+                className={item.value === value ? 'is-active' : ''}
+                onClick={() => { onChange(item.value); setOpen(false); }}
+              >
+                <span>{item.label}</span>
+                {item.value === value && <Check size={15} aria-hidden="true" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 // A professional drag-drop uploader with a pre-upload setup/validation stage
 // (the student reviews, picks the document type and sees the security checks
@@ -141,12 +196,15 @@ export default function DocumentUploader({ product, user, assessmentId = null, o
             <b title={staged.file.name}>{staged.file.name}</b>
             <small>{(staged.file.type || '').includes('pdf') ? 'PDF' : 'تصویر'} · {humanFileSize(staged.file.size)}</small>
 
-            <label className="doc-stage-kind">
+            <div className="doc-stage-kind">
               <span>نوع مدرک را مشخص کنید</span>
-              <select value={staged.kind} onChange={(event) => setStaged((current) => ({ ...current, kind: event.target.value }))} disabled={busy}>
-                {kinds.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-              </select>
-            </label>
+              <KindPicker
+                kinds={kinds}
+                value={staged.kind}
+                disabled={busy}
+                onChange={(next) => setStaged((current) => ({ ...current, kind: next }))}
+              />
+            </div>
 
             <div className="doc-stage-checks">
               {staged.status === 'checking' && (

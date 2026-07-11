@@ -984,6 +984,62 @@ textarea {
 .doc-stage-cancel:hover:not(:disabled) { color: #a23b2a; border-color: rgba(196,76,52,.4); background: rgba(196,76,52,.05); }
 .doc-stage-upload { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; border: 0; border-radius: 11px; color: #fff; background: linear-gradient(145deg, #102f48, #14745f); font-size: 11px; font-weight: 900; cursor: pointer; }
 .doc-stage-upload:disabled { opacity: .55; cursor: not-allowed; }
+/* Apple-style document-type picker (custom popover, replaces native <select>) */
+.doc-kind-picker { position: relative; flex: 1; min-width: 0; }
+.doc-kind-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 38px; padding: 0 12px; border: 1px solid rgba(16,47,72,.14); border-radius: 12px; background: #fff; color: #102f48; font-size: 12px; font-weight: 800; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease; }
+.doc-kind-trigger:hover:not(:disabled) { border-color: rgba(20,116,95,.5); }
+.doc-kind-picker.is-open .doc-kind-trigger { border-color: #14745f; box-shadow: 0 0 0 3px rgba(20,116,95,.14); }
+.doc-kind-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-kind-trigger svg { flex: 0 0 auto; color: rgba(16,47,72,.5); transition: transform .2s ease; }
+.doc-kind-picker.is-open .doc-kind-trigger svg { transform: rotate(180deg); }
+.doc-kind-trigger:disabled { opacity: .6; cursor: not-allowed; }
+.doc-kind-menu { position: absolute; z-index: 30; top: calc(100% + 6px); inset-inline: 0; max-height: 244px; overflow-y: auto; margin: 0; padding: 6px; list-style: none; border: 1px solid rgba(16,47,72,.1); border-radius: 14px; background: #fff; box-shadow: 0 18px 44px rgba(16,47,72,.18); }
+.doc-kind-menu li { margin: 0; }
+.doc-kind-menu button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 9px 11px; border: 0; border-radius: 10px; background: transparent; color: #102f48; font-size: 12px; font-weight: 700; text-align: start; cursor: pointer; }
+.doc-kind-menu button:hover { background: rgba(20,116,95,.09); }
+.doc-kind-menu button.is-active { background: rgba(20,116,95,.12); color: #0f6a57; font-weight: 900; }
+.doc-kind-menu button svg { flex: 0 0 auto; color: #14745f; }
+.account-central[data-theme="dark"] .doc-stage-kind span { color: rgba(231,238,251,.74); }
+.account-central[data-theme="dark"] .doc-kind-trigger { color: var(--account-night-text); border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.07); }
+.account-central[data-theme="dark"] .doc-kind-trigger svg { color: rgba(231,238,251,.6); }
+.account-central[data-theme="dark"] .doc-kind-picker.is-open .doc-kind-trigger { border-color: #2fd0a6; box-shadow: 0 0 0 3px rgba(47,208,166,.2); }
+.account-central[data-theme="dark"] .doc-kind-menu { border-color: rgba(255,255,255,.12); background: #0f2136; box-shadow: 0 22px 50px rgba(0,0,0,.5); }
+.account-central[data-theme="dark"] .doc-kind-menu button { color: var(--account-night-text); }
+.account-central[data-theme="dark"] .doc-kind-menu button:hover { background: rgba(47,208,166,.14); }
+.account-central[data-theme="dark"] .doc-kind-menu button.is-active { background: rgba(47,208,166,.18); color: #6ef0cd; }
+.account-central[data-theme="dark"] .doc-kind-menu button svg { color: #2fd0a6; }
+/* Realtime toast stack (live account notifications) */
+.account-toasts { position: fixed; z-index: 90; top: 18px; inset-inline-end: 18px; display: flex; flex-direction: column; gap: 10px; width: min(340px, calc(100vw - 32px)); pointer-events: none; }
+.account-toast { display: flex; align-items: flex-start; gap: 11px; padding: 12px 13px; border: 1px solid rgba(16,47,72,.1); border-radius: 15px; background: rgba(255,255,255,.97); box-shadow: 0 18px 44px rgba(16,47,72,.2); pointer-events: auto; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.account-toast-icon { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 10px; color: #fff; background: #14745f; }
+.account-toast.is-success .account-toast-icon { background: linear-gradient(145deg,#128a63,#0f6a57); }
+.account-toast.is-error .account-toast-icon { background: linear-gradient(145deg,#c4443a,#9a2f27); }
+.account-toast.is-info .account-toast-icon { background: linear-gradient(145deg,#1f6f8c,#16506a); }
+.account-toast-body { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.account-toast-body b { color: #0f2b45; font-size: 12.5px; font-weight: 900; }
+.account-toast-body p { margin: 0; color: rgba(16,47,72,.7); font-size: 11px; line-height: 1.7; }
+.account-toast > button { display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 7px; color: rgba(16,47,72,.5); background: transparent; cursor: pointer; }
+.account-toast > button:hover { background: rgba(16,47,72,.08); color: #0f2b45; }
+.account-central[data-theme="dark"] .account-toast { border-color: rgba(255,255,255,.12); background: rgba(18,33,54,.96); box-shadow: 0 22px 50px rgba(0,0,0,.5); }
+.account-central[data-theme="dark"] .account-toast-body b { color: #f3f7ff; }
+.account-central[data-theme="dark"] .account-toast-body p { color: rgba(231,238,251,.72); }
+.account-central[data-theme="dark"] .account-toast > button { color: rgba(231,238,251,.6); }
+.account-central[data-theme="dark"] .account-toast > button:hover { background: rgba(255,255,255,.1); color: #f3f7ff; }
+/* Clickable toast + notification → jump to the changed section */
+.account-toast.is-clickable { cursor: pointer; }
+.account-toast.is-clickable:hover { transform: translateY(-1px); box-shadow: 0 22px 52px rgba(16,47,72,.26); }
+.account-toast-cta { margin-top: 3px; color: #128a63; font-size: 10px; font-weight: 900; font-style: normal; }
+.account-central[data-theme="dark"] .account-toast-cta { color: #6ef0cd; }
+.account-notification-list .is-navigable { cursor: pointer; border-radius: 10px; transition: background .15s ease; }
+.account-notification-list .is-navigable:hover { background: rgba(20,116,95,.06); }
+.account-central[data-theme="dark"] .account-notification-list .is-navigable:hover { background: rgba(47,208,166,.1); }
+/* Scroll-target markers + flash highlight on the landed section */
+.account-anchor { display: block; height: 0; margin: 0; scroll-margin-top: 92px; }
+#account-anchor-notifications, #account-anchor-profile { scroll-margin-top: 92px; }
+@keyframes account-anchor-flash { 0% { box-shadow: 0 0 0 0 rgba(20,116,95,.0); } 22% { box-shadow: 0 0 0 3px rgba(20,116,95,.5), 0 0 32px rgba(20,116,95,.28); } 100% { box-shadow: 0 0 0 0 rgba(20,116,95,0); } }
+.account-anchor-flash { animation: account-anchor-flash 1.6s ease; border-radius: 20px; }
+.account-central[data-theme="dark"] .account-anchor-flash { animation-name: account-anchor-flash-dark; }
+@keyframes account-anchor-flash-dark { 0% { box-shadow: 0 0 0 0 rgba(47,208,166,0); } 22% { box-shadow: 0 0 0 3px rgba(47,208,166,.6), 0 0 34px rgba(47,208,166,.3); } 100% { box-shadow: 0 0 0 0 rgba(47,208,166,0); } }
 .doc-uploader-progress { display: flex; align-items: center; gap: 9px; margin-top: 10px; }
 .doc-uploader-progress .account-progress { flex: 1; margin: 0; }
 .doc-uploader-progress > span { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; color: rgba(16,47,72,.55); font-size: 9px; font-weight: 800; }
@@ -3072,6 +3128,60 @@ textarea {
 ) {
   color: var(--account-night-text);
 }
+
+/* Cards whose light background wasn't themed for dark mode — the text was
+   correctly re-coloured light above, leaving light-on-light. Give them the
+   dark surface. */
+.account-central[data-theme="dark"] .account-next-action {
+  border-color: var(--account-night-border);
+  background: rgba(255, 255, 255, 0.05);
+}
+.account-central[data-theme="dark"] .account-next-action > svg { color: #2fd0a6; }
+
+/* Inner content cards whose text was re-coloured light (block above) but whose
+   white/near-white background stayed light — the reported low-contrast spots.
+   Give them the dark surface so text reads. */
+.account-central[data-theme="dark"] :is(
+  .account-notification-list article,
+  .account-profile-summary-grid div,
+  .account-profile-security,
+  .account-ocr-fields > div,
+  .account-ocr-summary,
+  .acceptance-record > div,
+  .acceptance-doc,
+  .acceptance-facts > div,
+  .acceptance-step-button,
+  .acceptance-company-item,
+  .acceptance-guide-facts,
+  .acceptance-guide-map,
+  .acceptance-guide-checklist,
+  .acceptance-guide-paths article,
+  .account-journey-step.is-current,
+  .application-program-check,
+  .application-guidance-note,
+  .application-requirement
+) {
+  border-color: var(--account-night-border);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+/* Form inputs / secondary buttons on white — dark input surface + readable text. */
+.account-central[data-theme="dark"] :is(
+  .account-profile-input,
+  .account-profile-pass,
+  .account-profile-reset-link,
+  .account-ocr-toggle,
+  .account-ocr-actions button.secondary,
+  .acceptance-guide-actions a,
+  .acceptance-guide-actions button,
+  .account-product-actions a
+) {
+  color: var(--account-night-text);
+  border-color: var(--account-night-border);
+  background: rgba(255, 255, 255, 0.06);
+}
+.account-central[data-theme="dark"] .account-profile-input::placeholder,
+.account-central[data-theme="dark"] .account-profile-pass { color: var(--account-night-muted); }
 
 .account-central[data-theme="dark"] :is(
   .account-header-meta,

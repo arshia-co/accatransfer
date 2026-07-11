@@ -240,11 +240,11 @@ export function DashboardPreview() {
                 <div className="absolute top-3 left-3 h-px bg-gradient-to-r from-[#D6A46B] to-[#C8965F]" style={{ width: "55%" }} />
                 <div className="relative grid grid-cols-5 gap-2">
                   {[
-                    { l: "Documents", s: "done" },
-                    { l: "AI Analysis", s: "done" },
-                    { l: "Equivalency", s: "done" },
-                    { l: "Human Review", s: "active" },
-                    { l: "University", s: "pending" },
+                    { l: "Documents", fa: "مدارک", s: "done" },
+                    { l: "AI Analysis", fa: "تحلیل هوش مصنوعی", s: "done" },
+                    { l: "Equivalency", fa: "تطبیق دروس", s: "done" },
+                    { l: "Human Review", fa: "بررسی انسانی", s: "active" },
+                    { l: "University", fa: "دانشگاه", s: "pending" },
                   ].map((step) => (
                     <div key={step.l} className="flex flex-col items-center text-center">
                       <span className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium ${
@@ -255,7 +255,7 @@ export function DashboardPreview() {
                         {step.s === "done" ? <CheckCircle2 className="w-3 h-3" /> : step.s === "active" ? <span className="w-1.5 h-1.5 rounded-full bg-cyan animate-pulse" /> : <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />}
                         {step.s === "active" && <span className="absolute inset-0 rounded-full bg-cyan/30 animate-ping" />}
                       </span>
-                      <span className={`mt-2 text-[10px] ${step.s === "pending" ? "text-muted-foreground" : "text-foreground/85"}`}>{step.l}</span>
+                      <span className={`mt-2 text-[10px] ${step.s === "pending" ? "text-muted-foreground" : "text-foreground/85"}`}>{lang === "fa" ? step.fa : step.l}</span>
                     </div>
                   ))}
                 </div>

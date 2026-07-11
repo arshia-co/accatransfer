@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle, ArrowLeft, BadgeCheck, Bell, BookOpen, BrainCircuit, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CloudUpload, Compass,
   Download, FileCheck2, FileText, FolderLock, GraduationCap, Layers, LayoutGrid, ListChecks, LoaderCircle, Lock, LogOut, Moon, Paperclip, Percent,
-  RefreshCw, ScanText, ShieldCheck, Sparkles, Sun, Target, Trash2, XCircle,
+  RefreshCw, ScanText, ShieldCheck, Sparkles, Sun, Target, Trash2, X, XCircle,
 } from 'lucide-react';
 import { computeCourseMatches, overallMatch, parseGradeRatio } from '../../transfer/lib/course-matching';
 import { useAuth } from '../../auth/AuthContext';
@@ -13,6 +13,7 @@ import {
   confirmDocumentExtraction,
   createTransferAssessment,
   createDocumentSignedUrl,
+  subscribeAccountRealtime,
   deleteStudentDocument,
   listCentralAccountData,
   migrateGuestTransferDraftV2 as migrateGuestTransferDraft,
@@ -73,7 +74,7 @@ function StatusPill({ status = 'draft' }) {
     review_ready: 'آماده بررسی',
     verified: 'تأیید شده',
   };
-  return <span className="account-status"><CheckCircle2 size={13} />{labels[status] || status}</span>;
+  return <span className="account-status"><CheckCircle2 size={13} />{labels[status] || localizeStatus(status)}</span>;
 }
 
 const EXTRACTION_FIELDS = [
@@ -266,10 +267,15 @@ const LETTER_TYPE_LABEL = {
   general: 'نامه رسمی',
 };
 
-function AccountNotifications({ notifications = [], documents = [] }) {
+function AccountNotifications({ notifications = [], documents = [], onNavigate }) {
   const [openingId, setOpeningId] = useState(null);
   const visible = notifications.slice(0, 5);
   if (!visible.length) return null;
+
+  const navigateForNotification = (notification) => {
+    const document = documents.find((item) => item.id === notification.document_id);
+    onNavigate?.({ target: 'documents', product: document?.product || null });
+  };
 
   const openLinkedDocument = async (notification) => {
     const document = documents.find((item) => item.id === notification.document_id);
@@ -284,7 +290,7 @@ function AccountNotifications({ notifications = [], documents = [] }) {
   };
 
   return (
-    <motion.section className="account-notifications" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+    <motion.section id="account-anchor-notifications" className="account-notifications" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
       <div className="account-notifications-head">
         <span><Bell size={18} /></span>
         <div>
@@ -297,7 +303,13 @@ function AccountNotifications({ notifications = [], documents = [] }) {
           const hasDocument = Boolean(notification.document_id && documents.some((item) => item.id === notification.document_id));
           return (
             <article key={notification.id} className={notification.read_at ? '' : 'is-unread'}>
-              <div>
+              <div
+                className={hasDocument ? 'is-navigable' : ''}
+                role={hasDocument ? 'button' : undefined}
+                tabIndex={hasDocument ? 0 : undefined}
+                onClick={hasDocument ? () => navigateForNotification(notification) : undefined}
+                onKeyDown={hasDocument ? (event) => { if (event.key === 'Enter') navigateForNotification(notification); } : undefined}
+              >
                 <b>{notification.title}</b>
                 <small>{formatDate(notification.created_at)}</small>
                 <p>{notification.message}</p>
@@ -313,6 +325,100 @@ function AccountNotifications({ notifications = [], documents = [] }) {
         })}
       </div>
     </motion.section>
+  );
+}
+
+// Turn a realtime data-table change into a short Persian toast, or null when
+// the change isn't meaningful enough to interrupt the student.
+function synthesizeChange({ table, event, row, old }) {
+  if (table === 'student_documents') {
+    const label = documentKindLabel(row.document_kind) || 'مدرک';
+    const nav = { product: row.product || null, target: 'documents' };
+    const status = String(row.review_status || '').toLowerCase();
+    const wasStatus = String(old?.review_status || '').toLowerCase();
+    if (['confirmed', 'reviewed', 'approved'].includes(status) && status !== wasStatus) {
+      return { tone: 'success', title: 'مدرک تأیید شد', message: `«${label}» شما تأیید شد.`, ...nav };
+    }
+    if (status === 'rejected' && status !== wasStatus) {
+      return { tone: 'error', title: 'مدرک رد شد', message: `«${label}» نیازمند بازبینی است.`, ...nav };
+    }
+    const gotExtraction = row.ai_extraction && !old?.ai_extraction;
+    if (gotExtraction) {
+      return { tone: 'info', title: 'اطلاعات مدرک استخراج شد', message: `نمرات و اطلاعات «${label}» با هوش مصنوعی خوانده شد.`, ...nav };
+    }
+    if (event === 'INSERT') {
+      return { tone: 'info', title: 'مدرک آپلود شد', message: `«${label}» با موفقیت در پرونده ثبت شد.`, ...nav };
+    }
+    return null;
+  }
+  if (table === 'transfer_assessments') {
+    return { tone: 'info', title: 'تحلیل انتقالی به‌روزرسانی شد', message: 'نتیجهٔ جدید بررسی شانس انتقالی شما آماده است.', product: 'ai_transfer', target: 'transfer' };
+  }
+  if (table === 'application_submissions') {
+    const nav = { product: row.product || null, target: 'application' };
+    const status = row.admin_status || row.status;
+    const wasStatus = old?.admin_status || old?.status;
+    if (status && status !== wasStatus) {
+      return { tone: 'success', title: 'وضعیت پرونده تغییر کرد', message: `وضعیت جدید: ${localizeStatus(status)}`, ...nav };
+    }
+    if (event === 'INSERT') {
+      return { tone: 'info', title: 'پرونده ثبت شد', message: 'درخواست شما ثبت شد و در صف بررسی قرار گرفت.', ...nav };
+    }
+    return null;
+  }
+  if (table === 'profiles') {
+    return { tone: 'info', title: 'پروفایل به‌روزرسانی شد', message: 'تغییرات حساب شما ذخیره شد.', target: 'profile' };
+  }
+  return null;
+}
+
+const TOAST_TONE_ICON = { success: CheckCircle2, error: AlertTriangle, info: Bell };
+
+// Live popup stack for realtime account events. Each toast auto-dismisses and,
+// when it carries a target, clicking it jumps the page to the changed section.
+function AccountToasts({ toasts, onDismiss, onNavigate }) {
+  useEffect(() => {
+    if (!toasts.length) return undefined;
+    const timers = toasts.map((t) => window.setTimeout(() => onDismiss(t.id), 7000));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [toasts, onDismiss]);
+
+  if (!toasts.length) return null;
+  return (
+    <div className="account-toasts" aria-live="polite">
+      <AnimatePresence>
+        {toasts.map((toast) => {
+          const Icon = TOAST_TONE_ICON[toast.tone] || Bell;
+          const clickable = Boolean(toast.target);
+          return (
+            <motion.div
+              key={toast.id}
+              className={`account-toast is-${toast.tone} ${clickable ? 'is-clickable' : ''}`}
+              role="status"
+              initial={{ opacity: 0, x: 40, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 40, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              onClick={clickable ? () => { onNavigate(toast); onDismiss(toast.id); } : undefined}
+            >
+              <span className="account-toast-icon"><Icon size={17} /></span>
+              <div className="account-toast-body">
+                <b>{toast.title}</b>
+                {toast.message && <p>{toast.message}</p>}
+                {clickable && <em className="account-toast-cta">نمایش این بخش ←</em>}
+              </div>
+              <button
+                type="button"
+                onClick={(event) => { event.stopPropagation(); onDismiss(toast.id); }}
+                aria-label="بستن"
+              >
+                <X size={14} />
+              </button>
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -335,6 +441,65 @@ function localizeEntry(value) {
 function localizeConfidence(value) {
   const map = { Low: 'پایین', Medium: 'متوسط', High: 'بالا' };
   return value ? (map[value] || value) : '—';
+}
+
+// The saved AI report (from the transfer-analyze edge function) can contain
+// English strings; the panel is Persian-first, so localize them at render.
+const TRANSFER_FIT_FA = {
+  'Strong Candidate for Transfer Review': 'کاندیدای قوی برای بررسی انتقالی',
+  'Good Candidate with Document Review Needed': 'کاندیدای مناسب، نیازمند بررسی مدارک',
+  'Possible Candidate with Significant Risks': 'کاندیدای احتمالی با ریسک‌های قابل‌توجه',
+};
+function localizeFit(value) {
+  if (!value) return '';
+  return TRANSFER_FIT_FA[value] || value;
+}
+
+const REVIEW_STATUS_FA = {
+  human_review: 'بررسی انسانی',
+  admin_review: 'در حال بررسی کارشناس',
+  under_review: 'در حال بررسی',
+  in_review: 'در حال بررسی',
+  pending: 'در انتظار بررسی',
+  pending_review: 'در انتظار بررسی',
+  reviewed: 'بررسی‌شده',
+  confirmed: 'تأییدشده',
+  approved: 'تأییدشده',
+  verified: 'تأیید شده',
+  rejected: 'ردشده',
+  needs_review: 'نیازمند بررسی',
+  submitted: 'ارسال‌شده',
+  processing: 'در حال پردازش',
+  accepted: 'پذیرفته‌شده',
+  conditional_acceptance: 'پذیرش مشروط',
+  final_acceptance: 'پذیرش نهایی',
+  waitlisted: 'در لیست انتظار',
+};
+function localizeStatus(value) {
+  if (!value) return '';
+  const key = String(value).toLowerCase();
+  return REVIEW_STATUS_FA[key] || value;
+}
+
+// Latin-heavy text = English server output we should not show in a Persian panel.
+function isMostlyLatin(str) {
+  const s = String(str || '');
+  const latin = (s.match(/[A-Za-z]/g) || []).length;
+  const persian = (s.match(/[؀-ۿ]/g) || []).length;
+  return latin > persian * 1.2 && latin > 12;
+}
+
+// Prefer the saved Persian overview; rebuild a Persian sentence when the saved
+// text is English so the hero never shows an English paragraph.
+function faOverview(result, targetUniversity) {
+  const raw = result?.overview;
+  if (raw && !isMostlyLatin(raw)) return raw;
+  return `بر پایهٔ ریزنمرات و مقصد انتخابی${targetUniversity ? ` (${targetUniversity})` : ''}، پروندهٔ تحصیلی شما برای بررسی انتقالی مناسب به‌نظر می‌رسد؛ اما استخراج کامل ریزنمرات و بررسی درس‌به‌درس هنوز لازم است.`;
+}
+function faRealityNote(result) {
+  const raw = result?.admission_reality_note;
+  if (raw && !isMostlyLatin(raw)) return raw;
+  return 'این گزارش مقدماتی است. پذیرش، معادل‌سازی درس و تعیین ترم نهایی فقط توسط دانشگاه مقصد انجام می‌شود.';
 }
 
 function transferStatusFromScore(score) {
@@ -669,31 +834,31 @@ function TransferAnalysisPanel({ result, documents = [] }) {
       <div className="account-transfer-hero">
         <span className="account-transfer-hero-glow" aria-hidden="true" />
         <div className="account-transfer-hero-main">
-          <span className="account-transfer-hero-kicker"><Sparkles size={13} /> Matching Engine · تحلیل هوشمند</span>
+          <span className="account-transfer-hero-kicker"><Sparkles size={13} /> موتور تطبیق · تحلیل هوشمند</span>
           <h3>{result.headline || 'تحلیل مقدماتی انتقالی'}</h3>
-          <p>{result.overview || result.admission_reality_note || 'تطبیق دروس شما با برنامهٔ دانشگاه مقصد، بر پایهٔ ریزنمرات، واحدها و معدل.'}</p>
-          {result.preliminary_transfer_fit && <span className="account-transfer-fit">{result.preliminary_transfer_fit}</span>}
+          <p>{faOverview(result, targetUniversity)}</p>
+          {result.preliminary_transfer_fit && <span className="account-transfer-fit">{localizeFit(result.preliminary_transfer_fit)}</span>}
         </div>
         <div className="account-transfer-hero-ring">
           <AiConfidenceRing value={matchValue} />
-          <div><b>{localizeConfidence(result.ai_confidence)}</b><small>AI Confidence</small></div>
+          <div><b>{localizeConfidence(result.ai_confidence)}</b><small>اطمینان هوش مصنوعی</small></div>
         </div>
       </div>
 
       <div className="account-transfer-command">
         <div>
-          <small>STUDENT PATH</small>
+          <small>مسیر دانشجو</small>
           <b>{currentUniversity || 'دانشگاه فعلی ثبت نشده'}</b>
           <span>{currentProgram || 'رشته فعلی تکمیل نشده'}</span>
         </div>
         <span><ArrowLeft size={16} /></span>
         <div>
-          <small>TARGET UNIVERSITY</small>
+          <small>دانشگاه مقصد</small>
           <b>{targetUniversity || 'دانشگاه مقصد انتخاب نشده'}</b>
           <span>{targetProgram || 'رشته مقصد انتخاب نشده'}</span>
         </div>
         <strong className={result.is_live_preview ? 'is-live' : 'is-official'}>
-          {result.is_live_preview ? 'Live preliminary preview' : 'Saved AI report'}
+          {result.is_live_preview ? 'پیش‌نمایش زندهٔ مقدماتی' : 'گزارش ذخیره‌شدهٔ هوش مصنوعی'}
         </strong>
       </div>
 
@@ -825,7 +990,7 @@ function TransferAnalysisPanel({ result, documents = [] }) {
 
       <div className="account-result-reality">
         <ShieldCheck size={17} />
-        <span>{result.admission_reality_note || 'این گزارش مقدماتی است. پذیرش، معادل‌سازی درس و تعیین ترم نهایی فقط توسط دانشگاه مقصد انجام می‌شود.'}</span>
+        <span>{faRealityNote(result)}</span>
       </div>
     </motion.div>
   );
@@ -855,7 +1020,7 @@ function TransferHistoryPanel({ assessments = [], activeId, onSelect }) {
                 <small>{target || 'رشته مقصد نامشخص'}{university ? ` · ${university}` : ''}</small>
                 {sourceFile && <em><Paperclip size={11} /> {sourceFile}</em>}
               </div>
-              <strong dir="ltr">{score == null ? 'Draft' : `${Math.round(Number(score))}%`}</strong>
+              <strong dir="ltr">{score == null ? 'پیش‌نویس' : `${Math.round(Number(score))}%`}</strong>
               <span>{formatDate(assessment.updated_at || assessment.created_at)}</span>
               <button type="button" disabled={active} onClick={() => onSelect(assessment.id)}>
                 {active ? 'در حال نمایش' : 'نمایش این نسخه'}
@@ -1055,6 +1220,74 @@ export default function AccountPortal() {
     const timer = window.setTimeout(refresh, 0);
     return () => window.clearTimeout(timer);
   }, [refresh]);
+
+  // ── Live account notifications (Supabase Realtime) ────────────────────────
+  const [toasts, setToasts] = useState([]);
+  const toastSeq = useRef(0);
+  const refreshTimer = useRef(null);
+  const pushToast = useCallback((toast) => {
+    if (!toast) return;
+    toastSeq.current += 1;
+    const id = `t${toastSeq.current}`;
+    // Keep at most 4 toasts stacked.
+    setToasts((list) => [...list.slice(-3), { id, ...toast }]);
+  }, []);
+  const dismissToast = useCallback((id) => {
+    setToasts((list) => list.filter((t) => t.id !== id));
+  }, []);
+
+  // Jump the page to the section a notification refers to (switching product
+  // tab first when needed), with a brief highlight so the change is obvious.
+  const goToChange = useCallback((toast) => {
+    if (!toast?.target) return;
+    const scrollTo = () => {
+      const el = document.getElementById(`account-anchor-${toast.target}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Zero-height marker anchors flash their following content instead.
+      const flashEl = (el.offsetHeight > 6 ? el : el.nextElementSibling) || el;
+      flashEl.classList.add('account-anchor-flash');
+      window.setTimeout(() => flashEl.classList.remove('account-anchor-flash'), 1700);
+    };
+    if (toast.product && (toast.product === 'smart_apply' || toast.product === 'ai_transfer')) {
+      let switched = false;
+      setActiveProduct((current) => { switched = current !== toast.product; return toast.product; });
+      window.setTimeout(scrollTo, switched ? 160 : 0);
+    } else {
+      scrollTo();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    const scheduleRefresh = () => {
+      if (refreshTimer.current) return;
+      refreshTimer.current = window.setTimeout(() => {
+        refreshTimer.current = null;
+        refresh();
+      }, 700);
+    };
+    const unsubscribe = subscribeAccountRealtime(user.id, {
+      onNotification: (row) => {
+        pushToast({
+          tone: 'info',
+          title: row?.title || 'اعلان جدید',
+          message: row?.message || '',
+          target: row?.document_id ? 'documents' : 'notifications',
+          documentId: row?.document_id || null,
+        });
+        scheduleRefresh();
+      },
+      onDataChange: (change) => {
+        pushToast(synthesizeChange(change));
+        scheduleRefresh();
+      },
+    });
+    return () => {
+      unsubscribe();
+      if (refreshTimer.current) { window.clearTimeout(refreshTimer.current); refreshTimer.current = null; }
+    };
+  }, [user, refresh, pushToast]);
 
   useEffect(() => {
     if (!user || loading) return;
@@ -1309,6 +1542,7 @@ export default function AccountPortal() {
       <div className="account-ambient" aria-hidden="true">
         {theme === 'dark' && <ParticleField theme="dark" className="account-star-field" />}
       </div>
+      <AccountToasts toasts={toasts} onDismiss={dismissToast} onNavigate={goToChange} />
       <header className="account-header">
         <a href="/" className="account-brand"><LayoutGrid size={17} /> ACCA AI Services</a>
         <div className="account-header-meta">
@@ -1338,7 +1572,7 @@ export default function AccountPortal() {
       </header>
 
       <div className="account-shell">
-        <section className="account-hero">
+        <section id="account-anchor-profile" className="account-hero">
           <div>
             <span className="account-kicker">ACCA Central Account</span>
             <h1>{t('پنل مرکزی شما', 'Your central panel')}</h1>
@@ -1391,7 +1625,7 @@ export default function AccountPortal() {
           </div>
         )}
 
-        <AccountNotifications notifications={data.notifications} documents={data.documents} />
+        <AccountNotifications notifications={data.notifications} documents={data.documents} onNavigate={goToChange} />
 
         <nav className="account-product-tabs" role="tablist" aria-label="انتخاب سرویس">
           <button
@@ -1473,6 +1707,7 @@ export default function AccountPortal() {
             </div>
             <a href="/smart-apply">ادامه مسیر</a>
           </div>
+          <div id="account-anchor-documents" className="account-anchor" aria-hidden="true" />
           <DocumentUploader product="smart_apply" user={user} onUploaded={refresh} />
           <DocumentList
             documents={smartStudentDocs}
@@ -1484,6 +1719,7 @@ export default function AccountPortal() {
             deletingId={deletingDocId}
             onDelete={deleteDocument}
           />
+          <div id="account-anchor-application" className="account-anchor" aria-hidden="true" />
           <ApplicationReadinessPanel
             product="smart_apply"
             documents={smartDocuments}
@@ -1544,7 +1780,9 @@ export default function AccountPortal() {
             product="ai_transfer"
             onChange={() => setCatalogPicker({ product: 'ai_transfer', initialSelection: getSelectionItems(transferSelection) })}
           />
+          <div id="account-anchor-transfer" className="account-anchor" aria-hidden="true" />
           <TransferAnalysisPanel result={transferDashboardResult} documents={transferDocuments} />
+          <div id="account-anchor-documents" className="account-anchor" aria-hidden="true" />
           <div className="account-transfer-tools">
             <DocumentUploader
               product="ai_transfer"
@@ -1589,6 +1827,7 @@ export default function AccountPortal() {
             deletingId={deletingDocId}
             onDelete={deleteDocument}
           />
+          <div id="account-anchor-application" className="account-anchor" aria-hidden="true" />
           <ApplicationReadinessPanel
             product="ai_transfer"
             documents={transferDocuments}
