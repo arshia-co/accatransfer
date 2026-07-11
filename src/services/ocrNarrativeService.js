@@ -1,4 +1,6 @@
-const PERSIAN_TEXT = /[\u0600-\u06ff]/;
+// Deliberately exclude Persian/Arabic digits. An English OCR sentence may
+// contain dates or grades such as ۱۳۹۸/۰۵/۰۵ and is still not Persian copy.
+const PERSIAN_LETTERS = /[\u0621-\u063a\u0641-\u064a\u066e-\u06d3\u06fa-\u06ff]/;
 
 const DOCUMENT_TYPE_FA = {
   passport: 'گذرنامه',
@@ -18,7 +20,7 @@ function valueOf(value) {
 }
 
 function isPersian(value) {
-  return PERSIAN_TEXT.test(valueOf(value));
+  return PERSIAN_LETTERS.test(valueOf(value));
 }
 
 function extractionOf(document) {
@@ -114,7 +116,7 @@ export function getLocalizedOcrSummary(document, lang = 'fa') {
     return valueOf(extraction.summary_en) || valueOf(extraction.summary) || '';
   }
   const localized = valueOf(extraction.summary_fa);
-  if (localized) return localized;
+  if (isPersian(localized)) return localized;
   if (isPersian(extraction.summary)) return valueOf(extraction.summary);
   return buildPersianSummary(document, extraction);
 }
@@ -127,7 +129,7 @@ export function getLocalizedOcrAction(document, lang = 'fa') {
     return valueOf(quality.student_action_en) || valueOf(quality.student_action) || '';
   }
   const localized = valueOf(quality.student_action_fa);
-  if (localized) return localized;
+  if (isPersian(localized)) return localized;
   if (isPersian(quality.student_action)) return valueOf(quality.student_action);
   return buildPersianAction(document, extraction);
 }
