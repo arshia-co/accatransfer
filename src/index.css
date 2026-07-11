@@ -1273,7 +1273,7 @@ textarea {
   .account-profile-state { grid-auto-flow: row; }
   .account-profile-state button { width: 100%; }
   .account-profile-modal-backdrop { align-items: end; padding: 8px; }
-  .account-profile-modal { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); gap: 14px; padding: 21px 14px 16px; border-radius: 24px; }
+  .account-profile-modal { width: 100%; max-width: 100%; max-height: calc(100dvh - 16px); gap: 14px; padding: 21px 14px 16px; border-radius: 24px; }
   .account-profile-modal-head { align-items: flex-start; padding-inline-end: 0; }
   .account-profile-modal-close { top: 12px; left: 12px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
   .account-profile-modal-grid, .account-profile-security { padding: 12px; border-radius: 19px; }
