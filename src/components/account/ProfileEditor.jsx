@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Camera,
   Check,
+  ChevronDown,
   Edit3,
   Eye,
   EyeOff,
@@ -23,17 +24,102 @@ import {
 } from '../../services/accountService';
 
 const COUNTRY_CODES = [
-  { value: '+90', label: 'Turkey +90' },
-  { value: '+98', label: 'Iran +98' },
-  { value: '+994', label: 'Azerbaijan +994' },
-  { value: '+7', label: 'Russia / CIS +7' },
-  { value: '+971', label: 'UAE +971' },
-  { value: '+966', label: 'Saudi Arabia +966' },
-  { value: '+964', label: 'Iraq +964' },
-  { value: '+1', label: 'US / Canada +1' },
-  { value: '+44', label: 'UK +44' },
-  { value: '+49', label: 'Germany +49' },
+  { value: '+90', iso: 'tr', name: 'Turkey' },
+  { value: '+98', iso: 'ir', name: 'Iran' },
+  { value: '+994', iso: 'az', name: 'Azerbaijan' },
+  { value: '+7', iso: 'ru', name: 'Russia / CIS' },
+  { value: '+971', iso: 'ae', name: 'UAE' },
+  { value: '+966', iso: 'sa', name: 'Saudi Arabia' },
+  { value: '+964', iso: 'iq', name: 'Iraq' },
+  { value: '+1', iso: 'us', name: 'US / Canada' },
+  { value: '+44', iso: 'gb', name: 'UK' },
+  { value: '+49', iso: 'de', name: 'Germany' },
 ];
+
+// Tiny flag icon. flagcdn serves 20×~14 PNGs; if it ever fails (offline /
+// blocked), fall back to the ISO code so the row still reads.
+function CountryFlag({ country }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <span className="account-cc-flag is-fallback">{country.iso.toUpperCase()}</span>;
+  }
+  return (
+    <img
+      className="account-cc-flag"
+      src={`https://flagcdn.com/w40/${country.iso}.png`}
+      srcSet={`https://flagcdn.com/w80/${country.iso}.png 2x`}
+      width="20"
+      height="14"
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+// Brand-styled country-code picker (same design language as the document-type
+// picker): flag + country name + dial code, custom popover instead of the
+// unthemeable native <select> that broke dark-mode contrast.
+function CountryCodePicker({ value, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const current = COUNTRY_CODES.find((c) => c.value === value) || COUNTRY_CODES[0];
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (event) => { if (ref.current && !ref.current.contains(event.target)) setOpen(false); };
+    const onKey = (event) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className={`doc-kind-picker account-cc-picker ${open ? 'is-open' : ''}`} ref={ref}>
+      <button
+        type="button"
+        className="doc-kind-trigger"
+        dir="ltr"
+        onClick={() => { if (!disabled) setOpen((o) => !o); }}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="account-cc-current">
+          <CountryFlag country={current} />
+          <b>{current.name}</b>
+          <small>{current.value}</small>
+        </span>
+        <ChevronDown size={16} aria-hidden="true" />
+      </button>
+      {open && (
+        <ul className="doc-kind-menu account-cc-menu" role="listbox" dir="ltr">
+          {COUNTRY_CODES.map((country) => (
+            <li key={country.value}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={country.value === value}
+                className={country.value === value ? 'is-active' : ''}
+                onClick={() => { onChange(country.value); setOpen(false); }}
+              >
+                <span className="account-cc-current">
+                  <CountryFlag country={country} />
+                  <b>{country.name}</b>
+                  <small>{country.value}</small>
+                </span>
+                {country.value === value && <Check size={15} aria-hidden="true" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function normalizePhone(value) {
   return String(value || '').replace(/[^\d\s()-]/g, '').replace(/\s+/g, ' ').trim();
@@ -299,18 +385,14 @@ export default function ProfileEditor({ user, profile, onSaved }) {
                     />
                   </label>
                   <div className="account-profile-phone">
-                    <label>
+                    <div className="account-profile-cc-field">
                       <span>کد کشور</span>
-                      <select
-                        className="account-profile-input"
+                      <CountryCodePicker
                         value={phoneCountryCode}
-                        onChange={(event) => setPhoneCountryCode(event.target.value)}
-                      >
-                        {COUNTRY_CODES.map((country) => (
-                          <option key={country.value} value={country.value}>{country.label}</option>
-                        ))}
-                      </select>
-                    </label>
+                        onChange={setPhoneCountryCode}
+                        disabled={savingProfile}
+                      />
+                    </div>
                     <label>
                       <span>شماره تلفن</span>
                       <input

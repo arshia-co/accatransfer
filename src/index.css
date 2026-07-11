@@ -425,7 +425,8 @@ textarea {
 .account-profile-modal-grid { position: relative; display: grid; grid-template-columns: 135px minmax(0, 1fr); gap: 18px; min-width: 0; padding: 16px; border: 1px solid rgba(16,47,72,.07); border-radius: 22px; background: rgba(247,243,236,.58); }
 .account-profile-photo-block { display: grid; justify-items: center; align-content: start; gap: 9px; color: rgba(16,47,72,.5); font-size: 10px; text-align: center; }
 .account-profile-fields { display: grid; min-width: 0; gap: 11px; }
-.account-profile-fields label { display: grid; gap: 6px; color: rgba(16,47,72,.55); font-size: 10px; font-weight: 850; }
+.account-profile-fields label,
+.account-profile-cc-field { display: grid; gap: 6px; color: rgba(16,47,72,.55); font-size: 10px; font-weight: 850; }
 .account-profile-input { width: 100%; min-width: 0; min-height: 46px; padding: 0 12px; border: 1px solid rgba(16,47,72,.12); border-radius: 13px; color: #102f48; background: white; font: inherit; font-size: 14px; }
 .account-profile-input:focus { outline: 0; border-color: rgba(20,116,95,.5); box-shadow: 0 0 0 4px rgba(20,116,95,.08); }
 .account-profile-phone { display: grid; grid-template-columns: minmax(145px, .75fr) minmax(0, 1.25fr); gap: 10px; min-width: 0; }
@@ -1008,6 +1009,19 @@ textarea {
 .account-central[data-theme="dark"] .doc-kind-menu button:hover { background: rgba(47,208,166,.14); }
 .account-central[data-theme="dark"] .doc-kind-menu button.is-active { background: rgba(47,208,166,.18); color: #6ef0cd; }
 .account-central[data-theme="dark"] .doc-kind-menu button svg { color: #2fd0a6; }
+/* Country-code picker (profile editor) — same design language as the
+   document-type picker, plus a small flag and the dial code per row. */
+.account-cc-picker .doc-kind-trigger { min-height: 46px; border-radius: 13px; font-size: 13px; }
+.account-cc-current { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.account-cc-current b { overflow: hidden; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.account-cc-current small { flex: 0 0 auto; color: rgba(16,47,72,.55); font-size: 11px; font-weight: 800; }
+.account-cc-flag { flex: 0 0 auto; width: 20px; height: 14px; border-radius: 3px; object-fit: cover; box-shadow: 0 0 0 1px rgba(16,47,72,.16); }
+.account-cc-flag.is-fallback { display: inline-grid; place-items: center; font-size: 7.5px; font-weight: 900; color: rgba(16,47,72,.6); background: rgba(16,47,72,.08); }
+.account-cc-menu { max-height: 268px; }
+.account-cc-menu .account-cc-current { flex: 1; }
+.account-central[data-theme="dark"] .account-cc-current small { color: rgba(231,238,251,.6); }
+.account-central[data-theme="dark"] .account-cc-flag { box-shadow: 0 0 0 1px rgba(255,255,255,.2); }
+.account-central[data-theme="dark"] .account-cc-flag.is-fallback { color: rgba(231,238,251,.7); background: rgba(255,255,255,.1); }
 /* Realtime toast stack (live account notifications) */
 .account-toasts { position: fixed; z-index: 90; top: 18px; inset-inline-end: 18px; display: flex; flex-direction: column; gap: 10px; width: min(340px, calc(100vw - 32px)); pointer-events: none; }
 .account-toast { display: flex; align-items: flex-start; gap: 11px; padding: 12px 13px; border: 1px solid rgba(16,47,72,.1); border-radius: 15px; background: rgba(255,255,255,.97); box-shadow: 0 18px 44px rgba(16,47,72,.2); pointer-events: auto; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
@@ -2988,6 +3002,12 @@ textarea {
   background: radial-gradient(120% 82% at 50% 40%, transparent 45%, rgba(2, 8, 18, 0.68) 100%);
 }
 
+/* Star field now renders in BOTH themes (navy constellation on cream by day). */
+.account-central .account-star-field {
+  z-index: 1;
+  opacity: 0.5;
+}
+
 .account-central[data-theme="dark"] .account-star-field {
   z-index: 1;
   opacity: 0.76;
@@ -3735,6 +3755,7 @@ textarea {
   .account-profile-modal-head p,
   .account-profile-photo-block,
   .account-profile-fields label,
+  .account-profile-cc-field,
   .account-profile-security span,
   .account-profile-security small
 ) {
