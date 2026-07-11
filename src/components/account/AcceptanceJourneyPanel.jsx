@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { WHATSAPP_URL } from '../../lib/constants';
 import { createDocumentSignedUrl } from '../../services/accountService';
+import { getLocalizedOcrSummary } from '../../services/ocrNarrativeService';
 
 function waLink(message) {
   return `${WHATSAPP_URL}?text=${encodeURIComponent(message)}`;
@@ -82,6 +83,7 @@ const STEPS = [
 export default function AcceptanceJourneyPanel({
   submission,
   acceptanceDoc,
+  lang = 'fa',
   companyDocs = [],
   onRequestRegistrationHelp,
   helpBusy,
@@ -103,7 +105,7 @@ export default function AcceptanceJourneyPanel({
     }
   };
   const accepted = Boolean(acceptanceDoc);
-  const ocrSummary = acceptanceDoc?.ai_extraction?.summary;
+  const ocrSummary = getLocalizedOcrSummary(acceptanceDoc, lang);
   const offerDetails = acceptanceDoc?.ai_extraction?.offer_details;
   const offerStatus = offerDetails?.status;
   // The admin-controlled application status is authoritative. OCR describes

@@ -36,6 +36,7 @@ import ApplicationReadinessPanel from './ApplicationReadinessPanel';
 import AcceptanceJourneyPanel from './AcceptanceJourneyPanel';
 import ProfileEditor from './ProfileEditor';
 import ParticleField from '../gateway/ParticleField';
+import { getLocalizedOcrAction, getLocalizedOcrSummary } from '../../services/ocrNarrativeService';
 
 const EMPTY_DATA = {
   profile: null,
@@ -140,7 +141,7 @@ function ExtractedCourses({ courses }) {
 // upload list, and are not deletable by the student.
 const COMPANY_DOC_KINDS = new Set(['acceptance_letter', 'document_request', 'status_update_attachment', 'rejection_notice']);
 
-function DocumentCard({ document, busy, deleting, onConfirm, onReview, onRetry, onDelete }) {
+function DocumentCard({ document, lang = 'fa', busy, deleting, onConfirm, onReview, onRetry, onDelete }) {
   const locked = Boolean(document.is_locked) || COMPANY_DOC_KINDS.has(document.document_kind);
   const [open, setOpen] = useState(false);
   const extraction = document.ai_extraction;
@@ -149,8 +150,10 @@ function DocumentCard({ document, busy, deleting, onConfirm, onReview, onRetry, 
   const decision = getDocumentOcrDecision(document);
   const confidence = decision.confidence;
   const quality = extraction?.quality || document.quality_report;
+  const ocrSummary = getLocalizedOcrSummary(document, lang);
+  const ocrAction = getLocalizedOcrAction(document, lang);
   const confirmed = document.review_status === 'confirmed' || document.review_status === 'reviewed';
-  const hasDetail = visibleFields.length > 0 || Boolean(extraction?.summary) || (extraction?.courses?.length ?? 0) > 0;
+  const hasDetail = visibleFields.length > 0 || Boolean(ocrSummary) || (extraction?.courses?.length ?? 0) > 0;
   const expandable = hasDetail || Boolean(extraction && !decision.canContinue);
   const state = confirmed
     ? { cls: 'is-confirmed', label: 'تأیید‌شده', Icon: BadgeCheck }
@@ -215,9 +218,9 @@ function DocumentCard({ document, busy, deleting, onConfirm, onReview, onRetry, 
               ))}
             </dl>
           )}
-          {extraction?.summary && <p className="account-ocr-summary">{extraction.summary}</p>}
-          {quality?.student_action && quality.status !== 'good' && (
-            <p className="account-ocr-warning"><AlertTriangle size={14} />{quality.student_action}</p>
+          {ocrSummary && <p className="account-ocr-summary">{ocrSummary}</p>}
+          {ocrAction && quality?.status !== 'good' && (
+            <p className="account-ocr-warning"><AlertTriangle size={14} />{ocrAction}</p>
           )}
           <ExtractedCourses courses={extraction?.courses} />
           {!confirmed && extraction && (
@@ -231,7 +234,7 @@ function DocumentCard({ document, busy, deleting, onConfirm, onReview, onRetry, 
   );
 }
 
-function DocumentList({ documents, busyId, deletingId, onConfirm, onReview, onRetry, onDelete }) {
+function DocumentList({ documents, lang = 'fa', busyId, deletingId, onConfirm, onReview, onRetry, onDelete }) {
   if (!documents.length) {
     return <div className="account-product-empty"><FolderLock size={22} /><span>هنوز مدرکی در این بخش ثبت نشده است.</span></div>;
   }
@@ -241,6 +244,7 @@ function DocumentList({ documents, busyId, deletingId, onConfirm, onReview, onRe
         <DocumentCard
           key={document.id}
           document={document}
+          lang={lang}
           busy={busyId === document.id}
           deleting={deletingId === document.id}
           onConfirm={onConfirm}
@@ -1472,6 +1476,7 @@ export default function AccountPortal() {
           <DocumentUploader product="smart_apply" user={user} onUploaded={refresh} />
           <DocumentList
             documents={smartStudentDocs}
+            lang={lang}
             busyId={documentBusyId}
             onConfirm={(document) => updateDocumentReview(document, 'confirm')}
             onReview={(document) => updateDocumentReview(document, 'review')}
@@ -1492,6 +1497,7 @@ export default function AccountPortal() {
             <AcceptanceJourneyPanel
               submission={smartSubmission}
               acceptanceDoc={smartAcceptanceDoc}
+              lang={lang}
               companyDocs={smartCompanyDocs}
               onRequestRegistrationHelp={() => requestRegistrationHelp('smart_apply')}
               helpBusy={helpBusy}
@@ -1574,6 +1580,7 @@ export default function AccountPortal() {
           )}
           <DocumentList
             documents={transferStudentDocs}
+            lang={lang}
             busyId={documentBusyId}
             onConfirm={(document) => updateDocumentReview(document, 'confirm')}
             onReview={(document) => updateDocumentReview(document, 'review')}
@@ -1594,6 +1601,7 @@ export default function AccountPortal() {
             <AcceptanceJourneyPanel
               submission={transferSubmission}
               acceptanceDoc={transferAcceptanceDoc}
+              lang={lang}
               companyDocs={transferCompanyDocs}
               onRequestRegistrationHelp={() => requestRegistrationHelp('ai_transfer')}
               helpBusy={helpBusy}

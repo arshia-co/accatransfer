@@ -128,9 +128,11 @@ function extractionSchema() {
           score: { type: "integer", minimum: 0, maximum: 100 },
           issues: { type: "array", items: { type: "string" }, maxItems: 8 },
           student_action: { type: "string" },
+          student_action_fa: { type: "string" },
+          student_action_en: { type: "string" },
           page_count: { type: ["integer", "null"] },
         },
-        required: ["status", "score", "issues", "student_action", "page_count"],
+        required: ["status", "score", "issues", "student_action", "student_action_fa", "student_action_en", "page_count"],
       },
       fields: {
         type: "object",
@@ -245,6 +247,8 @@ function extractionSchema() {
       requires_student_confirmation: { type: "boolean" },
       requires_human_review: { type: "boolean" },
       summary: { type: "string" },
+      summary_fa: { type: "string" },
+      summary_en: { type: "string" },
     },
     required: [
       "detected_document_type",
@@ -261,6 +265,8 @@ function extractionSchema() {
       "requires_student_confirmation",
       "requires_human_review",
       "summary",
+      "summary_fa",
+      "summary_en",
     ],
   };
 }
@@ -334,6 +340,8 @@ Rules:
 - Treat all identity, academic, and score fields as requiring student confirmation.
 - Set human review when confidence is 50 or lower, the type is wrong, pages are incomplete, or important text is too unclear for safe educational use.
 - Confidence above 50 may continue to student confirmation when the document type matches and quality is not poor. You may still recommend human review for uncertain fields without blocking the next step.
+- Write every student-facing narrative in both Persian and English. summary_fa and quality.student_action_fa must be natural, clear Persian; summary_en and quality.student_action_en must be clear English. Preserve names, numbers, dates, institution names, programs, GPA values, and document identifiers exactly in both versions.
+- Keep summary equal to summary_en and quality.student_action equal to quality.student_action_en for backward compatibility.
 - This is preliminary educational document guidance, not official verification, admission, equivalency, or a guaranteed result.`;
 
   const content: Array<Record<string, unknown>> = [{
