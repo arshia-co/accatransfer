@@ -412,7 +412,7 @@ textarea {
 .account-profile-modal::-webkit-scrollbar { width: 8px; }
 .account-profile-modal::-webkit-scrollbar-track { background: transparent; }
 .account-profile-modal::-webkit-scrollbar-thumb { border: 2px solid rgba(255,255,255,.96); border-radius: 999px; background: rgba(16,47,72,.24); }
-.account-profile-modal::before { content: ""; position: absolute; z-index: 0; inset: -72px -96px auto; height: 350px; background: radial-gradient(ellipse 72% 86% at 78% 4%, rgba(20,128,106,.22) 0%, rgba(20,128,106,.13) 34%, rgba(232,201,134,.07) 56%, transparent 82%); filter: blur(3px); opacity: .94; pointer-events: none; }
+.account-profile-modal::before { content: ""; position: absolute; z-index: 0; inset: -72px 0 auto; width: 100%; height: 350px; background: radial-gradient(ellipse 72% 86% at 78% 4%, rgba(20,128,106,.22) 0%, rgba(20,128,106,.13) 34%, rgba(232,201,134,.07) 56%, transparent 82%); filter: blur(3px); opacity: .94; pointer-events: none; }
 .account-profile-modal-close { position: absolute; z-index: 5; top: 14px; left: 14px; display: grid; width: 42px; min-width: 42px; height: 42px; min-height: 42px; padding: 0; place-items: center; border: 1px solid rgba(16,47,72,.1); border-radius: 50%; color: rgba(16,47,72,.68); background: rgba(255,255,255,.78); box-shadow: 0 10px 24px rgba(16,47,72,.1), inset 0 1px 0 rgba(255,255,255,.9); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform .22s ease, color .22s ease, border-color .22s ease, background .22s ease, box-shadow .22s ease; }
 .account-profile-modal-close:hover { color: #102f48; border-color: rgba(20,116,95,.25); background: white; box-shadow: 0 12px 30px rgba(20,116,95,.18), 0 0 0 5px rgba(20,116,95,.06); transform: translateY(-1px) rotate(4deg); }
 .account-profile-modal-close:active { transform: scale(.94); }
@@ -3605,7 +3605,8 @@ textarea {
 }
 
 .account-central[data-theme="dark"] .account-profile-modal::before {
-  inset: -82px -105px auto;
+  inset: -82px 0 auto;
+  width: 100%;
   height: 390px;
   background:
     radial-gradient(ellipse 76% 90% at 80% 2%, rgba(54, 216, 173, 0.29) 0%, rgba(36, 184, 148, 0.18) 32%, rgba(24, 119, 119, 0.1) 55%, transparent 84%);
@@ -3660,6 +3661,17 @@ textarea {
   color: var(--account-night-text);
   border: 0;
   background: transparent;
+}
+
+.account-central[data-theme="dark"] .account-profile-pass input:-webkit-autofill,
+.account-central[data-theme="dark"] .account-profile-pass input:-webkit-autofill:hover,
+.account-central[data-theme="dark"] .account-profile-pass input:-webkit-autofill:focus {
+  border: 0;
+  -webkit-text-fill-color: var(--account-night-text);
+  caret-color: var(--account-night-text);
+  -webkit-box-shadow: 0 0 0 1000px #07192a inset;
+  box-shadow: 0 0 0 1000px #07192a inset;
+  transition: background-color 9999s ease-out 0s;
 }
 
 .account-central[data-theme="dark"] .account-profile-input::placeholder,
