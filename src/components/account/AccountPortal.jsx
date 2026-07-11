@@ -267,10 +267,15 @@ const LETTER_TYPE_LABEL = {
   general: 'نامه رسمی',
 };
 
-function AccountNotifications({ notifications = [], documents = [] }) {
+function AccountNotifications({ notifications = [], documents = [], onNavigate }) {
   const [openingId, setOpeningId] = useState(null);
   const visible = notifications.slice(0, 5);
   if (!visible.length) return null;
+
+  const navigateForNotification = (notification) => {
+    const document = documents.find((item) => item.id === notification.document_id);
+    onNavigate?.({ target: 'documents', product: document?.product || null });
+  };
 
   const openLinkedDocument = async (notification) => {
     const document = documents.find((item) => item.id === notification.document_id);
@@ -285,7 +290,7 @@ function AccountNotifications({ notifications = [], documents = [] }) {
   };
 
   return (
-    <motion.section className="account-notifications" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+    <motion.section id="account-anchor-notifications" className="account-notifications" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
       <div className="account-notifications-head">
         <span><Bell size={18} /></span>
         <div>
@@ -298,7 +303,13 @@ function AccountNotifications({ notifications = [], documents = [] }) {
           const hasDocument = Boolean(notification.document_id && documents.some((item) => item.id === notification.document_id));
           return (
             <article key={notification.id} className={notification.read_at ? '' : 'is-unread'}>
-              <div>
+              <div
+                className={hasDocument ? 'is-navigable' : ''}
+                role={hasDocument ? 'button' : undefined}
+                tabIndex={hasDocument ? 0 : undefined}
+                onClick={hasDocument ? () => navigateForNotification(notification) : undefined}
+                onKeyDown={hasDocument ? (event) => { if (event.key === 'Enter') navigateForNotification(notification); } : undefined}
+              >
                 <b>{notification.title}</b>
                 <small>{formatDate(notification.created_at)}</small>
                 <p>{notification.message}</p>
@@ -322,50 +333,53 @@ function AccountNotifications({ notifications = [], documents = [] }) {
 function synthesizeChange({ table, event, row, old }) {
   if (table === 'student_documents') {
     const label = documentKindLabel(row.document_kind) || 'مدرک';
+    const nav = { product: row.product || null, target: 'documents' };
     const status = String(row.review_status || '').toLowerCase();
     const wasStatus = String(old?.review_status || '').toLowerCase();
     if (['confirmed', 'reviewed', 'approved'].includes(status) && status !== wasStatus) {
-      return { tone: 'success', title: 'مدرک تأیید شد', message: `«${label}» شما تأیید شد.` };
+      return { tone: 'success', title: 'مدرک تأیید شد', message: `«${label}» شما تأیید شد.`, ...nav };
     }
     if (status === 'rejected' && status !== wasStatus) {
-      return { tone: 'error', title: 'مدرک رد شد', message: `«${label}» نیازمند بازبینی است.` };
+      return { tone: 'error', title: 'مدرک رد شد', message: `«${label}» نیازمند بازبینی است.`, ...nav };
     }
     const gotExtraction = row.ai_extraction && !old?.ai_extraction;
     if (gotExtraction) {
-      return { tone: 'info', title: 'اطلاعات مدرک استخراج شد', message: `نمرات و اطلاعات «${label}» با هوش مصنوعی خوانده شد.` };
+      return { tone: 'info', title: 'اطلاعات مدرک استخراج شد', message: `نمرات و اطلاعات «${label}» با هوش مصنوعی خوانده شد.`, ...nav };
     }
     if (event === 'INSERT') {
-      return { tone: 'info', title: 'مدرک آپلود شد', message: `«${label}» با موفقیت در پرونده ثبت شد.` };
+      return { tone: 'info', title: 'مدرک آپلود شد', message: `«${label}» با موفقیت در پرونده ثبت شد.`, ...nav };
     }
     return null;
   }
   if (table === 'transfer_assessments') {
-    return { tone: 'info', title: 'تحلیل انتقالی به‌روزرسانی شد', message: 'نتیجهٔ جدید بررسی شانس انتقالی شما آماده است.' };
+    return { tone: 'info', title: 'تحلیل انتقالی به‌روزرسانی شد', message: 'نتیجهٔ جدید بررسی شانس انتقالی شما آماده است.', product: 'ai_transfer', target: 'transfer' };
   }
   if (table === 'application_submissions') {
+    const nav = { product: row.product || null, target: 'application' };
     const status = row.admin_status || row.status;
     const wasStatus = old?.admin_status || old?.status;
     if (status && status !== wasStatus) {
-      return { tone: 'success', title: 'وضعیت پرونده تغییر کرد', message: `وضعیت جدید: ${localizeStatus(status)}` };
+      return { tone: 'success', title: 'وضعیت پرونده تغییر کرد', message: `وضعیت جدید: ${localizeStatus(status)}`, ...nav };
     }
     if (event === 'INSERT') {
-      return { tone: 'info', title: 'پرونده ثبت شد', message: 'درخواست شما ثبت شد و در صف بررسی قرار گرفت.' };
+      return { tone: 'info', title: 'پرونده ثبت شد', message: 'درخواست شما ثبت شد و در صف بررسی قرار گرفت.', ...nav };
     }
     return null;
   }
   if (table === 'profiles') {
-    return { tone: 'info', title: 'پروفایل به‌روزرسانی شد', message: 'تغییرات حساب شما ذخیره شد.' };
+    return { tone: 'info', title: 'پروفایل به‌روزرسانی شد', message: 'تغییرات حساب شما ذخیره شد.', target: 'profile' };
   }
   return null;
 }
 
 const TOAST_TONE_ICON = { success: CheckCircle2, error: AlertTriangle, info: Bell };
 
-// Live popup stack for realtime account events. Each toast auto-dismisses.
-function AccountToasts({ toasts, onDismiss }) {
+// Live popup stack for realtime account events. Each toast auto-dismisses and,
+// when it carries a target, clicking it jumps the page to the changed section.
+function AccountToasts({ toasts, onDismiss, onNavigate }) {
   useEffect(() => {
     if (!toasts.length) return undefined;
-    const timers = toasts.map((t) => window.setTimeout(() => onDismiss(t.id), 6000));
+    const timers = toasts.map((t) => window.setTimeout(() => onDismiss(t.id), 7000));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [toasts, onDismiss]);
 
@@ -375,22 +389,31 @@ function AccountToasts({ toasts, onDismiss }) {
       <AnimatePresence>
         {toasts.map((toast) => {
           const Icon = TOAST_TONE_ICON[toast.tone] || Bell;
+          const clickable = Boolean(toast.target);
           return (
             <motion.div
               key={toast.id}
-              className={`account-toast is-${toast.tone}`}
+              className={`account-toast is-${toast.tone} ${clickable ? 'is-clickable' : ''}`}
               role="status"
               initial={{ opacity: 0, x: 40, scale: 0.96 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 40, scale: 0.96 }}
               transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              onClick={clickable ? () => { onNavigate(toast); onDismiss(toast.id); } : undefined}
             >
               <span className="account-toast-icon"><Icon size={17} /></span>
               <div className="account-toast-body">
                 <b>{toast.title}</b>
                 {toast.message && <p>{toast.message}</p>}
+                {clickable && <em className="account-toast-cta">نمایش این بخش ←</em>}
               </div>
-              <button type="button" onClick={() => onDismiss(toast.id)} aria-label="بستن"><X size={14} /></button>
+              <button
+                type="button"
+                onClick={(event) => { event.stopPropagation(); onDismiss(toast.id); }}
+                aria-label="بستن"
+              >
+                <X size={14} />
+              </button>
             </motion.div>
           );
         })}
@@ -1213,6 +1236,28 @@ export default function AccountPortal() {
     setToasts((list) => list.filter((t) => t.id !== id));
   }, []);
 
+  // Jump the page to the section a notification refers to (switching product
+  // tab first when needed), with a brief highlight so the change is obvious.
+  const goToChange = useCallback((toast) => {
+    if (!toast?.target) return;
+    const scrollTo = () => {
+      const el = document.getElementById(`account-anchor-${toast.target}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Zero-height marker anchors flash their following content instead.
+      const flashEl = (el.offsetHeight > 6 ? el : el.nextElementSibling) || el;
+      flashEl.classList.add('account-anchor-flash');
+      window.setTimeout(() => flashEl.classList.remove('account-anchor-flash'), 1700);
+    };
+    if (toast.product && (toast.product === 'smart_apply' || toast.product === 'ai_transfer')) {
+      let switched = false;
+      setActiveProduct((current) => { switched = current !== toast.product; return toast.product; });
+      window.setTimeout(scrollTo, switched ? 160 : 0);
+    } else {
+      scrollTo();
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) return undefined;
     const scheduleRefresh = () => {
@@ -1224,7 +1269,13 @@ export default function AccountPortal() {
     };
     const unsubscribe = subscribeAccountRealtime(user.id, {
       onNotification: (row) => {
-        pushToast({ tone: 'info', title: row?.title || 'اعلان جدید', message: row?.message || '' });
+        pushToast({
+          tone: 'info',
+          title: row?.title || 'اعلان جدید',
+          message: row?.message || '',
+          target: row?.document_id ? 'documents' : 'notifications',
+          documentId: row?.document_id || null,
+        });
         scheduleRefresh();
       },
       onDataChange: (change) => {
@@ -1491,7 +1542,7 @@ export default function AccountPortal() {
       <div className="account-ambient" aria-hidden="true">
         {theme === 'dark' && <ParticleField theme="dark" className="account-star-field" />}
       </div>
-      <AccountToasts toasts={toasts} onDismiss={dismissToast} />
+      <AccountToasts toasts={toasts} onDismiss={dismissToast} onNavigate={goToChange} />
       <header className="account-header">
         <a href="/" className="account-brand"><LayoutGrid size={17} /> ACCA AI Services</a>
         <div className="account-header-meta">
@@ -1521,7 +1572,7 @@ export default function AccountPortal() {
       </header>
 
       <div className="account-shell">
-        <section className="account-hero">
+        <section id="account-anchor-profile" className="account-hero">
           <div>
             <span className="account-kicker">ACCA Central Account</span>
             <h1>{t('پنل مرکزی شما', 'Your central panel')}</h1>
@@ -1574,7 +1625,7 @@ export default function AccountPortal() {
           </div>
         )}
 
-        <AccountNotifications notifications={data.notifications} documents={data.documents} />
+        <AccountNotifications notifications={data.notifications} documents={data.documents} onNavigate={goToChange} />
 
         <nav className="account-product-tabs" role="tablist" aria-label="انتخاب سرویس">
           <button
@@ -1656,6 +1707,7 @@ export default function AccountPortal() {
             </div>
             <a href="/smart-apply">ادامه مسیر</a>
           </div>
+          <div id="account-anchor-documents" className="account-anchor" aria-hidden="true" />
           <DocumentUploader product="smart_apply" user={user} onUploaded={refresh} />
           <DocumentList
             documents={smartStudentDocs}
@@ -1667,6 +1719,7 @@ export default function AccountPortal() {
             deletingId={deletingDocId}
             onDelete={deleteDocument}
           />
+          <div id="account-anchor-application" className="account-anchor" aria-hidden="true" />
           <ApplicationReadinessPanel
             product="smart_apply"
             documents={smartDocuments}
@@ -1727,7 +1780,9 @@ export default function AccountPortal() {
             product="ai_transfer"
             onChange={() => setCatalogPicker({ product: 'ai_transfer', initialSelection: getSelectionItems(transferSelection) })}
           />
+          <div id="account-anchor-transfer" className="account-anchor" aria-hidden="true" />
           <TransferAnalysisPanel result={transferDashboardResult} documents={transferDocuments} />
+          <div id="account-anchor-documents" className="account-anchor" aria-hidden="true" />
           <div className="account-transfer-tools">
             <DocumentUploader
               product="ai_transfer"
@@ -1772,6 +1827,7 @@ export default function AccountPortal() {
             deletingId={deletingDocId}
             onDelete={deleteDocument}
           />
+          <div id="account-anchor-application" className="account-anchor" aria-hidden="true" />
           <ApplicationReadinessPanel
             product="ai_transfer"
             documents={transferDocuments}
