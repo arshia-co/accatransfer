@@ -1498,6 +1498,7 @@ export default function AccountPortal() {
               submission={smartSubmission}
               acceptanceDoc={smartAcceptanceDoc}
               lang={lang}
+              theme={theme}
               companyDocs={smartCompanyDocs}
               onRequestRegistrationHelp={() => requestRegistrationHelp('smart_apply')}
               helpBusy={helpBusy}
@@ -1602,6 +1603,7 @@ export default function AccountPortal() {
               submission={transferSubmission}
               acceptanceDoc={transferAcceptanceDoc}
               lang={lang}
+              theme={theme}
               companyDocs={transferCompanyDocs}
               onRequestRegistrationHelp={() => requestRegistrationHelp('ai_transfer')}
               helpBusy={helpBusy}

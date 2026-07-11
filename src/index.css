@@ -673,11 +673,60 @@ textarea {
 .acceptance-offer-warning b { display: block; color: #6f4817; font-size: 11px; }
 .acceptance-offer-warning small { display: block; margin-top: 3px; color: rgba(85,55,20,.72); font-size: 9px; line-height: 1.75; }
 .acceptance-steps { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
-.acceptance-steps li { display: grid; grid-template-columns: auto auto minmax(0,1fr); align-items: center; gap: 11px; padding: 11px 13px; border: 1px solid rgba(16,47,72,.07); border-radius: 14px; background: white; }
+.acceptance-steps li { margin: 0; }
+.acceptance-step-button { display: grid; width: 100%; grid-template-columns: auto auto minmax(0,1fr) auto; align-items: center; gap: 11px; padding: 11px 13px; border: 1px solid rgba(16,47,72,.07); border-radius: 14px; color: inherit; background: white; text-align: start; cursor: pointer; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease, background .2s ease; }
+.acceptance-step-button:hover { border-color: rgba(20,116,95,.24); background: rgba(250,255,253,.98); box-shadow: 0 11px 28px rgba(16,47,72,.08); transform: translateY(-1px); }
 .acceptance-step-num { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; color: white; background: #102f48; font-size: 11px; font-weight: 900; }
 .acceptance-step-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 10px; color: #14745f; background: rgba(20,116,95,.1); }
+.acceptance-step-copy { display: block; min-width: 0; }
 .acceptance-steps b { display: block; color: #102f48; font-size: 12px; }
 .acceptance-steps small { color: rgba(16,47,72,.58); font-size: 10px; line-height: 1.7; }
+.acceptance-step-more { display: inline-flex; align-items: center; gap: 4px; padding: 6px 9px; border-radius: 999px; color: #116d5b; background: rgba(20,128,106,.09); font-size: 9px; font-weight: 900; white-space: nowrap; }
+.acceptance-step-more svg { transition: transform .2s ease; }
+.acceptance-step-button:hover .acceptance-step-more svg { transform: translateY(2px); }
+
+.acceptance-guide-backdrop { position: fixed; z-index: 10030; inset: 0; display: grid; place-items: center; padding: 22px; background: rgba(6,18,32,.62); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.acceptance-guide-modal { width: min(860px, 100%); max-height: min(880px, calc(100svh - 44px)); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; direction: rtl; color: #102f48; border: 1px solid rgba(255,255,255,.88); border-radius: 26px; background: radial-gradient(circle at 88% -5%, rgba(20,128,106,.12), transparent 34%), #f8f5ee; box-shadow: 0 38px 120px rgba(0,0,0,.32); scrollbar-width: thin; }
+.acceptance-guide-head { position: sticky; z-index: 3; top: 0; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: flex-start; gap: 13px; padding: 20px 22px 17px; border-bottom: 1px solid rgba(16,47,72,.08); background: rgba(248,245,238,.92); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.acceptance-guide-step { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 15px; color: white; background: linear-gradient(145deg,#102f48,#14745f); box-shadow: 0 12px 28px rgba(16,47,72,.16); }
+.acceptance-guide-head small { color: #a2732d; font-size: 9px; font-weight: 950; letter-spacing: .06em; }
+.acceptance-guide-head h3 { margin: 4px 0 5px; color: #102f48; font-size: 20px; }
+.acceptance-guide-head p { max-width: 670px; margin: 0; color: rgba(16,47,72,.64); font-size: 11px; line-height: 1.9; }
+.acceptance-guide-close { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid rgba(16,47,72,.1); border-radius: 50%; color: #102f48; background: rgba(255,255,255,.7); cursor: pointer; }
+.acceptance-guide-facts, .acceptance-guide-map, .acceptance-guide-checklist { margin: 16px 20px 0; padding: 15px; border: 1px solid rgba(16,47,72,.08); border-radius: 18px; background: rgba(255,255,255,.72); }
+.acceptance-guide-section-title { display: flex; align-items: center; gap: 7px; color: #14745f; }
+.acceptance-guide-section-title b { color: #102f48; font-size: 12px; }
+.acceptance-guide-facts > div:nth-child(2) { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin-top: 10px; }
+.acceptance-guide-facts > div:nth-child(2) > span { display: grid; gap: 3px; padding: 10px 11px; border-radius: 12px; background: rgba(16,47,72,.045); }
+.acceptance-guide-facts small { color: rgba(16,47,72,.48); font-size: 8px; }
+.acceptance-guide-facts span b { overflow-wrap: anywhere; color: #102f48; font-size: 11px; }
+.acceptance-guide-facts > p, .acceptance-guide-map > p { margin: 10px 0 0; color: rgba(16,47,72,.55); font-size: 9px; line-height: 1.8; }
+.acceptance-guide-missing { display: flex; align-items: flex-start; gap: 8px; margin: 16px 20px 0; padding: 12px 14px; border: 1px solid rgba(198,167,104,.2); border-radius: 15px; color: #76551e; background: rgba(230,198,129,.13); font-size: 10px; line-height: 1.8; }
+.acceptance-guide-missing svg { flex: 0 0 auto; margin-top: 2px; }
+.acceptance-letter-map { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; margin-top: 11px; padding: 10px; border: 1px solid rgba(16,47,72,.07); border-radius: 15px; background: rgba(16,47,72,.035); }
+.acceptance-letter-map span { position: relative; display: grid; align-content: center; gap: 3px; min-height: 72px; padding: 10px; border: 1px solid transparent; border-radius: 11px; color: rgba(16,47,72,.48); background: rgba(255,255,255,.66); }
+.acceptance-letter-map span::before { position: absolute; inset-inline-start: 10px; top: 9px; width: 18px; height: 3px; border-radius: 99px; background: rgba(16,47,72,.12); content: ""; }
+.acceptance-letter-map span.is-focus { color: #0f5c4a; border-color: rgba(20,128,106,.2); background: rgba(20,128,106,.1); box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
+.acceptance-letter-map span.is-focus::before { background: #16806b; }
+.acceptance-letter-map b { margin-top: 8px; color: inherit; font-size: 10px; }
+.acceptance-letter-map small { color: inherit; font-size: 8px; line-height: 1.55; }
+.acceptance-guide-checklist ul { display: grid; gap: 8px; margin: 11px 0 0; padding: 0; list-style: none; }
+.acceptance-guide-checklist li { display: flex; align-items: flex-start; gap: 8px; color: rgba(16,47,72,.7); font-size: 10px; line-height: 1.8; }
+.acceptance-guide-checklist li svg { flex: 0 0 auto; margin-top: 2px; color: #16806b; }
+.acceptance-guide-paths { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 16px 20px 0; }
+.acceptance-guide-paths article { display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid rgba(16,47,72,.08); border-radius: 17px; background: rgba(255,255,255,.68); }
+.acceptance-guide-paths article > span { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 11px; color: #102f48; background: rgba(16,47,72,.07); }
+.acceptance-guide-paths article.is-acca { border-color: rgba(20,128,106,.2); background: rgba(20,128,106,.075); }
+.acceptance-guide-paths article.is-acca > span { color: #116d5b; background: rgba(20,128,106,.13); }
+.acceptance-guide-paths b { color: #102f48; font-size: 11px; }
+.acceptance-guide-paths p { margin: 5px 0 0; color: rgba(16,47,72,.6); font-size: 9px; line-height: 1.8; }
+.acceptance-guide-warning { display: flex; align-items: flex-start; gap: 8px; margin: 12px 20px 0; padding: 12px 14px; border: 1px solid rgba(185,111,22,.2); border-radius: 14px; color: #7a4f16; background: rgba(230,168,68,.11); font-size: 9px; font-weight: 750; line-height: 1.8; }
+.acceptance-guide-warning svg { flex: 0 0 auto; margin-top: 1px; }
+.acceptance-guide-actions { position: sticky; z-index: 2; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; padding: 14px 20px 18px; border-top: 1px solid rgba(16,47,72,.08); background: rgba(248,245,238,.94); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.acceptance-guide-actions a, .acceptance-guide-actions button { display: inline-flex; min-height: 42px; flex: 1 1 180px; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid rgba(16,47,72,.1); border-radius: 13px; color: #102f48; background: rgba(255,255,255,.8); font-size: 10px; font-weight: 900; text-decoration: none; cursor: pointer; }
+.acceptance-guide-actions .acceptance-guide-open { color: white; border-color: #102f48; background: #102f48; }
+.acceptance-guide-actions .acceptance-guide-help { color: white; border-color: #14745f; background: #14745f; }
+.acceptance-guide-actions button:disabled { opacity: .58; cursor: progress; }
 .acceptance-visa { display: flex; align-items: flex-start; gap: 11px; padding: 13px; border: 1px solid rgba(20,116,95,.22); border-radius: 14px; background: rgba(20,116,95,.06); }
 .acceptance-visa > svg { flex: 0 0 auto; color: #14745f; }
 .acceptance-visa b { display: block; color: #102f48; font-size: 12px; }
@@ -696,8 +745,21 @@ textarea {
   .acceptance-head h3 { font-size: 16px; }
   .acceptance-doc > div { flex-basis: 100%; }
   .acceptance-download, .acceptance-soon { width: 100%; justify-content: center; }
-  .acceptance-steps li { gap: 9px; padding: 10px 11px; }
+  .acceptance-step-button { grid-template-columns: auto auto minmax(0,1fr); gap: 9px; padding: 10px 11px; }
+  .acceptance-step-more { grid-column: 2 / -1; justify-self: start; }
   .acceptance-visa, .acceptance-offer-warning { padding: 11px; }
+  .acceptance-guide-backdrop { align-items: end; padding: 0; }
+  .acceptance-guide-modal { width: 100%; max-height: 94svh; border-radius: 24px 24px 0 0; }
+  .acceptance-guide-head { padding: 16px 14px 14px; }
+  .acceptance-guide-step { width: 40px; height: 40px; border-radius: 13px; }
+  .acceptance-guide-head h3 { font-size: 17px; }
+  .acceptance-guide-facts, .acceptance-guide-map, .acceptance-guide-checklist { margin: 12px 12px 0; padding: 13px; }
+  .acceptance-guide-missing, .acceptance-guide-warning { margin-inline: 12px; }
+  .acceptance-guide-facts > div:nth-child(2) { grid-template-columns: 1fr 1fr; }
+  .acceptance-letter-map { grid-template-columns: 1fr 1fr; }
+  .acceptance-guide-paths { grid-template-columns: 1fr; margin: 12px 12px 0; }
+  .acceptance-guide-actions { padding: 12px; }
+  .acceptance-guide-actions a, .acceptance-guide-actions button { flex-basis: 100%; }
 }
 .account-journey { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 20px; padding: 8px; border: 1px solid rgba(16,47,72,.07); border-radius: 18px; background: rgba(16,47,72,.025); }
 .account-journey-step { position: relative; display: flex; min-width: 0; align-items: center; gap: 7px; padding: 9px 10px; border-radius: 12px; color: rgba(16,47,72,.38); }
@@ -2893,10 +2955,12 @@ textarea {
   .account-notifications,
   .account-product-tabs,
   .account-product-space,
+  .account-transfer-result,
   .application-readiness,
   .acceptance-journey,
   .account-transfer-history,
   .account-result-section,
+  .catalog-selected-card,
   .doc-dropzone,
   .doc-stage
 ) {
@@ -2910,6 +2974,66 @@ textarea {
     inset 0 1px 0 rgba(255, 255, 255, 0.09);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
   backdrop-filter: blur(16px) saturate(150%);
+}
+
+.account-central[data-theme="dark"] .account-transfer-result {
+  border-color: rgba(114, 225, 192, 0.13);
+  background:
+    radial-gradient(circle at 94% 2%, rgba(29, 158, 130, 0.13), transparent 32%),
+    linear-gradient(145deg, rgba(16, 38, 64, 0.92), rgba(7, 22, 40, 0.9));
+  box-shadow: 0 30px 82px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.account-central[data-theme="dark"] .account-transfer-result::before {
+  opacity: 0.65;
+  background-image:
+    linear-gradient(rgba(180, 215, 244, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(180, 215, 244, 0.04) 1px, transparent 1px);
+}
+
+.account-central[data-theme="dark"] .catalog-selected-card {
+  border-color: rgba(114, 225, 192, 0.15);
+  background: linear-gradient(135deg, rgba(27, 55, 82, 0.84), rgba(11, 31, 53, 0.84));
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.account-central[data-theme="dark"] .catalog-selected-copy > span,
+.account-central[data-theme="dark"] .catalog-selected-extra li svg {
+  color: var(--account-night-green);
+}
+
+.account-central[data-theme="dark"] .catalog-selected-copy h3 {
+  color: var(--account-night-text);
+  text-shadow: 0 0 18px rgba(114, 225, 192, 0.07);
+}
+
+.account-central[data-theme="dark"] .catalog-selected-copy p,
+.account-central[data-theme="dark"] .catalog-selected-extra li {
+  color: var(--account-night-muted);
+}
+
+.account-central[data-theme="dark"] .catalog-selected-copy small,
+.account-central[data-theme="dark"] .catalog-selected-count {
+  color: #dce8f7;
+  background: rgba(114, 225, 192, 0.11);
+}
+
+.account-central[data-theme="dark"] .catalog-selected-actions a {
+  color: #eaf2ff;
+  border-color: rgba(218, 232, 255, 0.16);
+  background: rgba(231, 241, 255, 0.09);
+}
+
+.account-central[data-theme="dark"] .catalog-selected-actions a:hover {
+  color: #fff;
+  border-color: rgba(114, 225, 192, 0.3);
+  background: rgba(114, 225, 192, 0.13);
+}
+
+.account-central[data-theme="dark"] .catalog-selected-actions button {
+  color: #051c2b;
+  border-color: var(--account-night-green);
+  background: linear-gradient(145deg, #7be8c8, #42c39f);
 }
 
 .account-central[data-theme="dark"] :is(h1, h2, h3, h4),
@@ -3033,11 +3157,27 @@ textarea {
 .account-central[data-theme="dark"] .acceptance-doc,
 .account-central[data-theme="dark"] .acceptance-facts > div,
 .account-central[data-theme="dark"] .acceptance-company-item,
-.account-central[data-theme="dark"] .acceptance-steps li,
+.account-central[data-theme="dark"] .acceptance-step-button,
 .account-central[data-theme="dark"] .acceptance-visa {
   border-color: var(--account-night-border-soft);
   background: var(--account-night-inner);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.account-central[data-theme="dark"] .acceptance-step-button:hover {
+  border-color: rgba(114, 225, 192, 0.25);
+  background: rgba(36, 184, 148, 0.105);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.account-central[data-theme="dark"] .acceptance-step-num {
+  color: #061d29;
+  background: var(--account-night-green);
+}
+
+.account-central[data-theme="dark"] .acceptance-step-more {
+  color: #9cf1d8;
+  background: rgba(36, 184, 148, 0.13);
 }
 
 .account-central[data-theme="dark"] .account-card-head > span:first-child,
@@ -3079,7 +3219,17 @@ textarea {
 }
 
 .account-central[data-theme="dark"] .account-product-tabs button {
-  color: var(--account-night-muted);
+  color: #c8d6e8;
+}
+
+.account-central[data-theme="dark"] .account-product-tabs button svg {
+  color: var(--account-night-green);
+  opacity: 0.9;
+}
+
+.account-central[data-theme="dark"] .account-product-tabs button:hover:not(.is-active) {
+  color: #fff;
+  background: rgba(114, 225, 192, 0.08);
 }
 
 .account-central[data-theme="dark"] .account-product-tabs button.is-active {
@@ -3087,6 +3237,60 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.11);
   background: linear-gradient(135deg, rgba(80, 108, 145, 0.42), rgba(33, 60, 91, 0.48));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.account-central[data-theme="dark"] .account-product-tabs button.is-active svg {
+  color: var(--account-night-gold);
+}
+
+.account-central[data-theme="dark"] .account-result-section-title {
+  color: var(--account-night-green);
+}
+
+.account-central[data-theme="dark"] .account-result-section-title h4,
+.account-central[data-theme="dark"] .account-transfer-history article b {
+  color: #f7faff;
+}
+
+.account-central[data-theme="dark"] .account-result-section-title small,
+.account-central[data-theme="dark"] .account-transfer-history article small,
+.account-central[data-theme="dark"] .account-transfer-history article > span,
+.account-central[data-theme="dark"] .account-transfer-history article em {
+  color: #aebfd5;
+}
+
+.account-central[data-theme="dark"] .account-transfer-history article strong {
+  color: var(--account-night-green);
+  text-shadow: 0 0 14px rgba(114, 225, 192, 0.18);
+}
+
+.account-central[data-theme="dark"] .account-transfer-history article.is-active {
+  border-color: rgba(114, 225, 192, 0.24);
+  background: linear-gradient(135deg, rgba(31, 150, 122, 0.17), rgba(29, 78, 101, 0.11));
+}
+
+.account-central[data-theme="dark"] .account-transfer-history button:disabled {
+  color: #92f0d3;
+  border-color: rgba(114, 225, 192, 0.22);
+  background: rgba(36, 184, 148, 0.14);
+}
+
+.account-central[data-theme="dark"] .account-transfer-command,
+.account-central[data-theme="dark"] .account-transfer-command > div,
+.account-central[data-theme="dark"] .account-transfer-stats > div,
+.account-central[data-theme="dark"] .account-result-section,
+.account-central[data-theme="dark"] .account-equiv-row {
+  border-color: rgba(218, 232, 255, 0.11);
+  background: rgba(225, 237, 255, 0.06);
+}
+
+.account-central[data-theme="dark"] .account-transfer-legend > span:not(.is-likely):not(.is-review):not(.is-unlikely) {
+  color: #c8d6e8;
+  background: rgba(225, 237, 255, 0.08);
+}
+
+.account-central[data-theme="dark"] .account-transfer-legend > span:not(.is-likely):not(.is-review):not(.is-unlikely) b {
+  color: #fff;
 }
 
 .account-central[data-theme="dark"] .account-journey {
@@ -3287,6 +3491,105 @@ textarea {
 .account-central[data-theme="dark"] .acceptance-offer-warning b,
 .account-central[data-theme="dark"] .acceptance-offer-warning small {
   color: inherit;
+}
+
+.acceptance-guide-backdrop.is-dark {
+  background: rgba(2, 9, 18, 0.76);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-modal {
+  color: #f5f8ff;
+  border-color: rgba(218, 232, 255, 0.17);
+  background:
+    radial-gradient(circle at 88% -8%, rgba(36, 184, 148, 0.18), transparent 38%),
+    linear-gradient(145deg, rgba(14, 34, 58, 0.98), rgba(6, 19, 35, 0.98));
+  box-shadow: 0 42px 130px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-head,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-actions {
+  border-color: rgba(218, 232, 255, 0.1);
+  background: rgba(9, 25, 44, 0.9);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-head h3,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-section-title b,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-facts span b,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-paths b {
+  color: #f5f8ff;
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-head small,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-section-title {
+  color: #72e1c0;
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-head p,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-facts small,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-facts > p,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-map > p,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-checklist li,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-paths p {
+  color: #b9c8dc;
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-close,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-facts,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-map,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-checklist,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-paths article,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-actions a,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-actions button {
+  color: #f5f8ff;
+  border-color: rgba(218, 232, 255, 0.13);
+  background: rgba(225, 237, 255, 0.065);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-facts > div:nth-child(2) > span,
+.acceptance-guide-backdrop.is-dark .acceptance-letter-map {
+  border-color: rgba(218, 232, 255, 0.08);
+  background: rgba(225, 237, 255, 0.055);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-letter-map span {
+  color: #9fb1c8;
+  background: rgba(225, 237, 255, 0.055);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-letter-map span.is-focus,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-paths article.is-acca {
+  color: #9cf1d8;
+  border-color: rgba(114, 225, 192, 0.22);
+  background: rgba(36, 184, 148, 0.13);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-paths article > span {
+  color: #f1d18a;
+  background: rgba(241, 209, 138, 0.1);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-paths article.is-acca > span {
+  color: #72e1c0;
+  background: rgba(36, 184, 148, 0.15);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-missing,
+.acceptance-guide-backdrop.is-dark .acceptance-guide-warning {
+  color: #f5dba5;
+  border-color: rgba(241, 209, 138, 0.18);
+  background: rgba(218, 170, 76, 0.11);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-actions .acceptance-guide-open {
+  color: #071b2b;
+  border-color: #f1d18a;
+  background: linear-gradient(145deg, #f5dda7, #d7b86f);
+}
+
+.acceptance-guide-backdrop.is-dark .acceptance-guide-actions .acceptance-guide-help {
+  color: #061d27;
+  border-color: #72e1c0;
+  background: linear-gradient(145deg, #7ce9c9, #42c39f);
 }
 
 .account-central[data-theme="dark"] .account-profile-modal {
