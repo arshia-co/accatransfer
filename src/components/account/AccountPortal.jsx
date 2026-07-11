@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle, ArrowLeft, BadgeCheck, Bell, BookOpen, BrainCircuit, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CloudUpload, Compass,
   Download, FileCheck2, FileText, FolderLock, GraduationCap, Layers, LayoutGrid, ListChecks, LoaderCircle, Lock, LogOut, Moon, Paperclip, Percent,
-  RefreshCw, ScanText, ShieldCheck, Sparkles, Sun, Target, Trash2, XCircle,
+  RefreshCw, ScanText, ShieldCheck, Sparkles, Sun, Target, Trash2, X, XCircle,
 } from 'lucide-react';
 import { computeCourseMatches, overallMatch, parseGradeRatio } from '../../transfer/lib/course-matching';
 import { useAuth } from '../../auth/AuthContext';
@@ -13,6 +13,7 @@ import {
   confirmDocumentExtraction,
   createTransferAssessment,
   createDocumentSignedUrl,
+  subscribeAccountRealtime,
   deleteStudentDocument,
   listCentralAccountData,
   migrateGuestTransferDraftV2 as migrateGuestTransferDraft,
@@ -73,7 +74,7 @@ function StatusPill({ status = 'draft' }) {
     review_ready: 'آماده بررسی',
     verified: 'تأیید شده',
   };
-  return <span className="account-status"><CheckCircle2 size={13} />{labels[status] || status}</span>;
+  return <span className="account-status"><CheckCircle2 size={13} />{labels[status] || localizeStatus(status)}</span>;
 }
 
 const EXTRACTION_FIELDS = [
@@ -316,6 +317,88 @@ function AccountNotifications({ notifications = [], documents = [] }) {
   );
 }
 
+// Turn a realtime data-table change into a short Persian toast, or null when
+// the change isn't meaningful enough to interrupt the student.
+function synthesizeChange({ table, event, row, old }) {
+  if (table === 'student_documents') {
+    const label = documentKindLabel(row.document_kind) || 'مدرک';
+    const status = String(row.review_status || '').toLowerCase();
+    const wasStatus = String(old?.review_status || '').toLowerCase();
+    if (['confirmed', 'reviewed', 'approved'].includes(status) && status !== wasStatus) {
+      return { tone: 'success', title: 'مدرک تأیید شد', message: `«${label}» شما تأیید شد.` };
+    }
+    if (status === 'rejected' && status !== wasStatus) {
+      return { tone: 'error', title: 'مدرک رد شد', message: `«${label}» نیازمند بازبینی است.` };
+    }
+    const gotExtraction = row.ai_extraction && !old?.ai_extraction;
+    if (gotExtraction) {
+      return { tone: 'info', title: 'اطلاعات مدرک استخراج شد', message: `نمرات و اطلاعات «${label}» با هوش مصنوعی خوانده شد.` };
+    }
+    if (event === 'INSERT') {
+      return { tone: 'info', title: 'مدرک آپلود شد', message: `«${label}» با موفقیت در پرونده ثبت شد.` };
+    }
+    return null;
+  }
+  if (table === 'transfer_assessments') {
+    return { tone: 'info', title: 'تحلیل انتقالی به‌روزرسانی شد', message: 'نتیجهٔ جدید بررسی شانس انتقالی شما آماده است.' };
+  }
+  if (table === 'application_submissions') {
+    const status = row.admin_status || row.status;
+    const wasStatus = old?.admin_status || old?.status;
+    if (status && status !== wasStatus) {
+      return { tone: 'success', title: 'وضعیت پرونده تغییر کرد', message: `وضعیت جدید: ${localizeStatus(status)}` };
+    }
+    if (event === 'INSERT') {
+      return { tone: 'info', title: 'پرونده ثبت شد', message: 'درخواست شما ثبت شد و در صف بررسی قرار گرفت.' };
+    }
+    return null;
+  }
+  if (table === 'profiles') {
+    return { tone: 'info', title: 'پروفایل به‌روزرسانی شد', message: 'تغییرات حساب شما ذخیره شد.' };
+  }
+  return null;
+}
+
+const TOAST_TONE_ICON = { success: CheckCircle2, error: AlertTriangle, info: Bell };
+
+// Live popup stack for realtime account events. Each toast auto-dismisses.
+function AccountToasts({ toasts, onDismiss }) {
+  useEffect(() => {
+    if (!toasts.length) return undefined;
+    const timers = toasts.map((t) => window.setTimeout(() => onDismiss(t.id), 6000));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [toasts, onDismiss]);
+
+  if (!toasts.length) return null;
+  return (
+    <div className="account-toasts" aria-live="polite">
+      <AnimatePresence>
+        {toasts.map((toast) => {
+          const Icon = TOAST_TONE_ICON[toast.tone] || Bell;
+          return (
+            <motion.div
+              key={toast.id}
+              className={`account-toast is-${toast.tone}`}
+              role="status"
+              initial={{ opacity: 0, x: 40, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 40, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+            >
+              <span className="account-toast-icon"><Icon size={17} /></span>
+              <div className="account-toast-body">
+                <b>{toast.title}</b>
+                {toast.message && <p>{toast.message}</p>}
+              </div>
+              <button type="button" onClick={() => onDismiss(toast.id)} aria-label="بستن"><X size={14} /></button>
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 const TRANSFER_STATUS_META = {
   likely: { fa: 'محتمل', cls: 'is-likely' },
   review: { fa: 'نیازمند بررسی', cls: 'is-review' },
@@ -352,12 +435,22 @@ function localizeFit(value) {
 const REVIEW_STATUS_FA = {
   human_review: 'بررسی انسانی',
   admin_review: 'در حال بررسی کارشناس',
+  under_review: 'در حال بررسی',
+  in_review: 'در حال بررسی',
   pending: 'در انتظار بررسی',
+  pending_review: 'در انتظار بررسی',
   reviewed: 'بررسی‌شده',
   confirmed: 'تأییدشده',
   approved: 'تأییدشده',
+  verified: 'تأیید شده',
   rejected: 'ردشده',
   needs_review: 'نیازمند بررسی',
+  submitted: 'ارسال‌شده',
+  processing: 'در حال پردازش',
+  accepted: 'پذیرفته‌شده',
+  conditional_acceptance: 'پذیرش مشروط',
+  final_acceptance: 'پذیرش نهایی',
+  waitlisted: 'در لیست انتظار',
 };
 function localizeStatus(value) {
   if (!value) return '';
@@ -1105,6 +1198,46 @@ export default function AccountPortal() {
     return () => window.clearTimeout(timer);
   }, [refresh]);
 
+  // ── Live account notifications (Supabase Realtime) ────────────────────────
+  const [toasts, setToasts] = useState([]);
+  const toastSeq = useRef(0);
+  const refreshTimer = useRef(null);
+  const pushToast = useCallback((toast) => {
+    if (!toast) return;
+    toastSeq.current += 1;
+    const id = `t${toastSeq.current}`;
+    // Keep at most 4 toasts stacked.
+    setToasts((list) => [...list.slice(-3), { id, ...toast }]);
+  }, []);
+  const dismissToast = useCallback((id) => {
+    setToasts((list) => list.filter((t) => t.id !== id));
+  }, []);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    const scheduleRefresh = () => {
+      if (refreshTimer.current) return;
+      refreshTimer.current = window.setTimeout(() => {
+        refreshTimer.current = null;
+        refresh();
+      }, 700);
+    };
+    const unsubscribe = subscribeAccountRealtime(user.id, {
+      onNotification: (row) => {
+        pushToast({ tone: 'info', title: row?.title || 'اعلان جدید', message: row?.message || '' });
+        scheduleRefresh();
+      },
+      onDataChange: (change) => {
+        pushToast(synthesizeChange(change));
+        scheduleRefresh();
+      },
+    });
+    return () => {
+      unsubscribe();
+      if (refreshTimer.current) { window.clearTimeout(refreshTimer.current); refreshTimer.current = null; }
+    };
+  }, [user, refresh, pushToast]);
+
   useEffect(() => {
     if (!user || loading) return;
     rememberAccountPreview(user, data.profile || {});
@@ -1358,6 +1491,7 @@ export default function AccountPortal() {
       <div className="account-ambient" aria-hidden="true">
         {theme === 'dark' && <ParticleField theme="dark" className="account-star-field" />}
       </div>
+      <AccountToasts toasts={toasts} onDismiss={dismissToast} />
       <header className="account-header">
         <a href="/" className="account-brand"><LayoutGrid size={17} /> ACCA AI Services</a>
         <div className="account-header-meta">

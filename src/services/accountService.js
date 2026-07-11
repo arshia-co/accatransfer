@@ -450,6 +450,54 @@ export async function listAccountData(userId, product) {
   return { documents: documentsResult.data || [], records: recordsResult.data || [] };
 }
 
+// Live account updates. Opens one Supabase Realtime channel that watches the
+// student's own rows: server-authored notifications (user_notifications) plus
+// the data tables whose changes matter to the student (documents reviewed,
+// grades/OCR extracted, transfer result refreshed, application status/stage
+// advanced, profile edited). Returns an unsubscribe function.
+//
+// NOTE: the watched tables must be in the `supabase_realtime` publication for
+// events to fire (see supabase/migrations/*_account_realtime.sql). Without it,
+// this degrades gracefully — the panel still refreshes on load.
+export function subscribeAccountRealtime(userId, { onNotification, onDataChange } = {}) {
+  if (!supabase || !userId) return () => {};
+  const channel = supabase.channel(`account-live:${userId}`);
+
+  channel.on(
+    'postgres_changes',
+    { event: 'INSERT', schema: 'public', table: 'user_notifications', filter: `user_id=eq.${userId}` },
+    (payload) => onNotification?.(payload.new),
+  );
+
+  const dataTables = [
+    { table: 'student_documents', column: 'user_id', events: ['INSERT', 'UPDATE'] },
+    { table: 'transfer_assessments', column: 'user_id', events: ['INSERT', 'UPDATE'] },
+    { table: 'application_submissions', column: 'user_id', events: ['INSERT', 'UPDATE'] },
+    { table: 'profiles', column: 'id', events: ['UPDATE'] },
+  ];
+  dataTables.forEach(({ table, column, events }) => {
+    events.forEach((event) => {
+      channel.on(
+        'postgres_changes',
+        { event, schema: 'public', table, filter: `${column}=eq.${userId}` },
+        (payload) => onDataChange?.({ table, event, row: payload.new || {}, old: payload.old || {} }),
+      );
+    });
+  });
+
+  channel.subscribe();
+  return () => { try { supabase.removeChannel(channel); } catch { /* ignore */ } };
+}
+
+export async function markNotificationsRead(userId, ids = []) {
+  if (!supabase || !userId || !ids.length) return;
+  await supabase
+    .from('user_notifications')
+    .update({ read_at: new Date().toISOString() })
+    .in('id', ids)
+    .eq('user_id', userId);
+}
+
 export async function listCentralAccountData(userId) {
   const client = requireClient();
   const [profile, documents, smartApply, deepFit, transfer, selections, submissions, notifications, letters] = await Promise.all([
