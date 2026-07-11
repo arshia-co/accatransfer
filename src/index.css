@@ -984,6 +984,30 @@ textarea {
 .doc-stage-cancel:hover:not(:disabled) { color: #a23b2a; border-color: rgba(196,76,52,.4); background: rgba(196,76,52,.05); }
 .doc-stage-upload { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; border: 0; border-radius: 11px; color: #fff; background: linear-gradient(145deg, #102f48, #14745f); font-size: 11px; font-weight: 900; cursor: pointer; }
 .doc-stage-upload:disabled { opacity: .55; cursor: not-allowed; }
+/* Apple-style document-type picker (custom popover, replaces native <select>) */
+.doc-kind-picker { position: relative; flex: 1; min-width: 0; }
+.doc-kind-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 38px; padding: 0 12px; border: 1px solid rgba(16,47,72,.14); border-radius: 12px; background: #fff; color: #102f48; font-size: 12px; font-weight: 800; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease; }
+.doc-kind-trigger:hover:not(:disabled) { border-color: rgba(20,116,95,.5); }
+.doc-kind-picker.is-open .doc-kind-trigger { border-color: #14745f; box-shadow: 0 0 0 3px rgba(20,116,95,.14); }
+.doc-kind-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-kind-trigger svg { flex: 0 0 auto; color: rgba(16,47,72,.5); transition: transform .2s ease; }
+.doc-kind-picker.is-open .doc-kind-trigger svg { transform: rotate(180deg); }
+.doc-kind-trigger:disabled { opacity: .6; cursor: not-allowed; }
+.doc-kind-menu { position: absolute; z-index: 30; top: calc(100% + 6px); inset-inline: 0; max-height: 244px; overflow-y: auto; margin: 0; padding: 6px; list-style: none; border: 1px solid rgba(16,47,72,.1); border-radius: 14px; background: #fff; box-shadow: 0 18px 44px rgba(16,47,72,.18); }
+.doc-kind-menu li { margin: 0; }
+.doc-kind-menu button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 9px 11px; border: 0; border-radius: 10px; background: transparent; color: #102f48; font-size: 12px; font-weight: 700; text-align: start; cursor: pointer; }
+.doc-kind-menu button:hover { background: rgba(20,116,95,.09); }
+.doc-kind-menu button.is-active { background: rgba(20,116,95,.12); color: #0f6a57; font-weight: 900; }
+.doc-kind-menu button svg { flex: 0 0 auto; color: #14745f; }
+.account-central[data-theme="dark"] .doc-stage-kind span { color: rgba(231,238,251,.74); }
+.account-central[data-theme="dark"] .doc-kind-trigger { color: var(--account-night-text); border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.07); }
+.account-central[data-theme="dark"] .doc-kind-trigger svg { color: rgba(231,238,251,.6); }
+.account-central[data-theme="dark"] .doc-kind-picker.is-open .doc-kind-trigger { border-color: #2fd0a6; box-shadow: 0 0 0 3px rgba(47,208,166,.2); }
+.account-central[data-theme="dark"] .doc-kind-menu { border-color: rgba(255,255,255,.12); background: #0f2136; box-shadow: 0 22px 50px rgba(0,0,0,.5); }
+.account-central[data-theme="dark"] .doc-kind-menu button { color: var(--account-night-text); }
+.account-central[data-theme="dark"] .doc-kind-menu button:hover { background: rgba(47,208,166,.14); }
+.account-central[data-theme="dark"] .doc-kind-menu button.is-active { background: rgba(47,208,166,.18); color: #6ef0cd; }
+.account-central[data-theme="dark"] .doc-kind-menu button svg { color: #2fd0a6; }
 .doc-uploader-progress { display: flex; align-items: center; gap: 9px; margin-top: 10px; }
 .doc-uploader-progress .account-progress { flex: 1; margin: 0; }
 .doc-uploader-progress > span { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; color: rgba(16,47,72,.55); font-size: 9px; font-weight: 800; }

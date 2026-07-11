@@ -337,6 +337,55 @@ function localizeConfidence(value) {
   return value ? (map[value] || value) : '—';
 }
 
+// The saved AI report (from the transfer-analyze edge function) can contain
+// English strings; the panel is Persian-first, so localize them at render.
+const TRANSFER_FIT_FA = {
+  'Strong Candidate for Transfer Review': 'کاندیدای قوی برای بررسی انتقالی',
+  'Good Candidate with Document Review Needed': 'کاندیدای مناسب، نیازمند بررسی مدارک',
+  'Possible Candidate with Significant Risks': 'کاندیدای احتمالی با ریسک‌های قابل‌توجه',
+};
+function localizeFit(value) {
+  if (!value) return '';
+  return TRANSFER_FIT_FA[value] || value;
+}
+
+const REVIEW_STATUS_FA = {
+  human_review: 'بررسی انسانی',
+  admin_review: 'در حال بررسی کارشناس',
+  pending: 'در انتظار بررسی',
+  reviewed: 'بررسی‌شده',
+  confirmed: 'تأییدشده',
+  approved: 'تأییدشده',
+  rejected: 'ردشده',
+  needs_review: 'نیازمند بررسی',
+};
+function localizeStatus(value) {
+  if (!value) return '';
+  const key = String(value).toLowerCase();
+  return REVIEW_STATUS_FA[key] || value;
+}
+
+// Latin-heavy text = English server output we should not show in a Persian panel.
+function isMostlyLatin(str) {
+  const s = String(str || '');
+  const latin = (s.match(/[A-Za-z]/g) || []).length;
+  const persian = (s.match(/[؀-ۿ]/g) || []).length;
+  return latin > persian * 1.2 && latin > 12;
+}
+
+// Prefer the saved Persian overview; rebuild a Persian sentence when the saved
+// text is English so the hero never shows an English paragraph.
+function faOverview(result, targetUniversity) {
+  const raw = result?.overview;
+  if (raw && !isMostlyLatin(raw)) return raw;
+  return `بر پایهٔ ریزنمرات و مقصد انتخابی${targetUniversity ? ` (${targetUniversity})` : ''}، پروندهٔ تحصیلی شما برای بررسی انتقالی مناسب به‌نظر می‌رسد؛ اما استخراج کامل ریزنمرات و بررسی درس‌به‌درس هنوز لازم است.`;
+}
+function faRealityNote(result) {
+  const raw = result?.admission_reality_note;
+  if (raw && !isMostlyLatin(raw)) return raw;
+  return 'این گزارش مقدماتی است. پذیرش، معادل‌سازی درس و تعیین ترم نهایی فقط توسط دانشگاه مقصد انجام می‌شود.';
+}
+
 function transferStatusFromScore(score) {
   if (score >= 80) return 'likely';
   if (score >= 58) return 'review';
@@ -669,31 +718,31 @@ function TransferAnalysisPanel({ result, documents = [] }) {
       <div className="account-transfer-hero">
         <span className="account-transfer-hero-glow" aria-hidden="true" />
         <div className="account-transfer-hero-main">
-          <span className="account-transfer-hero-kicker"><Sparkles size={13} /> Matching Engine · تحلیل هوشمند</span>
+          <span className="account-transfer-hero-kicker"><Sparkles size={13} /> موتور تطبیق · تحلیل هوشمند</span>
           <h3>{result.headline || 'تحلیل مقدماتی انتقالی'}</h3>
-          <p>{result.overview || result.admission_reality_note || 'تطبیق دروس شما با برنامهٔ دانشگاه مقصد، بر پایهٔ ریزنمرات، واحدها و معدل.'}</p>
-          {result.preliminary_transfer_fit && <span className="account-transfer-fit">{result.preliminary_transfer_fit}</span>}
+          <p>{faOverview(result, targetUniversity)}</p>
+          {result.preliminary_transfer_fit && <span className="account-transfer-fit">{localizeFit(result.preliminary_transfer_fit)}</span>}
         </div>
         <div className="account-transfer-hero-ring">
           <AiConfidenceRing value={matchValue} />
-          <div><b>{localizeConfidence(result.ai_confidence)}</b><small>AI Confidence</small></div>
+          <div><b>{localizeConfidence(result.ai_confidence)}</b><small>اطمینان هوش مصنوعی</small></div>
         </div>
       </div>
 
       <div className="account-transfer-command">
         <div>
-          <small>STUDENT PATH</small>
+          <small>مسیر دانشجو</small>
           <b>{currentUniversity || 'دانشگاه فعلی ثبت نشده'}</b>
           <span>{currentProgram || 'رشته فعلی تکمیل نشده'}</span>
         </div>
         <span><ArrowLeft size={16} /></span>
         <div>
-          <small>TARGET UNIVERSITY</small>
+          <small>دانشگاه مقصد</small>
           <b>{targetUniversity || 'دانشگاه مقصد انتخاب نشده'}</b>
           <span>{targetProgram || 'رشته مقصد انتخاب نشده'}</span>
         </div>
         <strong className={result.is_live_preview ? 'is-live' : 'is-official'}>
-          {result.is_live_preview ? 'Live preliminary preview' : 'Saved AI report'}
+          {result.is_live_preview ? 'پیش‌نمایش زندهٔ مقدماتی' : 'گزارش ذخیره‌شدهٔ هوش مصنوعی'}
         </strong>
       </div>
 
@@ -825,7 +874,7 @@ function TransferAnalysisPanel({ result, documents = [] }) {
 
       <div className="account-result-reality">
         <ShieldCheck size={17} />
-        <span>{result.admission_reality_note || 'این گزارش مقدماتی است. پذیرش، معادل‌سازی درس و تعیین ترم نهایی فقط توسط دانشگاه مقصد انجام می‌شود.'}</span>
+        <span>{faRealityNote(result)}</span>
       </div>
     </motion.div>
   );
@@ -855,7 +904,7 @@ function TransferHistoryPanel({ assessments = [], activeId, onSelect }) {
                 <small>{target || 'رشته مقصد نامشخص'}{university ? ` · ${university}` : ''}</small>
                 {sourceFile && <em><Paperclip size={11} /> {sourceFile}</em>}
               </div>
-              <strong dir="ltr">{score == null ? 'Draft' : `${Math.round(Number(score))}%`}</strong>
+              <strong dir="ltr">{score == null ? 'پیش‌نویس' : `${Math.round(Number(score))}%`}</strong>
               <span>{formatDate(assessment.updated_at || assessment.created_at)}</span>
               <button type="button" disabled={active} onClick={() => onSelect(assessment.id)}>
                 {active ? 'در حال نمایش' : 'نمایش این نسخه'}
