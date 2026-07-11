@@ -1540,7 +1540,9 @@ export default function AccountPortal() {
   return (
     <main className="account-page account-central" data-theme={theme} dir={fa ? 'rtl' : 'ltr'}>
       <div className="account-ambient" aria-hidden="true">
-        {theme === 'dark' && <ParticleField theme="dark" className="account-star-field" />}
+        {/* Star constellation in both themes: cream+gold stars at night, a
+            subtle navy constellation over the cream canvas by day. */}
+        <ParticleField theme={theme === 'dark' ? 'dark' : 'light'} className="account-star-field" />
       </div>
       <AccountToasts toasts={toasts} onDismiss={dismissToast} onNavigate={goToChange} />
       <header className="account-header">
