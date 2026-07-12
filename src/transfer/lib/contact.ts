@@ -10,8 +10,10 @@ export const ACCA_CONTACT = {
   whatsappUrl: "https://wa.me/905354585440",
   instagram: "Acca_edu",
   instagramUrl: "https://instagram.com/acca_edu",
-  // Google Maps embed (no API key required) for the Esenyurt office.
+  // Google Maps embed (no API key required), pinned to the exact office
+  // coordinates behind the official share link below.
   mapEmbedUrl:
-    "https://www.google.com/maps?q=ACCA+EDU+Esenyurt+Istanbul+Turkey&ll=41.00520574261714,28.684467950014007&z=16&t=m&output=embed",
-  mapsUrl: "https://www.google.com/maps?q=ACCA+EDU+Esenyurt+Istanbul+Turkey&ll=41.00520574261714,28.684467950014007",
+    "https://maps.google.com/maps?q=41.0052,28.6849825&z=17&output=embed",
+  // Official "Acca edu international" place page (share link).
+  mapsUrl: "https://maps.app.goo.gl/UJD5nA2QjCQcNr6C8",
 } as const;
